@@ -1,5 +1,8 @@
 # Модель акустического определения направления на БПЛА
 
+План развития и зависимости этапов: [ROADMAP.md](ROADMAP.md). Численные
+результаты выполненных проверок ведутся отдельно в [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
 Воспроизводимая геометрическая TDOA-модель для четырёхмикрофонных решёток. Реализация охватывает точную сферическую модель, приближение плоской волны, аналитический Якобиан, условную CRLB согласованной гауссовской TDOA-модели и ограниченный взвешенный МНК для направления прихода.
 
 ## Соглашения
@@ -124,6 +127,22 @@ estimator backend, available timestamp и total latency. Estimator получа�
 передаются. Это **sequential independent bearings, not tracking**. Число
 перекрывающихся frames не называется числом независимых trials.
 
+S7A калибрует неопределённость этих bearing-измерений на сфере. Ошибка
+определяется через `Log_u(u_hat)` и проецируется на ортонормированный
+azimuth/elevation tangent basis; обе компоненты имеют единицы радиан дуги.
+Почти антиподальное направление отклоняется явно, поскольку log-map там не
+единственен. Матрица `R` строится только по calibration sequences без
+произвольной диагональной регуляризации; evaluation использует `R^+` для NIS.
+Сравнение NIS с `chi-square(2)` является только Gaussian benchmark.
+
+Основная сетка S7A: tetrahedral/square, SNR `-6/5/20 dB`, stationary/
+transverse/piecewise, random broadband/deterministic multisine, `L=1024`,
+`H=256`, `fs=48 kHz`. На каждую из 36 групп используются 3 независимые
+calibration и 3 evaluation continuous sequences; 20 overlap frames каждой
+sequence являются зависимыми samples. Observable GCC/SRP quality metadata не
+использует truth и не называется вероятностью. Итог этапа — **calibrated
+bearing measurement benchmark, not tracking and not a signal-level CRLB**.
+
 Вырожденная матрица Фишера не обращается: `conditional_crlb` поднимает `DegenerateInformationError`, а `conditional_angular_crlb` возвращает собственные значения и ненаблюдаемые локальные направления без конечной общей angular CRLB. Для полного ранга используется метрически корректная величина `sqrt(cos(elevation)² C_phi_phi + C_elevation_elevation)` одновременно в радианах и градусах.
 
 ## Сравниваемые решётки
@@ -146,6 +165,7 @@ estimator backend, available timestamp и total latency. Estimator получа�
 - `model/tdoa.py` — времена прихода, сферические и плосковолновые TDOA, распространение ковариации;
 - `model/jacobian.py` — аналитический и центрально-разностный Якобианы;
 - `model/statistics.py` — матрица Фишера, ранг, обусловленность и условная CRLB;
+- `model/bearing_statistics.py` — spherical log-map residual, tangent covariance и NIS;
 - `estimators/wls_doa.py` — WLS на единичной верхней полусфере;
 - `estimators/gcc_phat.py` — ориентированный sub-sample GCC-PHAT;
 - `estimators/srp_phat.py` — direct/vectorized equal-pair far-field SRP-PHAT;
@@ -174,6 +194,8 @@ estimator backend, available timestamp и total latency. Estimator получа�
   GCC/WLS/SRP study с emission-time truth;
 - `validation/sequential_doa_study.py` — хронологические независимые
   frame-wise bearings, latency metadata и frame/sequence CSV;
+- `validation/bearing_uncertainty_study.py` — independent-sequence
+  calibration/evaluation covariance, NIS и observable-quality benchmark;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `notebooks/array_comparison.ipynb` — карты CRLB, ранга, обусловленности и вырождения;
@@ -191,6 +213,8 @@ estimator backend, available timestamp и total latency. Estimator получа�
   траектории и независимых GCC/SRP bearing rays;
 - `notebooks/sequential_doa_validation.ipynb` — continuous-stream overlap,
   causality, invalid, azimuth-wrap, error и latency validation;
+- `notebooks/bearing_uncertainty_validation.ipynb` — spherical residual,
+  covariance conditioning, evaluation NIS и quality/error associations;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -223,6 +247,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.srp_statistical import run_srp_statistical_validation; run_srp_statistical_validation()"
 .\.venv\Scripts\python.exe -c "from validation.moving_source_study import run_moving_source_study; run_moving_source_study()"
 .\.venv\Scripts\python.exe -c "from validation.sequential_doa_study import run_sequential_doa_study; run_sequential_doa_study()"
+.\.venv\Scripts\python.exe -c "from validation.bearing_uncertainty_study import run_bearing_uncertainty_study; run_bearing_uncertainty_study()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -233,6 +258,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_3d.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\sequential_doa_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 notebooks\bearing_uncertainty_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 

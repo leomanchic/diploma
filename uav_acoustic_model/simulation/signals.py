@@ -15,6 +15,7 @@ def deterministic_bandlimited_signal(
     maximum_frequency_hz: float = 12_000.0,
     tone_count: int = 47,
     taper_fraction: float = 0.12,
+    phase_offset_rad: float = 0.0,
 ) -> NDArray[np.float64]:
     """Return a reproducible tapered broadband multisine.
 
@@ -29,6 +30,7 @@ def deterministic_bandlimited_signal(
     high = float(maximum_frequency_hz)
     count = int(tone_count)
     taper = float(taper_fraction)
+    phase_offset = float(phase_offset_rad)
     if not np.isfinite(sampling_rate) or sampling_rate <= 0.0:
         raise ValueError("sampling_rate_hz must be finite and positive")
     if not np.isfinite(duration) or duration <= 0.0:
@@ -39,12 +41,14 @@ def deterministic_bandlimited_signal(
         raise ValueError("tone_count must be at least 2")
     if not np.isfinite(taper) or not 0.0 <= taper <= 1.0:
         raise ValueError("taper_fraction must lie in [0, 1]")
+    if not np.isfinite(phase_offset):
+        raise ValueError("phase_offset_rad must be finite")
 
     sample_count = max(2, int(np.rint(duration * sampling_rate)))
     time = np.arange(sample_count, dtype=float) / sampling_rate
     frequencies = np.linspace(low, high, count + 2, dtype=float)[1:-1]
     golden_fraction = (np.sqrt(5.0) - 1.0) / 2.0
-    phases = 2.0 * np.pi * np.mod(np.arange(count) * golden_fraction, 1.0)
+    phases = 2.0 * np.pi * np.mod(np.arange(count) * golden_fraction, 1.0) + phase_offset
     amplitudes = 1.0 / np.sqrt(frequencies / low)
     signal = np.sum(
         amplitudes[:, None]

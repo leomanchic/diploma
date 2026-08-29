@@ -157,6 +157,7 @@ def _frame_estimator_result_template() -> dict[str, dict[str, object]]:
             "total_runtime_s": 0.0,
             "gcc_frontend_pair_count": 6,
             "estimator_backend_pair_count": 3 if method == "reference_3_gcc_wls" else 6,
+            "quality_score_probability_claimed": False,
         }
         for method in MOVING_STUDY_METHODS
     }
@@ -274,6 +275,40 @@ def estimate_stream_frames_sequentially(
                     "estimate_elevation_deg": estimate_elevation_deg,
                     "valid": valid,
                     "boundary_hit": bool(result["boundary"]),
+                    "quality_score_probability_claimed": False,
+                    "gcc_peak_ratios_used_pairs": result.get("gcc_peak_ratios_used_pairs"),
+                    "gcc_peak_curvatures_used_pairs": result.get(
+                        "gcc_peak_curvatures_used_pairs"
+                    ),
+                    "gcc_spectral_energies_used_pairs": result.get(
+                        "gcc_spectral_energies_used_pairs"
+                    ),
+                    "gcc_mean_peak_ratio": result.get("gcc_mean_peak_ratio"),
+                    "gcc_minimum_peak_ratio": result.get("gcc_minimum_peak_ratio"),
+                    "gcc_mean_peak_curvature": result.get("gcc_mean_peak_curvature"),
+                    "gcc_total_spectral_energy": result.get("gcc_total_spectral_energy"),
+                    "gcc_boundary_count": result.get("gcc_boundary_count"),
+                    "gcc_valid_pair_count": result.get("gcc_valid_pair_count"),
+                    "srp_peak_score": result.get("srp_peak_score"),
+                    "srp_score_margin": result.get("srp_score_margin"),
+                    "srp_local_negative_score_hessian": None
+                    if result.get("srp_local_negative_score_hessian") is None
+                    else tuple(
+                        np.asarray(result["srp_local_negative_score_hessian"], dtype=float)
+                        .ravel()
+                        .tolist()
+                    ),
+                    "srp_local_curvature_eigenvalues": None
+                    if result.get("srp_local_curvature_eigenvalues") is None
+                    else tuple(
+                        np.asarray(result["srp_local_curvature_eigenvalues"], dtype=float)
+                        .ravel()
+                        .tolist()
+                    ),
+                    "srp_used_spectral_energy": result.get("srp_used_spectral_energy"),
+                    "srp_mean_spectral_energy_fraction": result.get(
+                        "srp_mean_spectral_energy_fraction"
+                    ),
                     "geodesic_angular_error_deg": error,
                     "nominal_stream_snr_db": stream.nominal_snr_db,
                     "effective_stream_snr_db": stream.effective_snr_db,

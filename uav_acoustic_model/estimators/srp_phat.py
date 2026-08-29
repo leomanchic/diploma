@@ -14,7 +14,7 @@ half-open ``valid_region`` before the shared GCC-PHAT spectral preparation.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from time import perf_counter
 
 import numpy as np
@@ -76,6 +76,13 @@ class SRPPHATResult:
     valid_region: tuple[int, int]
     search_azimuth_bounds_rad: tuple[float, float]
     search_elevation_bounds_rad: tuple[float, float]
+    score_margin: float = float("nan")
+    local_negative_score_hessian: NDArray[np.float64] = field(
+        default_factory=lambda: np.full((2, 2), np.nan)
+    )
+    local_curvature_eigenvalues: NDArray[np.float64] = field(
+        default_factory=lambda: np.full(2, np.nan)
+    )
 
 
 @dataclass(frozen=True)
@@ -117,6 +124,49 @@ def _sound_speed(value: float) -> float:
     if not np.isfinite(speed) or speed <= 0.0:
         raise ValueError("sound_speed must be finite and positive")
     return speed
+
+
+def _local_score_curvature(
+    score_function,
+    phi: float,
+    elevation: float,
+    *,
+    step_rad: float = np.deg2rad(0.1),
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Return ``-H(score)`` in local angular-arc coordinates.
+
+    Both axes have units of radians of spherical arc. A symmetric stencil is
+    required; at an elevation boundary NaNs are returned explicitly.
+    """
+
+    h = float(step_rad)
+    if elevation <= h or elevation >= np.pi / 2.0 - h:
+        return np.full((2, 2), np.nan), np.full(2, np.nan)
+    azimuth_step = h / max(np.cos(elevation), 1e-6)
+
+    def evaluate(azimuth_offset: float, elevation_offset: float) -> float:
+        vector = direction_vector(
+            (phi + azimuth_offset) % (2.0 * np.pi), elevation + elevation_offset
+        )[None, :]
+        return float(score_function(vector)[0])
+
+    f00 = evaluate(0.0, 0.0)
+    fpa, fma = evaluate(azimuth_step, 0.0), evaluate(-azimuth_step, 0.0)
+    fpe, fme = evaluate(0.0, h), evaluate(0.0, -h)
+    fpp, fpm = evaluate(azimuth_step, h), evaluate(azimuth_step, -h)
+    fmp, fmm = evaluate(-azimuth_step, h), evaluate(-azimuth_step, -h)
+    values = np.asarray([f00, fpa, fma, fpe, fme, fpp, fpm, fmp, fmm])
+    if not np.all(np.isfinite(values)):
+        return np.full((2, 2), np.nan), np.full(2, np.nan)
+    cross = (fpp - fpm - fmp + fmm) / (4.0 * h**2)
+    negative_hessian = -np.asarray(
+        [
+            [(fpa - 2.0 * f00 + fma) / h**2, cross],
+            [cross, (fpe - 2.0 * f00 + fme) / h**2],
+        ]
+    )
+    negative_hessian = 0.5 * (negative_hessian + negative_hessian.T)
+    return negative_hessian, np.linalg.eigvalsh(negative_hessian)
 
 
 def _unit_directions(directions: ArrayLike) -> NDArray[np.float64]:
@@ -524,6 +574,7 @@ def srp_phat(
     scores = _vectorized_scores_from_spectrum(
         spectrum, pair_baselines, directions, speed
     )
+    coarse_scores = scores.copy()
     best = int(np.argmax(scores))
     best_phi = float(phi_candidates[best])
     best_elevation = float(elevation_candidates[best])
@@ -618,6 +669,18 @@ def srp_phat(
             )
         )
     )
+    second_score = (
+        float(np.partition(coarse_scores, -2)[-2])
+        if coarse_scores.size >= 2
+        else float("nan")
+    )
+
+    def local_score(vectors: NDArray[np.float64]) -> NDArray[np.float64]:
+        return _vectorized_scores_from_spectrum(spectrum, pair_baselines, vectors, speed)
+
+    local_hessian, curvature_eigenvalues = _local_score_curvature(
+        local_score, float(best_phi), float(best_elevation)
+    )
     return SRPPHATResult(
         phi=float(best_phi),
         elevation=float(best_elevation),
@@ -639,6 +702,9 @@ def srp_phat(
         valid_region=selected_region,
         search_azimuth_bounds_rad=azimuth_bounds,
         search_elevation_bounds_rad=elevation_bounds,
+        score_margin=float(best_score - second_score),
+        local_negative_score_hessian=local_hessian,
+        local_curvature_eigenvalues=curvature_eigenvalues,
     )
 
 
