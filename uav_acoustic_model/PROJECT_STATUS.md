@@ -4,18 +4,60 @@
 
 ## Текущий этап
 
-Текущий этап: точная модель движущегося источника, независимая покадровая
-GCC/WLS и equal-weight far-field SRP-PHAT локализация и интерактивная 3D-
-визуализация. Отражения, ветер, коррелированный фон, SRP-Harmonics и
-EKF/UKF-фильтрация в этап не входят; последовательность кадров не называется
-tracking.
+Текущий этап: приёмочные исправления moving-source reporting для независимой
+покадровой GCC/WLS и equal-weight far-field SRP-PHAT локализации. Tracking,
+отражения, ветер, коррелированный фон и SRP-Harmonics не добавляются.
 
-Статус: **этап завершён**. SRP runtime reporting, траектории, exact
-moving-source propagation, paired frame-wise study и 3D-визуализация прошли
-полный pytest, численный аудит CSV и программное выполнение всех notebook.
+Статус: **этап завершён**. Method-specific boundary reporting, раздельный
+runtime и SNR/seed metadata реализованы; полный CSV пересчитан, pytest и все
+notebook прошли итоговую проверку. Tracking не добавлялся.
 
 ### Журнал текущего этапа
 
+- 2026-08-29 — итоговая приёмка reporting-поправок завершена. После полного
+  пересчёта `results/moving_source_summary.csv` выполнен весь pytest:
+  **198 passed in 14.22s**. Все **9/9** notebook программно перевыполнены и
+  прошли `nbformat.validate`; error-output `0`, невыполненных непустых
+  code-ячеек `0`. CSV counts: GCC pair/DOA/covariance `840/574/70`, SRP
+  DOA/runtime `792/594`, moving source `6480`. `pip check`:
+  `No broken requirements found`. Moving-source notebook подтвердил новые
+  средние conditional RMSE `3.6054°/2.7701°/0.6064°` для
+  reference-3/all-6/SRP при coverage `1.0`; изменение относительно прежних
+  чисел ожидаемо из-за общего clean waveform между SNR. Новых ослаблений
+  критериев нет; сохранено прежнее явное ограничение: `20 trials/config`
+  недостаточно для устойчивого operational P99. Console warnings Windows
+  ZMQ/IPython о selector thread, permissions и unencrypted local TCP kernel
+  остаются нефатальными и не являются notebook error-output.
+- 2026-08-29 — полный moving-source study пересчитан без изменения сетки или
+  числа испытаний: **6480 CSV-строк**, **2160 конфигураций**, **43200 paired
+  trials**, `20 trials/config`. Численный аудит подтвердил 720 физических
+  групп и clean-signal seeds, 2160 noise seeds; в каждой группе один clean
+  seed для трёх SNR и три noise seeds. Нарушений
+  `reference-3 boundary <= all-6 boundary` нет; all-6 имеет дополнительные
+  boundary hits в 21 moving и 17 static конфигурациях, максимальная разница
+  fractions `0.15`. Runtime identity `total=shared frontend+backend` выполнена
+  с максимальным остатком `8.67e-19 s`; frontend pair count всегда 6, backend
+  pair count 3 только для reference-3 и 6 для all-6/SRP. Mean moving frontend
+  runtime `0.7950 ms`; mean backend `1.0827/0.6303/3.2462 ms` для
+  ref-3/all-6/SRP. Expected static effective-minus-nominal SNR не превышает
+  `8.88e-16 dB`; mean realized static отклоняется на `-0.128…+0.156 dB` из-за
+  конечной noise realization. Moving effective-minus-nominal имеет диапазон
+  `-1.721…+0.975 dB`, поскольку общий noise scale задаётся по matched-static
+  clean RMS, а Doppler/time warp меняет moving frame RMS. Все новые numeric
+  fields конечны. До полного pytest и выполнения всех notebook статус остаётся
+  **в работе**.
+- 2026-08-29 — исправлена логика отчётности до полного пересчёта. Для
+  `reference_3_gcc_wls` boundary агрегируется только по трём реально
+  используемым опорным парам `(0,1)`, `(0,2)`, `(0,3)`; для all-6 — по всем
+  шести. Добавлен targeted regression: boundary только на неиспользуемой паре
+  даёт `reference-3=False`, `all-6=True`. Runtime разделён на общий
+  six-pair GCC frontend, estimator backend и их явно названную сумму; backend
+  pair count равен 3/6. Clean-signal seed теперь зависит от всех факторов,
+  кроме SNR; noise seed остаётся отдельным. В схему CSV добавлены nominal,
+  expected-effective и mean realized effective moving/static SNR, где
+  `SNR_eff=20 log10(RMS(clean frame)/RMS(realized noise frame))`. Целевой
+  `tests/test_moving_source_study.py`: **7 passed in 4.82s**. Этап пока не
+  завершён: полный study и общая приёмка ещё не выполнены.
 - 2026-08-29 — итоговая приёмка завершена. Полный pytest после выполнения
   всех notebook: **196 passed in 14.07s**. Все **9/9** notebook прошли
   `nbformat.validate`, имеют error-output `0` и невыполненных непустых
@@ -1314,7 +1356,8 @@ Operational confidence/SNR threshold не выбран. Monte Carlo исполь
   реальным данным; гауссовость и независимость пока модельные допущения.
 - Проверить влияние ошибок координат, синхронизации, температуры, ветра и
   пространственно неоднородной скорости звука.
-- Расширить реализованную точную модель движения на неизвестное время
+- Расширить реализованную exact retarded-time kinematic model in a homogeneous
+  stationary medium на неизвестное время
   излучения, отражения, многолучёвость, коррелированный шум и дополнительные
   источники.
 - Сопоставить условную TDOA-CRLB с полной границей, включающей неизвестный
@@ -1325,6 +1368,7 @@ Operational confidence/SNR threshold не выбран. Monte Carlo исполь
   broadband и harmonic stress-test. Ни один из них не является измеренной
   моделью БПЛА. Нужны измеренные спектры, цветной/коррелированный фон,
   SNR-калибровка и независимый ground truth.
-- Реализованы exact moving-source propagation и независимые покадровые
+- Реализована exact retarded-time kinematic model in a homogeneous stationary
+  medium и независимые покадровые
   equal-weight far-field SRP/GCC bearings. SRP-Harmonics, отражения, ветер,
   коррелированный фон и EKF/UKF tracking остаются вне этапа.

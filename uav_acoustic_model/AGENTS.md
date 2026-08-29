@@ -24,7 +24,8 @@
 - Signal-level GCC Monte Carlo uses an explicitly labelled diagnostic noise
   model. Do not conflate per-channel additive-noise SNR with `sigma_toa` or
   `sigma_tdoa`, and do not claim a signal-level CRLB without deriving it.
-- The current stage permits mathematically exact subsonic source motion and a
+- The current stage permits an exact retarded-time kinematic model in a
+  homogeneous stationary medium for subsonic source motion and a
   sequence of independent frame-wise GCC/WLS and equal-weight far-field SRP-PHAT
   bearings. Do not call this tracking, and do not add EKF/UKF, SRP-Harmonics,
   reflections, wind, or correlated background without a later validated stage.

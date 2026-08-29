@@ -1,5 +1,7 @@
 """Deterministic and smoke gates for independent frame-wise DOA."""
 
+from types import SimpleNamespace
+
 import numpy as np
 
 from model.geometry import comparison_arrays
@@ -8,11 +10,20 @@ from validation.moving_source_study import (
     MovingStudyConfig,
     default_moving_study_configurations,
     frame_truth_at_reception,
+    gcc_boundary_flags,
     run_deterministic_moving_gate,
     run_moving_configuration,
     run_moving_smoke_gate,
     trajectory_for_configuration,
 )
+
+
+def test_reference_3_boundary_ignores_boundary_hit_on_unused_pair():
+    diagnostics = [SimpleNamespace(boundary_hit=False) for _ in range(6)]
+    diagnostics[4].boundary_hit = True
+    flags = gcc_boundary_flags(diagnostics)
+    assert flags["reference_3_gcc_wls"] is False
+    assert flags["all_6_equal_gcc_wls"] is True
 
 
 def test_requested_moving_study_grid_is_complete():
@@ -77,12 +88,45 @@ def test_moving_configuration_schema_counts_and_seeded_metrics_are_reproducible(
     second = run_moving_configuration(config, 91_001, trial_count=3)
     assert len(first) == len(second) == 3
     nondeterministic = {
-        "mean_moving_runtime_per_estimate_s",
-        "mean_static_runtime_per_estimate_s",
+        "mean_moving_shared_gcc_frontend_runtime_s",
+        "mean_moving_estimator_backend_runtime_s",
+        "mean_moving_total_runtime_per_estimate_s",
+        "mean_static_shared_gcc_frontend_runtime_s",
+        "mean_static_estimator_backend_runtime_s",
+        "mean_static_total_runtime_per_estimate_s",
     }
     for left, right in zip(first, second, strict=True):
         assert left["moving_successful_trial_count"] + left["moving_unsuccessful_trial_count"] == 3
         assert left["static_successful_trial_count"] + left["static_unsuccessful_trial_count"] == 3
+        assert left["gcc_frontend_pair_count"] == 6
+        assert left["estimator_backend_pair_count"] == (
+            3 if left["estimator_variant"] == "reference_3_gcc_wls" else 6
+        )
+        np.testing.assert_allclose(
+            left["mean_moving_total_runtime_per_estimate_s"],
+            left["mean_moving_shared_gcc_frontend_runtime_s"]
+            + left["mean_moving_estimator_backend_runtime_s"],
+            rtol=1e-12,
+        )
+        assert np.isfinite(left["mean_effective_moving_snr_db"])
+        assert abs(left["mean_effective_static_snr_db"] - config.snr_db) < 0.5
         assert {k: v for k, v in left.items() if k not in nondeterministic} == {
             k: v for k, v in right.items() if k not in nondeterministic
         }
+
+
+def test_clean_signal_seed_is_shared_between_snr_levels_but_noise_seed_is_not():
+    low = MovingStudyConfig(
+        "tetrahedral", "recede", 10, 25, 256, "random_broadband", -6
+    )
+    high = MovingStudyConfig(
+        "tetrahedral", "recede", 10, 25, 256, "random_broadband", 20
+    )
+    low_rows = run_moving_configuration(low, 91_010, trial_count=1)
+    high_rows = run_moving_configuration(high, 91_011, trial_count=1)
+    assert {row["signal_seed"] for row in low_rows} == {
+        row["signal_seed"] for row in high_rows
+    }
+    assert {row["noise_seed"] for row in low_rows} != {
+        row["noise_seed"] for row in high_rows
+    }

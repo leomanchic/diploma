@@ -84,7 +84,8 @@ Runtime CSV хранит unique-count contribution только в exact-compone
 Эти counts относятся к SRP study; полный GCC reporting
 study отдельно использует seed `20260828` и `1000/2000` trials.
 
-Для движущегося источника реализовано точное запаздывающее время
+Для движущегося источника реализована **exact retarded-time kinematic model
+in a homogeneous stationary medium** с запаздывающим временем
 `t = t_e + ||q(t_e)-r_m||/c`. Общий Newton/Brent solver и независимое
 аналитическое constant-velocity решение проверяют друг друга. Поскольку
 `d/dt_e = 1+v_r/c>0` при `|v|<c`, корень единственен и причинен; естественный
@@ -98,7 +99,11 @@ warp вычисляет `s(t_e)` без округления. Отдельный
 исходный сигнал и тот же массив шума. Это последовательность независимых
 GCC/WLS и equal-weight SRP-PHAT bearings, **не tracking**. P99 при 20 trials
 сохраняется как диагностический sampled tail и не считается устойчивым
-operational quantile.
+operational quantile. Clean-signal seed общий для одинаковых факторов при
+разных SNR, noise seeds раздельны. CSV различает nominal, expected-effective
+и mean realized effective moving/static SNR. Общий frontend всегда вычисляет
+все шесть GCC-пар; runtime отдельно хранит его стоимость и backend оценивателя,
+а reference-3 boundary и backend используют только три опорные пары.
 
 Вырожденная матрица Фишера не обращается: `conditional_crlb` поднимает `DegenerateInformationError`, а `conditional_angular_crlb` возвращает собственные значения и ненаблюдаемые локальные направления без конечной общей angular CRLB. Для полного ранга используется метрически корректная величина `sqrt(cos(elevation)² C_phi_phi + C_elevation_elevation)` одновременно в радианах и градусах.
 
@@ -133,7 +138,8 @@ operational quantile.
   и отдельно маркированный harmonic stress-test;
 - `simulation/trajectory.py` — stationary, constant-velocity, circular и
   piecewise-linear строго дозвуковые траектории;
-- `simulation/moving_source.py` — exact/analytic/frozen retarded time,
+- `simulation/moving_source.py` — exact retarded-time kinematics in a
+  homogeneous stationary medium, analytic/frozen cross-checks,
   Doppler time warp, causality и moving multi-channel synthesis;
 - `validation/far_field.py` — сеточный `E_tau(R)` и численный поиск границы;
 - `validation/propagation_study.py` — итоговые CSV-исследования;
@@ -207,7 +213,7 @@ Notebook выполняется из корня проекта и сохраня
 
 ## Границы модели
 
-CRLB здесь условна относительно уже полученных гауссовских TDOA. Она не является границей по исходным микрофонным отсчётам и пока не включает неизвестный акустический сигнал, зависимость ошибок TDOA от SNR/спектра, калибровочные ошибки, ветер/температурный профиль, отражения, коррелированный акустический шум или дополнительные источники. Точное запаздывание движущегося источника реализовано, но его paired AWGN study не является signal-level CRLB. Дальнепольность количественно вычисляется для заданных `fs`, `f_max`, временного/фазового допуска и угловой сетки; диагностические значения 48 кГц, 2–12 кГц, 0.1 sample и 0.1 rad не являются измеренными характеристиками реального БПЛА.
+CRLB здесь условна относительно уже полученных гауссовских TDOA. Она не является границей по исходным микрофонным отсчётам и пока не включает неизвестный акустический сигнал, зависимость ошибок TDOA от SNR/спектра, калибровочные ошибки, ветер/температурный профиль, отражения, коррелированный акустический шум или дополнительные источники. Реализована **exact retarded-time kinematic model in a homogeneous stationary medium**; это точная кинематическая модель запаздывающего времени при её допущениях, а не полная модель акустической среды, и её paired AWGN study не является signal-level CRLB. Дальнепольность количественно вычисляется для заданных `fs`, `f_max`, временного/фазового допуска и угловой сетки; диагностические значения 48 кГц, 2–12 кГц, 0.1 sample и 0.1 rad не являются измеренными характеристиками реального БПЛА.
 
 Целочисленные сдвиги отсчётов в проекте не используются. Реализованы только
 независимые покадровые far-field equal-weight SRP-PHAT/GCC bearings.

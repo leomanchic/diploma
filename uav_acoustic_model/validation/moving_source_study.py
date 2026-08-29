@@ -1,8 +1,10 @@
-"""Paired frame-wise DOA study for exact subsonic source motion.
+"""Paired frame-wise DOA study for retarded-time subsonic source motion.
 
 This module produces independent per-frame bearings; it does not implement a
 trajectory filter or tracking. Moving and matched-static cases share the same
-source waveform and additive-noise realization (common random numbers).
+source waveform and additive-noise realization (common random numbers). The
+propagation model is an exact retarded-time kinematic model in a homogeneous
+stationary medium, not a complete environmental acoustics model.
 """
 
 from __future__ import annotations
@@ -99,6 +101,21 @@ def default_moving_study_configurations() -> tuple[MovingStudyConfig, ...]:
 
 def _configuration_seed(index: int, stream: int) -> int:
     sequence = np.random.SeedSequence([MOVING_STUDY_BASE_SEED, int(index), int(stream)])
+    return int(sequence.generate_state(1)[0])
+
+
+def _clean_signal_seed(config: MovingStudyConfig) -> int:
+    """Seed the clean waveform by all factors except the requested SNR."""
+
+    factors = (
+        MOVING_STUDY_GEOMETRIES.index(config.geometry),
+        MOVING_STUDY_MOTIONS.index(config.motion),
+        MOVING_STUDY_SPEEDS_MPS.index(float(config.speed_mps)),
+        MOVING_STUDY_DISTANCES_M.index(float(config.distance_m)),
+        MOVING_STUDY_FRAME_LENGTHS.index(int(config.frame_length)),
+        MOVING_STUDY_SIGNALS.index(config.signal_model),
+    )
+    sequence = np.random.SeedSequence([MOVING_STUDY_BASE_SEED, 0, *factors])
     return int(sequence.generate_state(1)[0])
 
 
@@ -226,6 +243,23 @@ def _delay_bounds(positions: NDArray[np.float64], pairs: tuple[Pair, ...], fs: f
     return np.linalg.norm(baselines(positions, pairs), axis=1) / DEFAULT_SOUND_SPEED + 2.0 / fs
 
 
+def gcc_boundary_flags(diagnostics) -> dict[str, bool]:
+    """Aggregate GCC boundary flags over the pairs actually used by each WLS.
+
+    The shared frontend computes all six pairs.  Reference-3 subsequently uses
+    pair indices 0, 1, 2 (microphone 0 against microphones 1, 2, 3), whereas
+    all-6 uses every pair.
+    """
+
+    flags = np.asarray([bool(item.boundary_hit) for item in diagnostics], dtype=bool)
+    if flags.shape != (6,):
+        raise ValueError("moving-source GCC frontend must report all six pair flags")
+    return {
+        "reference_3_gcc_wls": bool(np.any(flags[:3])),
+        "all_6_equal_gcc_wls": bool(np.any(flags)),
+    }
+
+
 def estimate_independent_frame(
     channels: NDArray[np.float64],
     positions: NDArray[np.float64],
@@ -245,7 +279,7 @@ def estimate_independent_frame(
     )
     gcc_runtime = perf_counter() - started
     finite = np.isfinite(observed) & ~np.asarray([item.invalid for item in diagnostics])
-    any_boundary = bool(any(item.boundary_hit for item in diagnostics))
+    method_boundary = gcc_boundary_flags(diagnostics)
     results: dict[str, dict[str, object]] = {}
     for method, indices in (
         ("reference_3_gcc_wls", np.array([0, 1, 2])),
@@ -264,11 +298,16 @@ def estimate_independent_frame(
             valid = bool(estimate.success and np.all(np.isfinite(estimate.direction)))
             if valid:
                 direction = estimate.direction
+        backend_runtime = perf_counter() - started
         results[method] = {
             "direction": direction,
             "valid": valid,
-            "boundary": any_boundary,
-            "runtime_s": gcc_runtime + perf_counter() - started,
+            "boundary": method_boundary[method],
+            "shared_gcc_frontend_runtime_s": gcc_runtime,
+            "estimator_backend_runtime_s": backend_runtime,
+            "total_runtime_s": gcc_runtime + backend_runtime,
+            "gcc_frontend_pair_count": 6,
+            "estimator_backend_pair_count": int(indices.size),
         }
     srp = _srp_from_gcc_diagnostics(
         diagnostics, positions, pairs, sampling_rate_hz, sample_count=channels.shape[1]
@@ -277,7 +316,11 @@ def estimate_independent_frame(
         "direction": srp.direction,
         "valid": not srp.invalid and np.all(np.isfinite(srp.direction)),
         "boundary": srp.boundary_hit,
-        "runtime_s": gcc_runtime + srp.runtime_seconds,
+        "shared_gcc_frontend_runtime_s": gcc_runtime,
+        "estimator_backend_runtime_s": srp.runtime_seconds,
+        "total_runtime_s": gcc_runtime + srp.runtime_seconds,
+        "gcc_frontend_pair_count": 6,
+        "estimator_backend_pair_count": 6,
     }
     return results
 
@@ -369,7 +412,7 @@ def run_moving_configuration(
     if count < 1:
         raise ValueError("trial_count must be positive")
     positions = comparison_arrays()[config.geometry]
-    signal_seed = _configuration_seed(configuration_index, 0)
+    signal_seed = _clean_signal_seed(config)
     noise_seed = _configuration_seed(configuration_index, 1)
     moving, static, moving_trajectory, _ = _clean_matched_frames(
         config, positions, sampling_rate_hz, np.random.default_rng(signal_seed)
@@ -382,7 +425,9 @@ def run_moving_configuration(
     # center; truth is intentionally evaluated at its own centroid emission time.
     diagnostics = _frame_diagnostics(moving, positions, moving_trajectory)
     noise_rng = np.random.default_rng(noise_seed)
-    noise_scale = float(np.sqrt(np.mean(static.channels**2))) / (
+    moving_clean_rms = float(np.sqrt(np.mean(moving.channels**2)))
+    static_clean_rms = float(np.sqrt(np.mean(static.channels**2)))
+    noise_scale = static_clean_rms / (
         10.0 ** (config.snr_db / 20.0)
     )
     moving_directions = {name: np.full((count, 3), np.nan) for name in MOVING_STUDY_METHODS}
@@ -391,10 +436,30 @@ def run_moving_configuration(
     static_valid = {name: np.zeros(count, dtype=bool) for name in MOVING_STUDY_METHODS}
     moving_boundary = {name: np.zeros(count, dtype=bool) for name in MOVING_STUDY_METHODS}
     static_boundary = {name: np.zeros(count, dtype=bool) for name in MOVING_STUDY_METHODS}
-    moving_runtime = {name: np.zeros(count) for name in MOVING_STUDY_METHODS}
-    static_runtime = {name: np.zeros(count) for name in MOVING_STUDY_METHODS}
+    runtime_components = (
+        "shared_gcc_frontend_runtime_s",
+        "estimator_backend_runtime_s",
+        "total_runtime_s",
+    )
+    moving_runtime = {
+        component: {name: np.zeros(count) for name in MOVING_STUDY_METHODS}
+        for component in runtime_components
+    }
+    static_runtime = {
+        component: {name: np.zeros(count) for name in MOVING_STUDY_METHODS}
+        for component in runtime_components
+    }
+    effective_moving_snr_db = np.zeros(count)
+    effective_static_snr_db = np.zeros(count)
     for trial in range(count):
         noise = noise_rng.normal(0.0, noise_scale, size=moving.channels.shape)
+        realized_noise_rms = float(np.sqrt(np.mean(noise**2)))
+        effective_moving_snr_db[trial] = 20.0 * np.log10(
+            moving_clean_rms / realized_noise_rms
+        )
+        effective_static_snr_db[trial] = 20.0 * np.log10(
+            static_clean_rms / realized_noise_rms
+        )
         paired = (
             ("moving", moving.channels + noise),
             ("static", static.channels + noise),
@@ -409,7 +474,8 @@ def run_moving_configuration(
                 directions[method][trial] = result["direction"]
                 valid[method][trial] = result["valid"]
                 boundary[method][trial] = result["boundary"]
-                runtime[method][trial] = result["runtime_s"]
+                for component in runtime_components:
+                    runtime[component][method][trial] = result[component]
 
     rows: list[dict[str, object]] = []
     for method in MOVING_STUDY_METHODS:
@@ -439,10 +505,24 @@ def run_moving_configuration(
                 "frame_duration_ms": 1000.0 * config.frame_length / sampling_rate_hz,
                 "signal_model": config.signal_model,
                 "snr_db": config.snr_db,
+                "nominal_snr_db": config.snr_db,
+                "nominal_moving_snr_db": config.snr_db,
+                "nominal_static_snr_db": config.snr_db,
+                "expected_effective_moving_snr_db": float(
+                    20.0 * np.log10(moving_clean_rms / noise_scale)
+                ),
+                "expected_effective_static_snr_db": float(
+                    20.0 * np.log10(static_clean_rms / noise_scale)
+                ),
+                "mean_effective_moving_snr_db": float(np.mean(effective_moving_snr_db)),
+                "mean_effective_static_snr_db": float(np.mean(effective_static_snr_db)),
+                "effective_snr_definition": "20log10(full_frame_clean_rms/full_frame_realized_noise_rms)",
+                "noise_standard_deviation": noise_scale,
                 "estimator_variant": method,
                 "trial_count": count,
                 "signal_seed": signal_seed,
                 "noise_seed": noise_seed,
+                "clean_signal_seed_scope": "all_configuration_factors_except_snr",
                 "common_random_numbers": True,
                 "truth_definition": "array_centroid_emission_time_at_selected_reception_sample",
                 "truth_reception_time_s": truth.reception_time_s,
@@ -475,8 +555,27 @@ def run_moving_configuration(
                 ),
                 "angular_lag_definition": "signed_log_map_projection_on_instantaneous_doa_tangent",
                 **diagnostics,
-                "mean_moving_runtime_per_estimate_s": float(np.mean(moving_runtime[method])),
-                "mean_static_runtime_per_estimate_s": float(np.mean(static_runtime[method])),
+                "runtime_accounting": "shared_all_6_gcc_frontend_plus_estimator_backend",
+                "gcc_frontend_pair_count": 6,
+                "estimator_backend_pair_count": 3 if method == "reference_3_gcc_wls" else 6,
+                "mean_moving_shared_gcc_frontend_runtime_s": float(
+                    np.mean(moving_runtime["shared_gcc_frontend_runtime_s"][method])
+                ),
+                "mean_moving_estimator_backend_runtime_s": float(
+                    np.mean(moving_runtime["estimator_backend_runtime_s"][method])
+                ),
+                "mean_moving_total_runtime_per_estimate_s": float(
+                    np.mean(moving_runtime["total_runtime_s"][method])
+                ),
+                "mean_static_shared_gcc_frontend_runtime_s": float(
+                    np.mean(static_runtime["shared_gcc_frontend_runtime_s"][method])
+                ),
+                "mean_static_estimator_backend_runtime_s": float(
+                    np.mean(static_runtime["estimator_backend_runtime_s"][method])
+                ),
+                "mean_static_total_runtime_per_estimate_s": float(
+                    np.mean(static_runtime["total_runtime_s"][method])
+                ),
                 "independent_framewise_doa_not_tracking": True,
             }
         )
@@ -553,6 +652,7 @@ __all__ = [
     "MovingStudyConfig",
     "default_moving_study_configurations",
     "estimate_independent_frame",
+    "gcc_boundary_flags",
     "frame_truth_at_reception",
     "run_deterministic_moving_gate",
     "run_moving_configuration",

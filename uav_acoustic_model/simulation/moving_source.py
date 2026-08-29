@@ -1,4 +1,4 @@
-r"""Retarded-time propagation from a strictly subsonic moving source.
+r"""Exact retarded-time kinematic model in a homogeneous stationary medium.
 
 For reception time ``t`` and microphone ``r_m``, the exact emission time is
 the unique root
