@@ -52,6 +52,9 @@ class MovingSourceResult:
     fir_length: int
     boundary_guard_samples: int
     geometric_attenuation: bool
+    synthesis_mode: str
+    chunk_size_samples: int | None
+    maximum_interpolation_working_set_elements: int
 
 
 def _positive(value: float, name: str) -> float:
@@ -295,6 +298,7 @@ def simulate_moving_source(
     frozen_emission_time_s: float | None = None,
     fir_length: int = DEFAULT_FIR_LENGTH,
     kaiser_beta: float = DEFAULT_KAISER_BETA,
+    chunk_size_samples: int | None = None,
 ) -> MovingSourceResult:
     """Generate synchronized channels from exact or frozen retarded time.
 
@@ -303,7 +307,10 @@ def simulate_moving_source(
     returned grid spans the earliest arrival of the first source sample to the
     latest arrival of the last source sample. Samples outside source support
     are zero, and ``valid_region`` excludes ``(fir_length-1)/2`` source samples
-    at each interpolation boundary.
+    at each interpolation boundary.  ``chunk_size_samples`` bounds the
+    interpolation working set to at most ``chunk_size_samples * fir_length``
+    floating-point weights.  It does not alter timestamps, delays, fractional
+    interpolation, or the returned valid region.
     """
 
     source = np.asarray(signal, dtype=float)
@@ -367,34 +374,63 @@ def simulate_moving_source(
                 np.diff(reception), 1.0 / sampling_rate, rtol=2e-10, atol=2e-14
             )
 
-    emission_rows = []
-    for microphone in coordinates:
-        if method == "numeric":
-            row = solve_emission_time(reception, microphone, trajectory, speed)
-        elif method == "constant_velocity_analytic":
-            row = constant_velocity_emission_time(reception, microphone, trajectory, speed)
-        else:
-            row = reception - frozen_distances[len(emission_rows)] / speed
-        emission_rows.append(np.asarray(row, dtype=float))
-    emission = np.asarray(emission_rows)
-    if np.any(emission >= reception[None, :]):
-        raise RuntimeError("moving-source propagation violated causality")
-
-    source_positions = np.asarray([trajectory.q(row) for row in emission])
-    displacement = source_positions - coordinates[:, None, :]
-    distances = np.linalg.norm(displacement, axis=-1)
-    if method == "frozen_delay":
-        distances = np.broadcast_to(frozen_distances[:, None], emission.shape).copy()
-    delays = reception[None, :] - emission
-    source_indices = (emission - source_start) * sampling_rate
-    channels, interpolation_valid = _windowed_sinc_interpolate(
-        source, source_indices, int(fir_length), float(kaiser_beta)
-    )
-    if geometric_attenuation:
-        amplitude = 1.0 / distances
-        channels = channels * amplitude
+    if chunk_size_samples is None:
+        block_size = int(reception.size)
+        synthesis_mode = "monolithic"
+        reported_chunk_size = None
     else:
-        amplitude = np.ones_like(distances)
+        block_size = int(chunk_size_samples)
+        if block_size < 1:
+            raise ValueError("chunk_size_samples must be a positive integer or None")
+        synthesis_mode = "chunked"
+        reported_chunk_size = block_size
+    block_size = min(block_size, int(reception.size))
+
+    microphone_count = coordinates.shape[0]
+    sample_count = reception.size
+    emission = np.empty((microphone_count, sample_count), dtype=float)
+    distances = np.empty_like(emission)
+    delays = np.empty_like(emission)
+    channels = np.empty_like(emission)
+    interpolation_valid = np.empty((microphone_count, sample_count), dtype=bool)
+    amplitude = np.empty_like(emission)
+    for start in range(0, sample_count, block_size):
+        stop = min(start + block_size, sample_count)
+        reception_block = reception[start:stop]
+        for microphone_index, microphone in enumerate(coordinates):
+            if method == "numeric":
+                row = solve_emission_time(
+                    reception_block, microphone, trajectory, speed
+                )
+            elif method == "constant_velocity_analytic":
+                row = constant_velocity_emission_time(
+                    reception_block, microphone, trajectory, speed
+                )
+            else:
+                row = reception_block - frozen_distances[microphone_index] / speed
+            row = np.asarray(row, dtype=float)
+            if np.any(row >= reception_block):
+                raise RuntimeError("moving-source propagation violated causality")
+            source_positions = trajectory.q(row)
+            block_distances = np.linalg.norm(source_positions - microphone, axis=-1)
+            if method == "frozen_delay":
+                block_distances = np.full(row.shape, frozen_distances[microphone_index])
+            block_delays = reception_block - row
+            source_indices = (row - source_start) * sampling_rate
+            block_channels, block_valid = _windowed_sinc_interpolate(
+                source, source_indices, int(fir_length), float(kaiser_beta)
+            )
+            if geometric_attenuation:
+                block_amplitude = 1.0 / block_distances
+                block_channels = block_channels * block_amplitude
+            else:
+                block_amplitude = np.ones_like(block_distances)
+            emission[microphone_index, start:stop] = row
+            distances[microphone_index, start:stop] = block_distances
+            delays[microphone_index, start:stop] = block_delays
+            channels[microphone_index, start:stop] = block_channels
+            interpolation_valid[microphone_index, start:stop] = block_valid
+            amplitude[microphone_index, start:stop] = block_amplitude
     tdoa = np.asarray(
         [delays[first] - delays[second] for first, second in checked_pairs]
     )
@@ -420,6 +456,9 @@ def simulate_moving_source(
         fir_length=int(fir_length),
         boundary_guard_samples=half,
         geometric_attenuation=bool(geometric_attenuation),
+        synthesis_mode=synthesis_mode,
+        chunk_size_samples=reported_chunk_size,
+        maximum_interpolation_working_set_elements=block_size * int(fir_length),
     )
 
 
