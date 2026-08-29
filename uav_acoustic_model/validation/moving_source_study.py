@@ -299,6 +299,13 @@ def estimate_independent_frame(
             if valid:
                 direction = estimate.direction
         backend_runtime = perf_counter() - started
+        used_diagnostics = tuple(diagnostics[index] for index in indices)
+        usable_diagnostics = tuple(item for item in used_diagnostics if not item.invalid)
+        peak_ratios = tuple(float(item.peak_to_second_peak_ratio) for item in used_diagnostics)
+        curvatures = tuple(float(item.peak_curvature) for item in used_diagnostics)
+        energies = tuple(float(item.used_spectral_energy) for item in used_diagnostics)
+        finite_ratios = np.asarray(peak_ratios)[np.isfinite(peak_ratios)]
+        finite_curvatures = np.asarray(curvatures)[np.isfinite(curvatures)]
         results[method] = {
             "direction": direction,
             "valid": valid,
@@ -308,6 +315,16 @@ def estimate_independent_frame(
             "total_runtime_s": gcc_runtime + backend_runtime,
             "gcc_frontend_pair_count": 6,
             "estimator_backend_pair_count": int(indices.size),
+            "quality_score_probability_claimed": False,
+            "gcc_peak_ratios_used_pairs": peak_ratios,
+            "gcc_peak_curvatures_used_pairs": curvatures,
+            "gcc_spectral_energies_used_pairs": energies,
+            "gcc_mean_peak_ratio": float(np.mean(finite_ratios)) if finite_ratios.size else float("nan"),
+            "gcc_minimum_peak_ratio": float(np.min(finite_ratios)) if finite_ratios.size else float("nan"),
+            "gcc_mean_peak_curvature": float(np.mean(finite_curvatures)) if finite_curvatures.size else float("nan"),
+            "gcc_total_spectral_energy": float(np.nansum(energies)),
+            "gcc_boundary_count": int(sum(item.boundary_hit for item in used_diagnostics)),
+            "gcc_valid_pair_count": len(usable_diagnostics),
         }
     srp = _srp_from_gcc_diagnostics(
         diagnostics, positions, pairs, sampling_rate_hz, sample_count=channels.shape[1]
@@ -321,6 +338,17 @@ def estimate_independent_frame(
         "total_runtime_s": gcc_runtime + srp.runtime_seconds,
         "gcc_frontend_pair_count": 6,
         "estimator_backend_pair_count": 6,
+        "quality_score_probability_claimed": False,
+        "srp_peak_score": float(srp.score),
+        "srp_score_margin": float(srp.score_margin),
+        "srp_local_negative_score_hessian": np.asarray(
+            srp.local_negative_score_hessian, dtype=float
+        ),
+        "srp_local_curvature_eigenvalues": np.asarray(
+            srp.local_curvature_eigenvalues, dtype=float
+        ),
+        "srp_used_spectral_energy": float(srp.used_spectral_energy),
+        "srp_mean_spectral_energy_fraction": float(srp.mean_spectral_energy_fraction),
     }
     return results
 

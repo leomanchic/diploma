@@ -34,3 +34,16 @@
   overlapping frames independently, never count overlapping frames as
   independent trials, and never provide truth or future DOA estimates to an
   estimator. Call the output "sequential independent bearings, not tracking".
+- Bearing errors must use the spherical log-map in an orthonormal tangent
+  basis and have units of angular-arc radians. Never replace them with an
+  unwrapped coordinate subtraction; reject the non-unique antipodal log-map
+  explicitly.
+- Fit bearing covariance only from calibration sequences. Calibration and
+  evaluation require disjoint sequence/source/noise seeds, while all methods
+  inside one sequence receive the same stream. Overlap frames are dependent
+  residual samples, never independent trials or bootstrap units.
+- Online quality metadata may use only signal/estimator observables. Truth and
+  angular error may be used for offline correlation diagnostics but never to
+  form a quality score. Do not call an uncalibrated score a probability.
+- S7A is a calibrated bearing measurement benchmark, not tracking and not a
+  signal-level CRLB. Do not add EKF/UKF/alpha-beta filtering during S7A.

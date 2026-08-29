@@ -192,6 +192,7 @@ def synthesize_continuous_stream(
             minimum_frequency_hz=300.0,
             maximum_frequency_hz=10_000.0,
             taper_fraction=0.0,
+            phase_offset_rad=float(source_rng.uniform(0.0, 2.0 * np.pi)),
         )
     else:
         raise ValueError("signal_model must be random_broadband or deterministic_multisine")

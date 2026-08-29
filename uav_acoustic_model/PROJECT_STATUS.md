@@ -4,16 +4,108 @@
 
 ## Текущий этап
 
-Текущий этап: Continuous Multichannel Stream and Sequential Frame-wise DOA.
-Цель — последовательность независимых GCC/WLS и equal-weight SRP-PHAT
-bearing-оценок из одного непрерывного многоканального массива. EKF/UKF,
-alpha-beta filter, tracking, отражения, ветер, коррелированный фон и
-SRP-Harmonics не добавляются.
+Текущий этап: **S7A — Bearing Measurement Uncertainty and Calibration**.
+Цель — статистически корректная calibration/evaluation модель неопределённости
+независимых покадровых GCC/WLS и equal-weight SRP-PHAT bearing-измерений.
+EKF/UKF, alpha-beta filter и любой другой tracking не добавляются.
 
-Статус: **этап завершён**. Chunked moving-source synthesis, overlap frame
-views, sequential study, CSV и notebook реализованы; полный pytest, все
-notebook, численный CSV-аудит и `pip check` прошли. Результат этапа:
-**sequential independent bearings, not tracking**.
+Статус: **этап завершён**. `ROADMAP.md` отмечает S7A как `Done`, S7B как
+`Next`; `PROJECT_STATUS.md` остаётся журналом формул, численных результатов и
+проверок. Итог: **calibrated bearing measurement benchmark, not tracking and
+not a signal-level CRLB**.
+
+### Журнал S7A
+
+- 2026-08-29 — финальная приёмка S7A завершена. После полного повторного
+  выполнения notebook весь pytest: **223 passed in 17.25s**; `pip check`:
+  `No broken requirements found`. Все **11/11 notebook** выполнены через
+  `nbconvert`, проходят `nbformat.validate`, имеют error-output `0`, unrun
+  непустых code cells `0` и missing cell ID `0`. Итоговый CSV-аудит:
+  covariance/quality `216/1368` строк, обязательных полей не пропущено,
+  `36/36` физических calibration/evaluation групп; уникальных sequence,
+  source и noise seeds `108/108` на split, межролевой overlap `0/0/0`.
+  Нарушений PSD/symmetry `0/0`, evaluation covariance fit `0`, online truth
+  use `0`, ложных independent-frame claims `0`, probability claims для
+  quality `0`. Финальных проваленных критериев нет. Статистическое ограничение
+  явно сохранено: три независимые sequence на группу не дают узких tail
+  confidence intervals; CI не вычислялись, поэтому frame bootstrap не
+  применялся. `ROADMAP.md`: S7A=`Done`, S7B=`Next`. Итоговая формулировка:
+  **calibrated bearing measurement benchmark, not tracking and not a
+  signal-level CRLB**.
+- 2026-08-29 — полный S7A benchmark выполнен после PASS gates и повторно
+  воспроизведён внутри `bearing_uncertainty_validation.ipynb`. Сетка:
+  36 физических групп × `(3 calibration + 3 evaluation)` = **216 независимых
+  continuous sequences**, по 6000 reception samples (`0.125 s`) и 20 overlap
+  frames каждая. Итого по каждой split/group/method 60 статистически зависимых
+  residual samples, но ровно 3 независимые sequence units. Сохранены **216
+  covariance rows** (108 calibration + 108 evaluation) и **1368 quality rows**.
+  Все 108 calibration/evaluation sequence seeds уникальны внутри роли;
+  sequence/source/noise overlap между ролями равен `0`. Coverage всех строк
+  `1.0`, antipodal count `0`; все `R` symmetric, PSD и rank 2 без epsilon,
+  minimum eigenvalue `9.655e-8 rad^2`, maximum condition number `150.135`.
+  Notebook: 8 cells, `nbformat` valid, error-output `0`, unrun code `0`,
+  missing ID `0`. Полная регрессия и остальные notebook ещё не повторены.
+- 2026-08-29 — evaluation NIS не подтверждает универсальную Gaussian model.
+  Для 108 evaluation групп отношение empirical NIS P95 к `chi-square(2)` P95
+  имеет диапазон `0.0967…2.7851`, median `1.1535`; только `77/108` групп лежат
+  в диагностическом диапазоне `0.5…1.5`, а fraction выше chi-square P95 лежит
+  в `0…0.30`. Median P95-ratio по SNR равен `1.029/1.067/1.371` для
+  `-6/5/20 dB`. Это benchmark хвостов, **не утверждение Gaussian distribution**.
+  Средний evaluation RMSE tetrahedral для ref-3/all-6/SRP составляет на
+  `-6 dB` `4.394/1.669/0.741°`, на `5 dB` `0.237/0.177/0.179°`, на `20 dB`
+  `0.098/0.071/0.071°`; square соответственно `1.873/1.796/1.303°`,
+  `0.410/0.350/0.350°`, `0.309/0.304/0.309°`. Это усреднение по двум сигналам
+  и трём траекториям, не критерий превосходства метода.
+- 2026-08-29 — offline quality/error analysis показывает контекстную, а не
+  вероятностную связь. Средний по группам модуль Spearman наиболее велик у
+  SRP score margin (`0.214`), GCC mean/min peak ratio (`0.184/0.181`) и GCC
+  curvature (`0.166`); максимум отдельных групп достигает `0.655/0.763`.
+  Знак может меняться (например, на square/high-SNR систематические эффекты
+  дают положительную связь peak ratio с error), поэтому универсальная online
+  probability calibration не заявляется. Все group-level SRP curvature means
+  конечны; минимальная mean eigenvalue `0.445`. Профильный deterministic/study/
+  SRP/sequential набор: **34 passed in 8.99s**.
+- 2026-08-29 — observable quality добавлена в общий frame-wise API без truth:
+  GCC сохраняет peak ratios/curvatures/spectral energies используемых пар,
+  их агрегаты, boundary count и valid pair count; reference-3 использует
+  только три опорные пары, all-6 — шесть. SRP сохраняет peak score,
+  coarse-grid score margin и симметричную локальную `-H(score)` с собственными
+  значениями в координатах радиан дуги; на elevation-boundary Hessian явно
+  недоступен. Ни одна величина не называется вероятностью. Регрессия
+  SRP/moving/sequential: **27 passed in 8.36s**.
+- 2026-08-29 — реализован независимый sequence-level calibration/evaluation
+  pipeline `validation/bearing_uncertainty_study.py`. Основная сетка содержит
+  36 групп: tetrahedral/square × SNR `-6/5/20 dB` × stationary/transverse/
+  piecewise × random broadband/deterministic multisine, `fs=48 kHz`,
+  `L/H=1024/256`. Calibration/evaluation получают разные role-coded sequence,
+  source и noise seeds; все методы внутри sequence используют один stream.
+  Deterministic multisine сохраняет фиксированный спектр, но получает
+  воспроизводимый seed-dependent общий phase offset, поэтому splits имеют
+  разные waveform realizations. Smoke gate с `2+2` независимыми sequence
+  прошёл: 6 covariance и 38 quality records, все `R` symmetric/PSD, seed
+  overlap `0`, evaluation-fit use `0`, online truth use `0`. Профильные тесты:
+  **13 passed in 1.85s**. Для полного benchmark после PASS зафиксированы
+  **3 calibration + 3 evaluation независимых sequence на группу**, duration
+  `0.125 s`; overlap frames используются как зависимые residual samples, не
+  как independent trials. Полный study и notebook ещё не выполнены.
+- 2026-08-29 — реализован `model/bearing_statistics.py`. Для нормированных
+  `u,u_hat` вычисляются `theta=acos(clip(u^T u_hat,-1,1))`, сферический
+  `Log_u(u_hat)=theta*(u_hat-(u^T u_hat)u)/sin(theta)` и его координаты в
+  ортонормированном базисе `e_az,e_el`; единицы residual — радианы дуги.
+  Малые углы обрабатываются через норму касательной проекции, а почти
+  антиподальные направления явно дают `AntipodalDirectionError`, поскольку
+  log-map там не единственен. Sample covariance строится без произвольного
+  epsilon, сохраняет eigen/rank/condition/correlation diagnostics; NIS
+  использует `R^+`. Deterministic gate: **8 passed in 0.14s**. В wrap-тесте
+  elevation-компонент ограничен величиной второго порядка `delta_phi^2`:
+  одинаковый elevation двух точек не означает, что соединяющая их геодезическая
+  лежит на параллели. Calibration/evaluation study ещё не выполнен.
+- 2026-08-29 — полностью прочитаны `AGENTS.md`, `PROJECT_STATUS.md` и
+  `README.md`. Создан `ROADMAP.md` с этапами S0–S13, зависимостями и явным
+  различием single-station bearing tracking и multi-station 3D localization.
+  S7A отмечен `In progress`, S7B — `Planned (Next)`. Начата реализация
+  сферического tangent residual; deterministic/smoke gates, полный study,
+  notebook и общая приёмка ещё не выполнены.
 
 ### Точная схема последовательности
 

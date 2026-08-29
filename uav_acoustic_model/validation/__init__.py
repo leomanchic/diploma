@@ -40,6 +40,12 @@ from .sequential_doa_study import (
     run_sequential_configuration,
     run_sequential_doa_study,
 )
+from .bearing_uncertainty_study import (
+    BearingUncertaintyConfig,
+    default_bearing_uncertainty_configurations,
+    run_bearing_uncertainty_configuration,
+    run_bearing_uncertainty_study,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -72,4 +78,8 @@ __all__ = [
     "default_sequential_configurations",
     "run_sequential_configuration",
     "run_sequential_doa_study",
+    "BearingUncertaintyConfig",
+    "default_bearing_uncertainty_configurations",
+    "run_bearing_uncertainty_configuration",
+    "run_bearing_uncertainty_study",
 ]
