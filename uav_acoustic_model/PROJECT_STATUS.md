@@ -4,16 +4,114 @@
 
 ## Текущий этап
 
-Текущий этап: приёмочные исправления moving-source reporting для независимой
-покадровой GCC/WLS и equal-weight far-field SRP-PHAT локализации. Tracking,
-отражения, ветер, коррелированный фон и SRP-Harmonics не добавляются.
+Текущий этап: Continuous Multichannel Stream and Sequential Frame-wise DOA.
+Цель — последовательность независимых GCC/WLS и equal-weight SRP-PHAT
+bearing-оценок из одного непрерывного многоканального массива. EKF/UKF,
+alpha-beta filter, tracking, отражения, ветер, коррелированный фон и
+SRP-Harmonics не добавляются.
 
-Статус: **этап завершён**. Method-specific boundary reporting, раздельный
-runtime и SNR/seed metadata реализованы; полный CSV пересчитан, pytest и все
-notebook прошли итоговую проверку. Tracking не добавлялся.
+Статус: **этап завершён**. Chunked moving-source synthesis, overlap frame
+views, sequential study, CSV и notebook реализованы; полный pytest, все
+notebook, численный CSV-аудит и `pip check` прошли. Результат этапа:
+**sequential independent bearings, not tracking**.
+
+### Точная схема последовательности
+
+- Один source array `s[n]` синтезируется на весь source-time support. Из него
+  одним retarded-time проходом получаются непрерывные clean channels
+  `x_m[n]`; одна noise matrix `w_m[n]` создаётся один раз на всю
+  последовательность, после чего `y_m[n]=x_m[n]+w_m[n]`.
+- Frame `k` является view `y_m[kH : kH+L]` общего массива, где
+  `L=1024`, `H=256`, overlap `L-H=768` (`75%`). При `N=12000` samples
+  число frame равно `1+floor((N-L)/H)=43` на последовательность. Общие
+  overlap samples побитово одинаковы; frame не ресинтезируются.
+- Для start/end reception timestamps `t_s,t_f` центр равен
+  `t_c=(t_s+t_f)/2`. Истинный timestamp bearing — centroid emission time
+  `t_e`, решающий `t_c=t_e+||q(t_e)-centroid(r)||/c`, а не обычный reception
+  time. Physical delay равен `t_c-t_e`; acquisition latency для оценки,
+  относимой к центру frame, равна `t_f-t_c`; available timestamp равен
+  `t_f+t_algorithm`. Total emission-to-available latency равна сумме этих
+  трёх составляющих.
+- Frames обрабатываются по возрастанию `k`. Estimator получает только текущий
+  frame, координаты и `fs`; truth, future samples и будущие DOA ему не
+  передаются. Методы используют один frame hash и один shared six-pair GCC
+  frontend, затем отдельные reference-3/all-6/SRP backends.
+- Основные параметры: `fs=48000 Hz`, duration `0.25 s`, chunk `4096`,
+  Kaiser FIR `129`; maximum interpolation weight matrix содержит
+  `4096*129=528384` элементов вместо зависимости от полной длины stream.
+- Диагностические последовательности: stationary, constant-velocity
+  transverse/receding, circular, piecewise-linear maneuver, azimuth wrap
+  `359° -> 0°`, а также low-SNR `-12 dB` с явно маркированным all-channel
+  data dropout. Все траектории дозвуковые, не пересекают решётку и остаются
+  внутри построенного source-time support.
+- 43 overlap frame каждой последовательности статистически зависимы и не
+  называются независимыми trials. Frame-level и sequence-level метрики
+  хранятся отдельно в CSV.
 
 ### Журнал текущего этапа
 
+- 2026-08-29 — финальная приёмка завершена. Полный pytest после выполнения
+  notebook: **209 passed in 16.56s**; `pip check`: `No broken requirements
+  found`. Все **10/10** notebook программно выполнены и проходят
+  `nbformat.validate`; error-output `0`, невыполненных непустых code-ячеек
+  `0`, отсутствующих cell ID `0`. CSV counts: GCC `840/574/70`, SRP
+  `792/594`, moving `6480`, sequential frame/summary `903/21`. Sequential
+  аудит: 301 уникальный статистически зависимый frame, frame-hash violations
+  `0`, causality/timestamp violations `0`, truth/future-use flags `0`.
+  Stationary coverage `1.0`, truth change `0°`, RMSE
+  `0.0514/0.0381/0.0376°`; wrap coverage `1.0`, переход
+  `356.81° -> 2.97°`, RMSE `0.0681/0.0577/0.0579°` для
+  ref-3/all-6/SRP. В шести штатных sequence coverage `1.0`; low-SNR/dropout
+  coverage `0.88372`, пять invalid frame на метод без фиктивного bearing.
+  Mean algorithm runtime по штатным sequence находится примерно в диапазонах
+  `2.06…2.24 ms` ref-3, `1.48…1.68 ms` all-6 и `3.85…4.42 ms` SRP;
+  physical delay `72.874…76.562 ms`, acquisition latency `10.65625 ms`, total
+  latency `85.012…91.461 ms`. Новых ослабленных тестовых допусков нет;
+  P95/P99 по 43 overlap frames являются sequence diagnostics, не оценками
+  хвостов независимой выборки. Console warnings Windows ZMQ/IPython остаются
+  нефатальными и не являются notebook error-output. Итог:
+  **sequential independent bearings, not tracking**.
+- 2026-08-29 — новый `sequential_doa_validation.ipynb` программно выполнен:
+  `nbformat` valid, error-output `0`, невыполненных непустых code-ячеек `0`;
+  он повторно создал и проверил 903/21 CSV-строку, causality, shared hashes,
+  invalid semantics, stationary и wrap. После документации и package exports
+  полный pytest: **209 passed in 16.86s**. Это промежуточная приёмка: остальные
+  девять notebook ещё должны быть повторно выполнены до завершения этапа.
+- 2026-08-29 — реализован полный sequential study и два раздельных CSV.
+  Семь потоков по `0.25 s` содержат по 12000 reception samples при `48 kHz`;
+  `frame_length=1024`, `hop_length=256`, overlap `768` samples (`75%`) дают
+  по **43** перекрывающихся frame и всего **301 статистически зависимый
+  frame**, не independent trials. Сохранены **903 frame-level** строки
+  (три метода) и **21 sequence-level** агрегат. Для шести штатных
+  последовательностей coverage `1.0`; диапазоны conditional RMSE/P95/P99:
+  ref-3 `0.0514…0.1060° / 0.0855…0.1625° / 0.0953…0.1990°`, all-6
+  `0.0381…0.0880° / 0.0639…0.1474° / 0.0796…0.1661°`, SRP
+  `0.0376…0.0886° / 0.0627…0.1485° / 0.0785…0.1680°`. Low-SNR
+  (`-12 dB`) stream имеет явный all-channel data-dropout и ровно 5 invalid
+  frames на метод, coverage `38/43=0.88372`; invalid bearing/error fields
+  остаются пустыми. Stationary truth change строго `0°`; wrap-последовательность
+  проходит `356.81° -> 2.97°` с круговым шагом <`1°` и RMSE <`0.14°`.
+  Chunk `4096`, FIR `129`, maximum interpolation working set `528384`
+  coefficients. Mean physical propagation delay `72.874…76.562 ms`;
+  acquisition latency относительно центра frame до последнего принятого
+  sample `10.65625 ms` (`frame span=21.3125 ms`, nominal `1024/fs=21.3333 ms`);
+  algorithm runtime измеряется отдельно, total emission-to-available latency
+  `85.012…91.461 ms`. Causality audit: future sample/DOA use `0`, несовпадений
+  frame hash между методами `0`, timestamp violations `0`. Notebook создан и
+  проходит `nbformat`; профильные continuous/sequential/moving tests:
+  **27 passed in 4.02s**. Полная приёмка всех notebook ещё не выполнена.
+- 2026-08-29 — полностью прочитаны `AGENTS.md`, `PROJECT_STATUS.md` и
+  `README.md`; начат этап непрерывного потока. В `simulate_moving_source`
+  добавлен chunked режим: при блоке `B` и FIR длины `L` интерполяционный
+  working set ограничен `B*L`, тогда как emission times, delays и output
+  остаются непрерывными по всей последовательности. Реализован
+  `simulation/continuous_stream.py`: один source waveform, одна noise matrix
+  на весь stream и read-only overlap views исходного `channels`, без
+  покадрового ресинтеза. Strict regression для chunked/monolithic:
+  channels `atol=3e-12`, emission/delays `atol=2e-15 s`, одинаковый valid
+  region. Подтверждены точный overlap, v=0/static agreement и полная seed-
+  воспроизводимость. Профильный результат: **13 passed in 1.57s**. Этап не
+  завершён до sequential study, полного pytest и notebook-аудита.
 - 2026-08-29 — итоговая приёмка reporting-поправок завершена. После полного
   пересчёта `results/moving_source_summary.csv` выполнен весь pytest:
   **198 passed in 14.22s**. Все **9/9** notebook программно перевыполнены и

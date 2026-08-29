@@ -29,3 +29,8 @@
   sequence of independent frame-wise GCC/WLS and equal-weight far-field SRP-PHAT
   bearings. Do not call this tracking, and do not add EKF/UKF, SRP-Harmonics,
   reflections, wind, or correlated background without a later validated stage.
+- Sequential validation must synthesize one continuous source/channel/noise
+  realization and extract overlapping frame views from it. Never resynthesize
+  overlapping frames independently, never count overlapping frames as
+  independent trials, and never provide truth or future DOA estimates to an
+  estimator. Call the output "sequential independent bearings, not tracking".

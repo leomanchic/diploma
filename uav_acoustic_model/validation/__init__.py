@@ -34,6 +34,12 @@ from .moving_source_study import (
     run_moving_configuration,
     run_moving_source_study,
 )
+from .sequential_doa_study import (
+    SequentialStudyConfig,
+    default_sequential_configurations,
+    run_sequential_configuration,
+    run_sequential_doa_study,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -62,4 +68,8 @@ __all__ = [
     "default_moving_study_configurations",
     "run_moving_configuration",
     "run_moving_source_study",
+    "SequentialStudyConfig",
+    "default_sequential_configurations",
+    "run_sequential_configuration",
+    "run_sequential_doa_study",
 ]

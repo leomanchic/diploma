@@ -105,6 +105,25 @@ operational quantile. Clean-signal seed общий для одинаковых �
 все шесть GCC-пар; runtime отдельно хранит его стоимость и backend оценивателя,
 а reference-3 boundary и backend используют только три опорные пары.
 
+Continuous-stream этап синтезирует один source waveform, один непрерывный
+набор микрофонных каналов и одну noise matrix на всю последовательность.
+Перекрывающиеся frames являются views этого общего массива: общие 768
+отсчётов при `frame_length=1024`, `hop_length=256` совпадают точно и не
+синтезируются повторно. Chunked Kaiser-sinc режим с блоком 4096 ограничивает
+интерполяционный working set величиной `4096*129=528384` коэффициента и
+совпадает с monolithic режимом до `3e-12` по channels и `2e-15 s` по
+emission times/delays.
+
+Основной sequential study использует `fs=48000 Hz`, duration `0.25 s`, 12000
+reception samples и 43 frame на каждую из семи последовательностей. Истина
+каждого frame вычисляется в centroid emission time, соответствующем
+геометрическому центру reception frame. Отдельно сохраняются physical
+propagation delay, center-to-end acquisition latency, shared GCC frontend,
+estimator backend, available timestamp и total latency. Estimator получает
+только текущий frame, геометрию и `fs`; truth и будущие bearing-оценки ему не
+передаются. Это **sequential independent bearings, not tracking**. Число
+перекрывающихся frames не называется числом независимых trials.
+
 Вырожденная матрица Фишера не обращается: `conditional_crlb` поднимает `DegenerateInformationError`, а `conditional_angular_crlb` возвращает собственные значения и ненаблюдаемые локальные направления без конечной общей angular CRLB. Для полного ранга используется метрически корректная величина `sqrt(cos(elevation)² C_phi_phi + C_elevation_elevation)` одновременно в радианах и градусах.
 
 ## Сравниваемые решётки
@@ -141,6 +160,8 @@ operational quantile. Clean-signal seed общий для одинаковых �
 - `simulation/moving_source.py` — exact retarded-time kinematics in a
   homogeneous stationary medium, analytic/frozen cross-checks,
   Doppler time warp, causality и moving multi-channel synthesis;
+- `simulation/continuous_stream.py` — chunked continuous source/channel/noise
+  synthesis и точные overlap frame views;
 - `validation/far_field.py` — сеточный `E_tau(R)` и численный поиск границы;
 - `validation/propagation_study.py` — итоговые CSV-исследования;
 - `validation/gcc_study.py` — benchmark задержек и cross-generator GCC-аудит;
@@ -151,6 +172,8 @@ operational quantile. Clean-signal seed общий для одинаковых �
   раздельными calibration/evaluation seeds и exact/accelerated SRP-аудитом;
 - `validation/moving_source_study.py` — paired frame-wise moving/static
   GCC/WLS/SRP study с emission-time truth;
+- `validation/sequential_doa_study.py` — хронологические независимые
+  frame-wise bearings, latency metadata и frame/sequence CSV;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `notebooks/array_comparison.ipynb` — карты CRLB, ранга, обусловленности и вырождения;
@@ -166,6 +189,8 @@ operational quantile. Clean-signal seed общий для одинаковых �
   motion excess, within-frame DOA/TDOA change и Doppler;
 - `notebooks/moving_source_3d.ipynb` — Play/Pause и вращаемая сцена истинной
   траектории и независимых GCC/SRP bearing rays;
+- `notebooks/sequential_doa_validation.ipynb` — continuous-stream overlap,
+  causality, invalid, azimuth-wrap, error и latency validation;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -197,6 +222,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -c "from validation.srp_statistical import run_srp_statistical_validation; run_srp_statistical_validation()"
 .\.venv\Scripts\python.exe -c "from validation.moving_source_study import run_moving_source_study; run_moving_source_study()"
+.\.venv\Scripts\python.exe -c "from validation.sequential_doa_study import run_sequential_doa_study; run_sequential_doa_study()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -206,6 +232,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=3600 notebooks\srp_phat_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_3d.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\sequential_doa_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
