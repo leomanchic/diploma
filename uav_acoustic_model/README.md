@@ -131,9 +131,12 @@ S7A калибрует неопределённость этих bearing-изм�
 определяется через `Log_u(u_hat)` и проецируется на ортонормированный
 azimuth/elevation tangent basis; обе компоненты имеют единицы радиан дуги.
 Почти антиподальное направление отклоняется явно, поскольку log-map там не
-единственен. Матрица `R` строится только по calibration sequences без
-произвольной диагональной регуляризации; evaluation использует `R^+` для NIS.
-Сравнение NIS с `chi-square(2)` является только Gaussian benchmark.
+единственен. Матрица `R` и bias `mu_cal` строятся только по calibration
+sequences без произвольной диагональной регуляризации. Centered NIS равен
+`(r-mu_cal)^T R^+ (r-mu_cal)` для обоих split; evaluation mean не используется.
+Нецентрированная величина `r^T R^+ r` сохраняется отдельно как
+`raw_normalized_squared_error`. Только centered NIS сравнивается с
+`chi-square(2)`, и это сравнение является лишь Gaussian benchmark.
 
 Основная сетка S7A: tetrahedral/square, SNR `-6/5/20 dB`, stationary/
 transverse/piecewise, random broadband/deterministic multisine, `L=1024`,
