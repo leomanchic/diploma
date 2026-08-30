@@ -16,6 +16,40 @@ not a signal-level CRLB**.
 
 ### Журнал S7A
 
+- 2026-08-30 — корректирующий gate bias-centered NIS полностью принят перед
+  bearing tracking. CSV и notebook перегенерированы: **216 covariance / 1368
+  quality rows**, 36/36 calibration/evaluation физических групп. Во всех
+  216 строках сохранён ненулевой `mu_cal` (`calibration_bias_norm_deg`
+  `0.01052…0.83711°`), centered/raw P95 различаются, bias-correction flag
+  истинный, centering source равен только `calibration`, evaluation mean use
+  равен `0`, а `chi_square_comparison_statistic=centered_nis`. После коррекции
+  centered NIS P95 / `chi-square(2)` P95 на 108 evaluation группах имеет
+  диапазон `0.10165…2.33270`, median `1.15129`; `88/108` групп лежат в
+  диагностическом диапазоне `0.5…1.5`. Median raw normalized squared error
+  P95 / `chi-square(2)` P95 равна `1.15347`, но raw statistic с chi-square не
+  сравнивается. Реальный set-аудит всех 108/108 sequence/source/noise seeds
+  дал overlap `0/0/0`; декларативных замен этому контролю нет.
+  Финальная проверка после выполнения всех notebook: **226 passed in 17.48s**,
+  `pip check` — `No broken requirements found`; все **11/11 notebook** имеют
+  `nbformat` valid, error-output `0`, unrun code `0`, missing ID `0`.
+  Ослаблений допусков и проваленных критериев нет; прежнее ограничение на
+  tail confidence intervals при трёх независимых sequence/group сохраняется.
+  `ROADMAP.md`: S7A=`Done`, S7B=`Next`. Tracking/EKF/UKF не реализованы.
+  Итог: **calibrated bearing measurement benchmark, not tracking and not a
+  signal-level CRLB**.
+- 2026-08-30 — начат и пройден математический gate bias-centered NIS перед
+  S7B. Матрица `R` и `mu_cal` по-прежнему оцениваются только на calibration
+  residuals. Для обоих split теперь
+  `NIS_centered=(r-mu_cal)^T R^+ (r-mu_cal)`; evaluation mean нигде не
+  участвует в центрировании. Прежняя величина `r^T R^+ r` сохранена отдельно
+  как `raw_normalized_squared_error`, а `chi-square(2)` сравнивается только с
+  centered NIS. Добавлены calibration bias/centering source/bias-correction
+  fields. Sequence/source/noise disjointness теперь вычисляется реальным
+  пересечением множеств; любой ненулевой overlap останавливает study, CSV
+  хранит четыре overlap counts и audit flag. Профильный результат:
+  **17 passed in 5.55s**. Полные CSV/notebook ещё не перегенерированы, поэтому
+  корректирующий gate пока не объявлен завершённым; tracking/EKF/UKF не
+  реализуются.
 - 2026-08-29 — финальная приёмка S7A завершена. После полного повторного
   выполнения notebook весь pytest: **223 passed in 17.25s**; `pip check`:
   `No broken requirements found`. Все **11/11 notebook** выполнены через
@@ -45,8 +79,11 @@ not a signal-level CRLB**.
   minimum eigenvalue `9.655e-8 rad^2`, maximum condition number `150.135`.
   Notebook: 8 cells, `nbformat` valid, error-output `0`, unrun code `0`,
   missing ID `0`. Полная регрессия и остальные notebook ещё не повторены.
-- 2026-08-29 — evaluation NIS не подтверждает универсальную Gaussian model.
-  Для 108 evaluation групп отношение empirical NIS P95 к `chi-square(2)` P95
+- 2026-08-29 — первоначальная **raw, нецентрированная** диагностика
+  `r^T R^+ r` не подтверждала универсальную Gaussian model. Эти числа
+  superseded корректирующим gate 2026-08-30 и теперь хранятся только как
+  `raw_normalized_squared_error`, без chi-square comparison. Для 108 evaluation
+  групп прежнее отношение raw P95 к `chi-square(2)` P95
   имеет диапазон `0.0967…2.7851`, median `1.1535`; только `77/108` групп лежат
   в диагностическом диапазоне `0.5…1.5`, а fraction выше chi-square P95 лежит
   в `0…0.30`. Median P95-ratio по SNR равен `1.029/1.067/1.371` для

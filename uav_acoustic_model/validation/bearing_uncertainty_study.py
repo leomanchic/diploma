@@ -86,6 +86,32 @@ def split_sequence_seeds(
     return tuple(sequence_seed(split, configuration_index, index) for index in range(int(count)))
 
 
+def _split_seed_audit(
+    split_metadata: dict[str, tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]]
+) -> dict[str, int | bool]:
+    """Compute, and enforce, sequence/source/noise split disjointness."""
+
+    if set(split_metadata) != {"calibration", "evaluation"}:
+        raise ValueError("seed audit requires calibration and evaluation metadata")
+    calibration = tuple(set(values) for values in split_metadata["calibration"])
+    evaluation = tuple(set(values) for values in split_metadata["evaluation"])
+    names = ("sequence", "source", "noise")
+    overlaps = {
+        f"{name}_seed_overlap_count": len(calibration[index] & evaluation[index])
+        for index, name in enumerate(names)
+    }
+    calibration_all = set().union(*calibration)
+    evaluation_all = set().union(*evaluation)
+    overlaps["all_role_seed_overlap_count"] = len(calibration_all & evaluation_all)
+    if any(overlaps.values()):
+        details = ", ".join(f"{name}={count}" for name, count in overlaps.items())
+        raise RuntimeError(f"calibration/evaluation seed overlap detected: {details}")
+    return {
+        **overlaps,
+        "seed_disjointness_programmatically_verified": True,
+    }
+
+
 def _sequence_rows(
     config: BearingUncertaintyConfig,
     configuration_index: int,
@@ -238,27 +264,56 @@ def _nis_fields(
     benchmark = {quantile: float(chi2.ppf(quantile / 100.0, df=2)) for quantile in (50, 95, 99)}
     if calibration is None or residuals.size == 0:
         return {
-            "nis_sample_count": 0,
-            "nis_p50": None,
-            "nis_p95": None,
-            "nis_p99": None,
+            "centered_nis_sample_count": 0,
+            "centered_nis_p50": None,
+            "centered_nis_p95": None,
+            "centered_nis_p99": None,
+            "centered_nis_fraction_gt_chi_square_2_p95": None,
+            "raw_normalized_squared_error_sample_count": 0,
+            "raw_normalized_squared_error_p50": None,
+            "raw_normalized_squared_error_p95": None,
+            "raw_normalized_squared_error_p99": None,
             "chi_square_2_p50": benchmark[50],
             "chi_square_2_p95": benchmark[95],
             "chi_square_2_p99": benchmark[99],
-            "nis_fraction_gt_chi_square_2_p95": None,
+            "nis_centering_mean_az_arc_rad": None,
+            "nis_centering_mean_el_arc_rad": None,
+            "bias_correction_applied_to_centered_nis": False,
+            "nis_centering_mean_source_split": None,
+            "evaluation_mean_used_for_nis_centering": False,
+            "chi_square_comparison_statistic": "centered_nis",
         }
-    nis = np.asarray(
+    calibration_mean = calibration.mean_residual_rad
+    centered_nis = np.asarray(
+        normalized_innovation_squared(
+            residuals - calibration_mean, calibration.covariance_rad2
+        ),
+        dtype=float,
+    )
+    raw_error = np.asarray(
         normalized_innovation_squared(residuals, calibration.covariance_rad2), dtype=float
     )
     return {
-        "nis_sample_count": int(nis.size),
-        "nis_p50": float(np.percentile(nis, 50.0)),
-        "nis_p95": float(np.percentile(nis, 95.0)),
-        "nis_p99": float(np.percentile(nis, 99.0)),
+        "centered_nis_sample_count": int(centered_nis.size),
+        "centered_nis_p50": float(np.percentile(centered_nis, 50.0)),
+        "centered_nis_p95": float(np.percentile(centered_nis, 95.0)),
+        "centered_nis_p99": float(np.percentile(centered_nis, 99.0)),
+        "centered_nis_fraction_gt_chi_square_2_p95": float(
+            np.mean(centered_nis > benchmark[95])
+        ),
+        "raw_normalized_squared_error_sample_count": int(raw_error.size),
+        "raw_normalized_squared_error_p50": float(np.percentile(raw_error, 50.0)),
+        "raw_normalized_squared_error_p95": float(np.percentile(raw_error, 95.0)),
+        "raw_normalized_squared_error_p99": float(np.percentile(raw_error, 99.0)),
         "chi_square_2_p50": benchmark[50],
         "chi_square_2_p95": benchmark[95],
         "chi_square_2_p99": benchmark[99],
-        "nis_fraction_gt_chi_square_2_p95": float(np.mean(nis > benchmark[95])),
+        "nis_centering_mean_az_arc_rad": float(calibration_mean[0]),
+        "nis_centering_mean_el_arc_rad": float(calibration_mean[1]),
+        "bias_correction_applied_to_centered_nis": True,
+        "nis_centering_mean_source_split": "calibration",
+        "evaluation_mean_used_for_nis_centering": False,
+        "chi_square_comparison_statistic": "centered_nis",
     }
 
 
@@ -363,10 +418,7 @@ def run_bearing_uncertainty_configuration(
         )
         split_rows[split] = rows
         split_metadata[split] = seeds, source_seeds, noise_seeds
-    calibration_seeds = set(split_metadata["calibration"][0])
-    evaluation_seeds = set(split_metadata["evaluation"][0])
-    if calibration_seeds & evaluation_seeds:
-        raise RuntimeError("calibration and evaluation sequence seeds overlap")
+    seed_audit = _split_seed_audit(split_metadata)
     covariance_records: list[dict[str, object]] = []
     quality_records: list[dict[str, object]] = []
     for method in MOVING_STUDY_METHODS:
@@ -377,6 +429,9 @@ def run_bearing_uncertainty_configuration(
             calibrate_bearing_covariance(calibration_residuals)
             if calibration_residuals.shape[0] >= 2
             else None
+        )
+        calibration_mean = (
+            calibration.mean_residual_rad if calibration is not None else np.full(2, np.nan)
         )
         for split in ("calibration", "evaluation"):
             rows = _method_rows(split_rows[split], method)
@@ -405,6 +460,17 @@ def run_bearing_uncertainty_configuration(
                     "bias_norm_deg": float(np.rad2deg(np.linalg.norm(bias)))
                     if np.all(np.isfinite(bias))
                     else None,
+                    "calibration_mean_residual_az_arc_rad": float(calibration_mean[0])
+                    if np.isfinite(calibration_mean[0])
+                    else None,
+                    "calibration_mean_residual_el_arc_rad": float(calibration_mean[1])
+                    if np.isfinite(calibration_mean[1])
+                    else None,
+                    "calibration_bias_norm_deg": float(
+                        np.rad2deg(np.linalg.norm(calibration_mean))
+                    )
+                    if np.all(np.isfinite(calibration_mean))
+                    else None,
                     "radial_tangent_rmse_rad": float(
                         np.sqrt(np.mean(np.sum(residuals**2, axis=1)))
                     )
@@ -427,8 +493,27 @@ def run_bearing_uncertainty_configuration(
                         split_metadata["evaluation"][0]
                     ),
                     "seed_scope": f"s7a_{split}_independent_continuous_sequences",
-                    "calibration_evaluation_seed_overlap": False,
-                    "source_noise_realizations_disjoint_between_splits": True,
+                    "calibration_evaluation_seed_overlap": bool(
+                        seed_audit["all_role_seed_overlap_count"]
+                    ),
+                    "calibration_evaluation_sequence_seed_overlap_count": seed_audit[
+                        "sequence_seed_overlap_count"
+                    ],
+                    "calibration_evaluation_source_seed_overlap_count": seed_audit[
+                        "source_seed_overlap_count"
+                    ],
+                    "calibration_evaluation_noise_seed_overlap_count": seed_audit[
+                        "noise_seed_overlap_count"
+                    ],
+                    "calibration_evaluation_all_role_seed_overlap_count": seed_audit[
+                        "all_role_seed_overlap_count"
+                    ],
+                    "seed_disjointness_programmatically_verified": seed_audit[
+                        "seed_disjointness_programmatically_verified"
+                    ],
+                    "source_noise_realizations_disjoint_between_splits": not bool(
+                        seed_audit["all_role_seed_overlap_count"]
+                    ),
                     "common_signal_and_noise_across_methods_within_sequence": True,
                     "overlapping_frames_are_statistically_dependent": True,
                     "dependent_frames_are_independent_trials": False,
@@ -459,8 +544,10 @@ def run_s7a_gates() -> dict[str, object]:
     passed = (
         all(row["covariance_symmetric"] and row["covariance_positive_semidefinite"] for row in calibration)
         and all(not row["evaluation_residual_used_to_fit_covariance"] for row in covariance)
-        and not set(json.loads(covariance[0]["calibration_sequence_seeds_json"]))
-        & set(json.loads(covariance[0]["evaluation_sequence_seeds_json"]))
+        and all(row["seed_disjointness_programmatically_verified"] for row in covariance)
+        and all(row["calibration_evaluation_all_role_seed_overlap_count"] == 0 for row in covariance)
+        and all(row["bias_correction_applied_to_centered_nis"] for row in covariance)
+        and all(not row["evaluation_mean_used_for_nis_centering"] for row in covariance)
         and all(not row["truth_used_by_estimator"] for split in rows.values() for row in split)
     )
     if not passed:

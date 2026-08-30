@@ -26,7 +26,7 @@ bearing tracking может сглаживать последовательно�
 | S5 | Done | Реализовать прямую пространственную оценку | equal-weight far-field SRP-PHAT | reference/vector agreement и paired comparison | S4 |
 | S6 | Done | Учесть кинематику источника | trajectories, retarded-time propagation, moving study | analytic/numeric emission time и Doppler tests | S3–S5 |
 | S7 | Done | Получить причинную последовательность кадров | continuous stream, chunking, sequential DOA | единый signal/noise stream и causal frame estimates | S6 |
-| S7A | Done | Калибровать неопределённость bearing-измерений | spherical residual, calibration/evaluation study, covariance/quality CSV | split isolation, PSD `R`, evaluation NIS, notebook | S7 |
+| S7A | Done | Калибровать неопределённость bearing-измерений | spherical residual, calibration/evaluation study, covariance/quality CSV | split isolation, PSD `R`, calibration-bias-centered evaluation NIS, notebook | S7 |
 | S7B | Next | Последовательно фильтровать bearing одной станции | отдельно валидируемый bearing tracker и consistency study | причинность, calibrated `R`, matched no-filter baseline | S7A |
 | S8 | Planned | Добавить измеренную спектральную модель БПЛА | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
@@ -38,6 +38,9 @@ bearing tracking может сглаживать последовательно�
 ## Текущий переход
 
 S7A завершён как калиброванный benchmark неопределённости отдельных bearing-
-измерений. Он не реализует tracking и не является signal-level CRLB. Следующий
-этап — S7B; его bearing tracker должен использовать принятый split-calibrated
-`R` и сравниваться с matched последовательностью несглаженных измерений.
+измерений. Он сохраняет `R` и `mu_cal` только из calibration split; evaluation
+NIS центрируется исключительно по `mu_cal`, а raw normalized squared error
+хранится отдельно. S7A не реализует tracking и не является signal-level CRLB.
+Следующий этап — S7B; его bearing tracker должен использовать принятые
+split-calibrated `R,mu_cal` и сравниваться с matched последовательностью
+несглаженных измерений.

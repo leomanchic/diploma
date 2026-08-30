@@ -1,10 +1,18 @@
 import json
 
 import numpy as np
+import pytest
+
+from model.bearing_statistics import (
+    calibrate_bearing_covariance,
+    normalized_innovation_squared,
+)
 
 from validation.bearing_uncertainty_study import (
     BearingUncertaintyConfig,
     _covariance_fields,
+    _nis_fields,
+    _split_seed_audit,
     default_bearing_uncertainty_configurations,
     run_bearing_uncertainty_configuration,
     split_sequence_seeds,
@@ -51,7 +59,11 @@ def test_small_sequence_split_uses_calibration_only_for_psd_covariance_and_nis()
         assert not row["evaluation_residual_used_to_fit_covariance"]
         assert row["covariance_symmetric"]
         assert row["covariance_positive_semidefinite"]
-        assert row["nis_sample_count"] > 0
+        assert row["centered_nis_sample_count"] > 0
+        assert row["raw_normalized_squared_error_sample_count"] > 0
+        assert row["bias_correction_applied_to_centered_nis"]
+        assert row["nis_centering_mean_source_split"] == "calibration"
+        assert not row["evaluation_mean_used_for_nis_centering"]
         assert not row["dependent_frames_are_independent_trials"]
         assert not row["truth_used_by_online_estimator"]
         assert not row["signal_level_crlb_claimed"]
@@ -60,6 +72,18 @@ def test_small_sequence_split_uses_calibration_only_for_psd_covariance_and_nis()
     calibration_seeds = set(json.loads(evaluation[0]["calibration_sequence_seeds_json"]))
     evaluation_seeds = set(json.loads(evaluation[0]["evaluation_sequence_seeds_json"]))
     assert not calibration_seeds & evaluation_seeds
+    calibration_noises = set(
+        json.loads(next(row for row in covariance if row["split"] == "calibration")["noise_seeds_json"])
+    )
+    evaluation_sources = set(json.loads(evaluation[0]["source_seeds_json"]))
+    evaluation_noises = set(json.loads(evaluation[0]["noise_seeds_json"]))
+    calibration_source_row = next(row for row in covariance if row["split"] == "calibration")
+    calibration_sources = set(json.loads(calibration_source_row["source_seeds_json"]))
+    assert not calibration_sources & evaluation_sources
+    assert not calibration_noises & evaluation_noises
+    assert all(row["calibration_evaluation_source_seed_overlap_count"] == 0 for row in covariance)
+    assert all(row["calibration_evaluation_noise_seed_overlap_count"] == 0 for row in covariance)
+    assert all(row["seed_disjointness_programmatically_verified"] for row in covariance)
     assert quality
     assert all(not row["quality_score_probability_claimed"] for row in quality)
     for rows in split_rows.values():
@@ -121,3 +145,53 @@ def test_no_valid_calibration_measurements_produces_no_fictitious_covariance():
     assert not fields["covariance_available"]
     assert fields["covariance_rad2_json"] is None
     assert fields["covariance_eigenvalue_min_rad2"] is None
+
+
+def test_nonzero_calibration_bias_is_saved_and_removed_from_centered_nis():
+    calibration_residuals = np.asarray(
+        [[0.10, -0.05], [0.12, -0.03], [0.08, -0.07], [0.11, -0.08], [0.09, -0.02]]
+    )
+    calibration = calibrate_bearing_covariance(calibration_residuals)
+    assert np.linalg.norm(calibration.mean_residual_rad) > 0.05
+    fields = _nis_fields(calibration_residuals, calibration)
+    assert fields["nis_centering_mean_az_arc_rad"] == pytest.approx(
+        calibration.mean_residual_rad[0]
+    )
+    assert fields["nis_centering_mean_el_arc_rad"] == pytest.approx(
+        calibration.mean_residual_rad[1]
+    )
+    assert fields["bias_correction_applied_to_centered_nis"]
+    assert fields["centered_nis_p50"] < fields["raw_normalized_squared_error_p50"]
+
+
+def test_evaluation_nis_uses_calibration_mean_not_evaluation_mean():
+    calibration_residuals = np.asarray(
+        [[0.09, -0.04], [0.13, -0.02], [0.08, -0.08], [0.12, -0.07], [0.10, -0.03]]
+    )
+    evaluation_residuals = np.asarray(
+        [[0.25, 0.02], [0.27, 0.01], [0.24, 0.04], [0.28, 0.03]]
+    )
+    calibration = calibrate_bearing_covariance(calibration_residuals)
+    fields = _nis_fields(evaluation_residuals, calibration)
+    expected = normalized_innovation_squared(
+        evaluation_residuals - calibration.mean_residual_rad,
+        calibration.covariance_rad2,
+    )
+    incorrectly_self_centered = normalized_innovation_squared(
+        evaluation_residuals - np.mean(evaluation_residuals, axis=0),
+        calibration.covariance_rad2,
+    )
+    assert fields["centered_nis_p50"] == pytest.approx(np.percentile(expected, 50.0))
+    assert fields["centered_nis_p50"] != pytest.approx(
+        np.percentile(incorrectly_self_centered, 50.0)
+    )
+    assert not fields["evaluation_mean_used_for_nis_centering"]
+
+
+def test_programmatic_seed_audit_rejects_source_or_noise_overlap():
+    metadata = {
+        "calibration": ((1, 2), (11, 12), (21, 22)),
+        "evaluation": ((3, 4), (12, 13), (23, 24)),
+    }
+    with pytest.raises(RuntimeError, match="source_seed_overlap_count=1"):
+        _split_seed_audit(metadata)
