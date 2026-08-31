@@ -52,10 +52,14 @@ covariance — в nullspace Якобиана точных ограничений
 Preliminary feasibility `least_squares` используется только как initial point,
 если остаётся stochastic free direction. Совместимость определяется по
 финальному constraint residual после `trust-constr`. Оптимальность отдельно
-проверяется covariance-scaled projected-KKT residual
-`||Z.T @ grad(J)||`; завершение оптимизатора только по `xtol` без PASS этого
-критерия не принимается. Default acceptance tolerance для этого diagnostic —
-`1e-8`; exact-constraint tolerance остаётся `1e-10 rad`.
+проверяется в допустимом подпространстве. Для `g_Z=Z.T @ grad(J)` и
+`I_Z=Z.T @ I @ Z` сохраняются raw diagnostic `||g_Z||` и dimensionless
+residual `rho_KKT=0.5*sqrt(g_Z.T @ solve(I_Z, g_Z))`. Последний оценивает
+остаточную Newton-коррекцию в единицах локального standard deviation; default
+acceptance tolerance равен `1e-6`. Статус/сообщение SciPy сохраняются как
+diagnostics, но `optimizer.success=False` сам по себе не отклоняет конечную,
+feasible, forward-ray, полнонаблюдаемую и KKT-согласованную позицию.
+Exact-constraint tolerance остаётся `1e-10 rad`.
 
 `BearingMeasurement` содержит station/sequence/frame IDs, reception/available
 timestamps, local unit direction, calibration-only tangent `R,mu_cal`,

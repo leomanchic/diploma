@@ -66,9 +66,12 @@
   zero eigenvalue by epsilon or silently discard its nullspace.
 - A preliminary exact-constraint least-squares solve is only an initializer
   whenever constrained stochastic optimization is possible. Decide
-  compatibility from the final constraint residual, and require the scaled
-  projected-KKT diagnostic `||Z.T @ grad(J)||` to pass; an optimizer `xtol`
-  success alone is not acceptance.
+  compatibility from the final constraint residual. Report both raw
+  `||g_Z||`, where `g_Z=Z.T @ grad(J)`, and the dimensionless diagnostic
+  `0.5*sqrt(g_Z.T @ solve(Z.T @ I @ Z, g_Z))`; the latter must pass. Optimizer
+  exit status is diagnostic: neither `xtol` success alone guarantees
+  acceptance nor `success=False` alone invalidates an otherwise finite,
+  feasible, forward-ray, observable and KKT-consistent solution.
 - S7B fuses only bearings referring to one static source state/time and first
   validates fusion with direct bearing-level noise. For future dynamics,
   `t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`; equal reception timestamps can
