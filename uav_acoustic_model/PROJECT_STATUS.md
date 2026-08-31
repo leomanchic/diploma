@@ -9,10 +9,10 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **In review**: финальный Windows Python 3.12 job зелёный, но финальный
-Ubuntu Python 3.12 job упал на pytest и исследуется в pinned Linux окружении.
-`ROADMAP.md` отмечает S7B как `In review`, а S7C как `Planned (Next)`; S7C ещё
-не начинался. S7A остаётся завершённым benchmark
+Статус: **Done** после повторного pinned Linux воспроизведения, 10-кратного
+randomized stress-run и зелёной GitHub Actions matrix Ubuntu/Windows Python
+3.12. `ROADMAP.md` отмечает S7B как `Done`, а S7C как `Next`; S7C ещё не
+начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
 в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
@@ -21,6 +21,13 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — повторный diagnostic commit `6defb6b` прошёл обе CI jobs:
+  [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763226)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763057).
+  Одиночный Ubuntu failure commit `147a84c` не воспроизвёлся ни в read-only
+  Linux Docker full suite, ни в 10 последовательных 1000-scene gates, ни в
+  повторном CI. Workflow сохраняет публичную failure-аннотацию для будущих
+  отказов. S7B переведён в **Done**, S7C — в **Next**, но S7C не начат.
 - 2026-08-31 — финальный status commit `147a84c` временно вернул S7B в
   **In review**: [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459311852)
   прошёл, но [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459312050)

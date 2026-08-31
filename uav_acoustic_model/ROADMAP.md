@@ -28,8 +28,8 @@ bearing tracking может сглаживать последовательно�
 | S6 | Done | Учесть кинематику источника | trajectories, retarded-time propagation, moving study | analytic/numeric emission time и Doppler tests | S3–S5 |
 | S7 | Done | Получить причинную последовательность кадров | continuous stream, chunking, sequential DOA | единый signal/noise stream и causal frame estimates | S6 |
 | S7A | Done | Калибровать неопределённость bearing-измерений | spherical residual, calibration/evaluation study, covariance/quality CSV | split isolation, PSD `R`, calibration-bias-centered evaluation NIS, notebook | S7 |
-| S7B | In review | Задать ENU, station poses, общий measurement contract и статическую 3D bearing-триангуляцию | `StationPose`, `BearingMeasurement`, constrained spherical WLS, observability/Monte Carlo/visualization | deterministic invariance/Jacobian gates, exact nullspace constraints, dimensionless projected-KKT optimality, cross-platform CI, явное вырождение, full static study | S7A |
-| S7C | Planned (Next) | Реализовать центральный причинный dynamic 3D tracker | asynchronous retarded-time bearing model и tracker benchmark | causal timing, matched static/no-tracker baselines, consistency | S7B |
+| S7B | Done | Задать ENU, station poses, общий measurement contract и статическую 3D bearing-триангуляцию | `StationPose`, `BearingMeasurement`, constrained spherical WLS, observability/Monte Carlo/visualization | deterministic invariance/Jacobian gates, exact nullspace constraints, dimensionless projected-KKT optimality, cross-platform CI, явное вырождение, full static study | S7A |
+| S7C | Next | Реализовать центральный причинный dynamic 3D tracker | asynchronous retarded-time bearing model и tracker benchmark | causal timing, matched static/no-tracker baselines, consistency | S7B |
 | S8 | Planned | Добавить измеренные сигналы БПЛА и held-out datasets | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
@@ -51,11 +51,11 @@ bearing tracking может сглаживать последовательно�
 ## Текущий переход
 
 S7A завершён как калиброванный benchmark неопределённости отдельных bearing-
-измерений. S7B снова находится на cross-platform corrective gate после
-повторного Ubuntu pytest failure: compatibility проверяется по финальному
-constrained solution, а projected-KKT должен оставаться dimensionless
-Newton-correction metric, инвариантной к rigid transforms и масштабу сцены.
-S7C имеет статус `Planned (Next)`, ещё не начат и должен позднее реализовать
+измерений. S7B завершён после повторного cross-platform corrective gate:
+compatibility проверяется по финальному constrained solution, а projected-KKT
+остаётся dimensionless Newton-correction metric, инвариантной к rigid
+transforms и масштабу сцены. S7C имеет статус `Next`, ещё не начат и должен
+позднее реализовать
 центральный причинный dynamic 3D tracker с asynchronous/retarded-time bearing
 measurements; в S7B tracking не добавляется.
 
