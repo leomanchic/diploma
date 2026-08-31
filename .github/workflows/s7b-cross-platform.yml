@@ -38,7 +38,14 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run pytest
-        run: python -m pytest -q
+        run: >-
+          python -c "import subprocess,sys;
+          completed=subprocess.run([sys.executable,'-m','pytest','-q'],text=True,capture_output=True);
+          print(completed.stdout,end='');print(completed.stderr,end='',file=sys.stderr);
+          diagnostic='\n'.join((completed.stdout+'\n'+completed.stderr).splitlines()[-120:]);
+          escaped=diagnostic.replace('%','%25').replace('\r','%0D').replace('\n','%0A');
+          print('::error title=pytest failure::'+escaped) if completed.returncode else None;
+          raise SystemExit(completed.returncode)"
 
       - name: Check dependency consistency
         run: python -m pip check
