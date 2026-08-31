@@ -669,6 +669,19 @@ def triangulate_bearings_spherical_wls(
                     warnings.filterwarnings(
                         "ignore", message="delta_grad == 0.0", category=UserWarning
                     )
+                    # SciPy SR1 can also warn while taking the reciprocal of
+                    # an effectively zero update denominator.  This is an
+                    # internal intermediate update: the returned position is
+                    # still accepted only after the independent exact-
+                    # constraint and scaled projected-KKT gates below.  Match
+                    # only the originating SciPy module/message; do not hide
+                    # unrelated numerical warnings or alter the SR1 algebra.
+                    warnings.filterwarnings(
+                        "ignore",
+                        message="overflow encountered in scalar divide",
+                        category=RuntimeWarning,
+                        module=r"scipy\.optimize\._hessian_update_strategy",
+                    )
                     constrained = minimize(
                         objective,
                         position,

@@ -21,6 +21,23 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — открыт неблокирующий housekeeping после S7B: GitHub Actions
+  переводится на `actions/checkout@v7` и `actions/setup-python@v7`, checkout
+  получает `fetch-depth: 0`, а whitespace gate проверяет branch diff от
+  merge-base через `git diff --check origin/main...HEAD`. Узкий SciPy SR1
+  `RuntimeWarning: overflow encountered in scalar divide` локализован во
+  внутреннем reciprocal почти нулевого update denominator и точечно подавлен
+  только для модуля `scipy.optimize._hessian_update_strategy`; final
+  constraint/KKT/observability/forward-ray gates не меняются. Математика,
+  допуски и CSV не изменялись. Локально: полный pytest **259 passed in
+  40.25s**, `pip check` PASS, `git diff --check` PASS, `results/` без diff.
+  Pinned Linux `numpy=2.4.6`/`scipy=1.17.1` повторил 1000-scene randomized
+  gate: **1 passed in 18.69s**, прежний SR1 warning отсутствует. Из-за
+  housekeeping-объёма notebooks не перезаписывались и CSV не пересчитывались;
+  новый merge-base whitespace gate дополнительно обнаружил и удалил только
+  trailing blank EOF lines в двух существующих multistation tests.
+  Cross-platform CI matrix остаётся финальным acceptance gate. S7B остаётся
+  `Done`, S7C не начат.
 - 2026-08-31 — повторный diagnostic commit `6defb6b` прошёл обе CI jobs:
   [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763226)
   и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763057).

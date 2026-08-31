@@ -47,4 +47,3 @@ def test_scene_plots_bearing_rays_position_and_covariance_only_in_validation_mod
     assert figure is axis.figure
     assert len(axis.lines) >= 3
     assert "bearing triangulation" in axis.get_title()
-
