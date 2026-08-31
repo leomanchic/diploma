@@ -1,9 +1,54 @@
-# Модель акустического определения направления на БПЛА
+# Многопозиционная акустическая модель локализации БПЛА
 
 План развития и зависимости этапов: [ROADMAP.md](ROADMAP.md). Численные
 результаты выполненных проверок ведутся отдельно в [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
-Воспроизводимая геометрическая TDOA-модель для четырёхмикрофонных решёток. Реализация охватывает точную сферическую модель, приближение плоской волны, аналитический Якобиан, условную CRLB согласованной гауссовской TDOA-модели и ограниченный взвешенный МНК для направления прихода.
+Конечная цель — воспроизводимая система из трёх пространственно разнесённых
+микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Текущий S7B
+реализует проверенный статический фундамент: каждая станция выдаёт только
+калиброванный bearing, после чего несколько одновременных bearings
+триангулируются в общей мировой системе. Динамическое 3D tracking будет
+отдельным этапом S7C.
+
+Одностанционная часть проекта по-прежнему охватывает точную сферическую и
+плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
+retarded-time синтез движения, continuous frames и калибровку tangent
+bearing covariance. Одна станция не измеряет акустическую дальность.
+
+## Статическая многопозиционная модель S7B
+
+Мировая система — правая ENU: `x=East`, `y=North`, `z=Up`. Поза станции
+состоит из centroid `p_k`, proper rotation `Q_k` из локальной системы в ENU и
+centroid-relative координат микрофонов:
+
+```text
+r_world = p_k + Q_k r_local
+d_k = Q_k u_hat_local,k
+u_pred_local,k(q) = Q_k.T (q-p_k) / ||q-p_k||
+r_k(q) = tangent_residual(u_pred_local,k(q), u_hat_local,k) - mu_cal,k
+J(q) = sum_k r_k(q).T R_k^+ r_k(q)
+```
+
+Closed-form closest-rays baseline использует
+`pinv(sum w_k(I-d_k d_k.T))`; основной результат получает spherical weighted
+nonlinear least squares. Initial point и online measurement не содержат true
+position/range. Проверяются forward rays, analytic/numeric Jacobian, rank,
+eigenvalues и condition position information. При полном ранге
+`C_q≈I_q^-1` называется только **local Gaussian covariance benchmark**. При
+вырождении finite covariance не возвращается, ground/`z>=0` constraint скрыто
+не вводится.
+
+`BearingMeasurement` содержит station/sequence/frame IDs, reception/available
+timestamps, local unit direction, calibration-only tangent `R,mu_cal`,
+estimator/quality/valid metadata. В нём намеренно нет truth direction,
+position, angular error, future estimates или true emission time.
+
+Статический S7B принимает только measurements одного source state/time.
+Будущая динамическая модель S7C должна учитывать
+`t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`: одинаковое reception time разных
+станций может соответствовать разным emission times. Простое пересечение
+асинхронных лучей движущегося источника не считается корректной dynamic
+localization.
 
 ## Соглашения
 
@@ -169,11 +214,15 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `model/jacobian.py` — аналитический и центрально-разностный Якобианы;
 - `model/statistics.py` — матрица Фишера, ранг, обусловленность и условная CRLB;
 - `model/bearing_statistics.py` — spherical log-map residual, tangent covariance и NIS;
+- `model/station.py` — immutable ENU station poses и local/world transforms;
+- `model/measurements.py` — truth-free calibrated bearing measurement contract;
 - `estimators/wls_doa.py` — WLS на единичной верхней полусфере;
 - `estimators/gcc_phat.py` — ориентированный sub-sample GCC-PHAT;
 - `estimators/srp_phat.py` — direct/vectorized equal-pair far-field SRP-PHAT;
 - `estimators/cycle_projection.py` — weighted projection всех пар на пространство
   физически согласованных TDOA;
+- `estimators/bearing_triangulation.py` — closest-rays baseline, spherical
+  weighted static 3D triangulation, Jacobian и position observability;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -199,8 +248,12 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   frame-wise bearings, latency metadata и frame/sequence CSV;
 - `validation/bearing_uncertainty_study.py` — independent-sequence
   calibration/evaluation covariance, NIS и observable-quality benchmark;
+- `validation/multistation_static_study.py` — direct-bearing three-station
+  calibration/evaluation Monte Carlo, pose/covariance mismatch и station loss;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
+- `visualization/multistation_scene.py` — ENU station axes, bearing rays,
+  static 3D estimate, ray residuals и local covariance ellipsoid;
 - `notebooks/array_comparison.ipynb` — карты CRLB, ранга, обусловленности и вырождения;
 - `notebooks/monte_carlo_crlb_validation.ipynb` — статистическая проверка WLS относительно CRLB;
 - `notebooks/far_field_fractional_delay_validation.ipynb` — дальняя зона, задержки и каналы;
@@ -218,6 +271,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   causality, invalid, azimuth-wrap, error и latency validation;
 - `notebooks/bearing_uncertainty_validation.ipynb` — spherical residual,
   covariance conditioning, evaluation NIS и quality/error associations;
+- `notebooks/multistation_static_validation.ipynb` — geometry/observability,
+  position tails, covariance benchmark и good/poor 3D scenes;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -251,6 +306,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.moving_source_study import run_moving_source_study; run_moving_source_study()"
 .\.venv\Scripts\python.exe -c "from validation.sequential_doa_study import run_sequential_doa_study; run_sequential_doa_study()"
 .\.venv\Scripts\python.exe -c "from validation.bearing_uncertainty_study import run_bearing_uncertainty_study; run_bearing_uncertainty_study()"
+.\.venv\Scripts\python.exe -c "from validation.multistation_static_study import run_multistation_static_study; run_multistation_static_study()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -262,6 +318,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_3d.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\sequential_doa_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 notebooks\bearing_uncertainty_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\multistation_static_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -275,3 +332,8 @@ CRLB здесь условна относительно уже полученн�
 независимые покадровые far-field equal-weight SRP-PHAT/GCC bearings.
 SRP-Harmonics, отражения, ветер, коррелированный фон и EKF/UKF tracking пока
 не реализованы.
+
+Статическая 3D-триангуляция S7B проверена сначала на непосредственных
+bearing-измерениях, поэтому её ошибки не смешаны с GCC/SRP. Clock
+offset/drift пока только входят в station contract: синхронизация,
+асинхронный retarded-time fusion и central dynamic 3D tracker не реализованы.

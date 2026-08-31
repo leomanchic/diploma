@@ -1,5 +1,14 @@
 """Direction-of-arrival estimators."""
 
+from .bearing_triangulation import (
+    ClosestRaysResult,
+    TriangulationResult,
+    bearing_residual,
+    bearing_residual_jacobian,
+    closest_rays_triangulation,
+    numerical_bearing_residual_jacobian,
+    triangulate_bearings_spherical_wls,
+)
 from .cycle_projection import (
     CycleProjectionResult,
     DisconnectedPairGraphError,
@@ -28,11 +37,13 @@ from .wls_doa import (
 
 __all__ = [
     "DOAEstimate",
+    "ClosestRaysResult",
     "CycleProjectionResult",
     "DirectGCCPHATResult",
     "GCCPHATResult",
     "SRPPHATResult",
     "SRPScoreGridResult",
+    "TriangulationResult",
     "DisconnectedPairGraphError",
     "UnobservableGeometryError",
     "direct_gcc_phat_correlation",
@@ -40,8 +51,13 @@ __all__ = [
     "estimate_doa_wls",
     "estimate_doa_spherical_wls",
     "estimate_tdoas_gcc_phat",
+    "bearing_residual",
+    "bearing_residual_jacobian",
+    "closest_rays_triangulation",
     "gcc_phat",
     "project_tdoa_cycles",
+    "numerical_bearing_residual_jacobian",
     "srp_phat",
     "vectorized_srp_phat_scores",
+    "triangulate_bearings_spherical_wls",
 ]

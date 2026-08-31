@@ -46,6 +46,12 @@ from .bearing_uncertainty_study import (
     run_bearing_uncertainty_configuration,
     run_bearing_uncertainty_study,
 )
+from .multistation_static_study import (
+    StaticStudyConfig,
+    default_static_study_configurations,
+    run_multistation_static_study,
+    run_static_configuration,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -82,4 +88,8 @@ __all__ = [
     "default_bearing_uncertainty_configurations",
     "run_bearing_uncertainty_configuration",
     "run_bearing_uncertainty_study",
+    "StaticStudyConfig",
+    "default_static_study_configurations",
+    "run_multistation_static_study",
+    "run_static_configuration",
 ]

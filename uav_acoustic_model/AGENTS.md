@@ -47,3 +47,21 @@
   form a quality score. Do not call an uncalibrated score a probability.
 - S7A is a calibrated bearing measurement benchmark, not tracking and not a
   signal-level CRLB. Do not add EKF/UKF/alpha-beta filtering during S7A.
+- Multi-station world coordinates use a right-handed ENU frame: `x=East`,
+  `y=North`, `z=Up`. A `StationPose.position_world_m` is the array centroid;
+  local microphone coordinates must be centroid-relative and
+  `r_world=p_station+Q_local_to_world@r_local`, with `Q` a proper rotation.
+- The online `BearingMeasurement` contract must remain truth-free. Never add
+  true direction/position, angular error, future estimates, or true emission
+  time to it. Calibration bias enters the spherical tangent residual; never
+  subtract raw azimuth/elevation coordinates.
+- One station measures bearing, not range. Static multi-station position
+  covariance is only a local Gaussian linearization benchmark. Do not hide
+  position-information rank deficiency with epsilon, an ordinary inverse, a
+  ground constraint, or an unreported `z>=0` bound.
+- S7B fuses only bearings referring to one static source state/time and first
+  validates fusion with direct bearing-level noise. For future dynamics,
+  `t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`; equal reception timestamps can
+  correspond to different emission times. Do not intersect asynchronous
+  moving-source rays and call it dynamic localization. Central causal
+  retarded-time 3-D tracking belongs to S7C.

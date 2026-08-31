@@ -14,21 +14,29 @@ PAIRS = all_pairs(M)
 B = incidence_matrix(PAIRS, M)
 
 
+def _roundoff_tolerance(values, *, operation_factor=64.0):
+    """Scale a reconstruction tolerance by data magnitude and float epsilon."""
+
+    scale = max(float(np.linalg.norm(np.asarray(values, dtype=float))), np.finfo(float).tiny)
+    return operation_factor * np.finfo(float).eps * scale
+
+
 def test_ideal_tdoa_is_unchanged_by_cycle_projection():
     arrival_times = np.asarray([1.2, -0.7, 0.4, 2.1]) * 1e-4
     ideal = B @ arrival_times
     result = project_tdoa_cycles(ideal, PAIRS, M)
-    np.testing.assert_allclose(result.consistent_tdoa, ideal, atol=2e-19)
-    np.testing.assert_allclose(result.residual, 0.0, atol=2e-19)
-    assert result.cycle_residual_before < 2e-19
-    assert result.cycle_residual_after < 2e-19
+    tolerance = _roundoff_tolerance(ideal)
+    np.testing.assert_allclose(result.consistent_tdoa, ideal, rtol=64 * np.finfo(float).eps, atol=tolerance)
+    np.testing.assert_allclose(result.residual, 0.0, atol=tolerance)
+    assert result.cycle_residual_before < tolerance
+    assert result.cycle_residual_after < tolerance
 
 
 def test_projection_enforces_cycles_for_inconsistent_measurements():
     measured = np.asarray([2.0, -1.0, 0.5, 1.7, -0.9, 2.4]) * 1e-4
     result = project_tdoa_cycles(measured, PAIRS, M)
     assert result.cycle_residual_before > 1e-5
-    assert result.cycle_residual_after < 2e-19
+    assert result.cycle_residual_after < _roundoff_tolerance(measured)
     np.testing.assert_allclose(result.consistent_tdoa, B @ result.arrival_times, atol=0.0)
 
 
@@ -72,9 +80,13 @@ def test_pair_orientation_does_not_change_physical_projection():
         M,
         weights=signs[:, None] * weights * signs[None, :],
     )
-    np.testing.assert_allclose(oriented.arrival_times, baseline.arrival_times, atol=2e-19)
+    tolerance = _roundoff_tolerance(baseline.arrival_times)
+    np.testing.assert_allclose(oriented.arrival_times, baseline.arrival_times, rtol=64 * np.finfo(float).eps, atol=tolerance)
     np.testing.assert_allclose(
-        oriented.consistent_tdoa, signs * baseline.consistent_tdoa, atol=2e-19
+        oriented.consistent_tdoa,
+        signs * baseline.consistent_tdoa,
+        rtol=64 * np.finfo(float).eps,
+        atol=_roundoff_tolerance(baseline.consistent_tdoa),
     )
     assert oriented.weighted_cost == pytest.approx(baseline.weighted_cost, abs=2e-24)
 
@@ -90,4 +102,4 @@ def test_diagonal_confidence_weights_are_supported():
         measured, PAIRS, M, weights=np.asarray([1.0, 2.0, 4.0, 3.0, 1.5, 0.8])
     )
     assert np.isfinite(result.weighted_cost)
-    assert result.cycle_residual_after < 2e-19
+    assert result.cycle_residual_after < _roundoff_tolerance(measured)
