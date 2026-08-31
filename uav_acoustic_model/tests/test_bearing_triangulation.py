@@ -1,9 +1,12 @@
 """Deterministic static spherical bearing-triangulation tests."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
+import estimators.bearing_triangulation as triangulation_module
 from estimators.bearing_triangulation import (
     bearing_residual,
     bearing_residual_jacobian,
@@ -297,6 +300,144 @@ def _measurements_with_tangent_offsets(stations, target, offsets, covariance):
     return measurements
 
 
+def _preliminary_false_invalid_scene():
+    """Compatible rank-1 scene whose preliminary residual exceeds 1e-10 rad."""
+
+    positions = [
+        np.zeros(3),
+        np.asarray(
+            [2.6187739630770173, -3.7639142858335752, -0.6555642820150913]
+        ),
+    ]
+    rotations = [
+        np.asarray(
+            [
+                [-0.1815239609872818, 0.9522455918315212, 0.24551452996701423],
+                [-0.599401613341004, 0.09078324025270512, -0.7952836658786735],
+                [-0.7795939696481045, -0.29152484649966937, 0.5542982106787417],
+            ]
+        ),
+        np.asarray(
+            [
+                [0.6755760966566243, -0.5943121581691221, 0.43633702143934494],
+                [-0.05288270742599477, -0.6293468449548808, -0.7753231377952249],
+                [0.7353912950813979, 0.5007150960353574, -0.45660052093794945],
+            ]
+        ),
+    ]
+    target = np.asarray([4.720723664433317, -43.01134796374569, 73.40353800707986])
+    covariance = np.asarray(
+        [
+            [3.0968741635773465e-06, -6.237830354392658e-06],
+            [-6.237830354392658e-06, 1.256445224278504e-05],
+        ]
+    )
+    offsets = [
+        np.asarray([0.01890537856186321, -0.03807986312180334]),
+        np.asarray([-0.00125966859196989, 0.00253726776240342]),
+    ]
+    stations = [
+        StationPose(f"S{index}", position, rotation, tetrahedral_array(0.2))
+        for index, (position, rotation) in enumerate(
+            zip(positions, rotations, strict=True)
+        )
+    ]
+    measurements = _measurements_with_tangent_offsets(
+        stations, target, offsets, covariance
+    )
+    return stations, measurements, target
+
+
+def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
+    """Return deterministic robustness diagnostics for compatible rank-1 scenes."""
+
+    rng = np.random.default_rng(seed)
+    microphone_array = tetrahedral_array(0.2)
+    failures = []
+    max_preliminary = 0.0
+    max_final = 0.0
+    max_kkt = 0.0
+    preliminary_exceedance_count = 0
+    for trial in range(scene_count):
+        baseline = rng.uniform(8.0, 40.0)
+        baseline_azimuth = rng.uniform(-np.pi, np.pi)
+        second_position = np.asarray(
+            [
+                baseline * np.cos(baseline_azimuth),
+                baseline * np.sin(baseline_azimuth),
+                rng.uniform(-2.0, 2.0),
+            ]
+        )
+        positions = [np.zeros(3), second_position]
+        midpoint = 0.5 * second_position
+        source_azimuth = rng.uniform(-np.pi, np.pi)
+        source_elevation = np.deg2rad(rng.uniform(15.0, 70.0))
+        source_direction = np.asarray(
+            [
+                np.cos(source_elevation) * np.cos(source_azimuth),
+                np.cos(source_elevation) * np.sin(source_azimuth),
+                np.sin(source_elevation),
+            ]
+        )
+        target = midpoint + rng.uniform(25.0, 120.0) * source_direction
+        rotations = [
+            Rotation.random(random_state=rng).as_matrix() for _ in range(2)
+        ]
+        stations = [
+            StationPose(f"S{index}", position, rotation, microphone_array)
+            for index, (position, rotation) in enumerate(
+                zip(positions, rotations, strict=True)
+            )
+        ]
+        covariance_angle = rng.uniform(-np.pi, np.pi)
+        covariance_basis = np.asarray(
+            [
+                [np.cos(covariance_angle), -np.sin(covariance_angle)],
+                [np.sin(covariance_angle), np.cos(covariance_angle)],
+            ]
+        )
+        sigma = np.deg2rad(rng.uniform(0.2, 2.0))
+        covariance = (
+            covariance_basis @ np.diag([sigma**2, 0.0]) @ covariance_basis.T
+        )
+        offsets = [
+            rng.normal(0.0, 0.5 * sigma) * covariance_basis[:, 0]
+            for _ in stations
+        ]
+        measurements = _measurements_with_tangent_offsets(
+            stations, target, offsets, covariance
+        )
+        result = triangulate_bearings_spherical_wls(stations, measurements)
+        if not result.valid:
+            failures.append(
+                (
+                    trial,
+                    result.failure_reason,
+                    result.preliminary_constraint_max_abs_rad,
+                    result.constraint_max_abs_rad,
+                    result.scaled_projected_kkt_residual,
+                )
+            )
+        preliminary_exceedance_count += int(
+            result.preliminary_constraint_max_abs_rad > 1e-10
+        )
+        max_preliminary = max(
+            max_preliminary, result.preliminary_constraint_max_abs_rad
+        )
+        max_final = max(max_final, result.constraint_max_abs_rad)
+        max_kkt = max(max_kkt, result.scaled_projected_kkt_residual)
+    return {
+        "scene_count": scene_count,
+        "seed": seed,
+        "false_invalid_count": len(failures),
+        "failures": failures,
+        "preliminary_exceedance_count": preliminary_exceedance_count,
+        "max_preliminary_constraint_residual_rad": max_preliminary,
+        "max_final_constraint_residual_rad": max_final,
+        "max_scaled_projected_kkt_residual": max_kkt,
+    }
+
+
 def test_three_exact_nonparallel_bearings_with_zero_covariance_recover_position():
     stations, _, target = _scene()
     measurements = _measurements_with_tangent_offsets(
@@ -340,6 +481,52 @@ def test_rank_one_covariance_enforces_zero_variance_component_exactly():
         0.0,
         atol=1e-13,
     )
+
+
+def test_preliminary_feasibility_exceedance_does_not_cause_false_invalid():
+    stations, measurements, _ = _preliminary_false_invalid_scene()
+    result = triangulate_bearings_spherical_wls(stations, measurements)
+    assert result.constrained_optimization_performed
+    assert result.preliminary_constraint_max_abs_rad > 1e-10
+    assert result.preliminary_constraint_max_abs_rad < 2e-10
+    assert result.valid
+    assert result.failure_reason is None
+    assert result.constraints_satisfied
+    assert result.constraint_max_abs_rad < 1e-14
+    assert result.projected_kkt_satisfied
+    assert result.scaled_projected_kkt_residual < 1e-10
+
+
+def test_xtol_success_is_rejected_when_projected_kkt_is_not_satisfied(monkeypatch):
+    stations, measurements, target = _preliminary_false_invalid_scene()
+
+    def fake_xtol_minimize(*args, **kwargs):
+        return SimpleNamespace(
+            x=np.asarray(target),
+            success=True,
+            message="`xtol` termination condition is satisfied.",
+            niter=1,
+        )
+
+    monkeypatch.setattr(triangulation_module, "minimize", fake_xtol_minimize)
+    result = triangulation_module.triangulate_bearings_spherical_wls(
+        stations, measurements
+    )
+    assert result.constraints_satisfied
+    assert result.optimizer_message.startswith("`xtol`")
+    assert not result.projected_kkt_satisfied
+    assert result.scaled_projected_kkt_residual > result.projected_kkt_tolerance
+    assert not result.valid
+    assert result.failure_reason == "projected_kkt_not_satisfied"
+
+
+def test_randomized_compatible_two_station_rank_one_scenes_have_no_false_invalid():
+    audit = _run_randomized_rank_one_audit(scene_count=1000, seed=20260831)
+    assert audit["scene_count"] == 1000
+    assert audit["false_invalid_count"] == 0, audit["failures"][:5]
+    assert audit["preliminary_exceedance_count"] > 0
+    assert audit["max_final_constraint_residual_rad"] < 1e-12
+    assert audit["max_scaled_projected_kkt_residual"] <= 1e-8
 
 
 def test_incompatible_deterministic_bearings_return_explicit_invalid():

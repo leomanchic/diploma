@@ -64,6 +64,11 @@
   and enforce every zero-eigenvalue component as an exact equality constraint.
   Report incompatible deterministic constraints as invalid; never replace a
   zero eigenvalue by epsilon or silently discard its nullspace.
+- A preliminary exact-constraint least-squares solve is only an initializer
+  whenever constrained stochastic optimization is possible. Decide
+  compatibility from the final constraint residual, and require the scaled
+  projected-KKT diagnostic `||Z.T @ grad(J)||` to pass; an optimizer `xtol`
+  success alone is not acceptance.
 - S7B fuses only bearings referring to one static source state/time and first
   validates fusion with direct bearing-level noise. For future dynamics,
   `t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`; equal reception timestamps can

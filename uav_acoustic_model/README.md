@@ -49,6 +49,14 @@ covariance — в nullspace Якобиана точных ограничений
 ограничения возвращают explicit invalid result; eigenvalues не заменяются
 произвольным epsilon.
 
+Preliminary feasibility `least_squares` используется только как initial point,
+если остаётся stochastic free direction. Совместимость определяется по
+финальному constraint residual после `trust-constr`. Оптимальность отдельно
+проверяется covariance-scaled projected-KKT residual
+`||Z.T @ grad(J)||`; завершение оптимизатора только по `xtol` без PASS этого
+критерия не принимается. Default acceptance tolerance для этого diagnostic —
+`1e-8`; exact-constraint tolerance остаётся `1e-10 rad`.
+
 `BearingMeasurement` содержит station/sequence/frame IDs, reception/available
 timestamps, local unit direction, calibration-only tangent `R,mu_cal`,
 estimator/quality/valid metadata. В нём намеренно нет truth direction,

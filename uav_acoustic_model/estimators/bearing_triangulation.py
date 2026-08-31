@@ -7,12 +7,13 @@ retarded-time fusion belongs to the later dynamic stage.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.optimize import NonlinearConstraint, least_squares, minimize
+from scipy.optimize import NonlinearConstraint, SR1, least_squares, minimize
 
 from model.bearing_statistics import (
     AntipodalDirectionError,
@@ -127,7 +128,9 @@ class TriangulationResult:
     by ``constraint_jacobian``.  Position covariance is computed in the local
     nullspace of those constraints; it is zero in exactly constrained
     directions and finite only if stochastic information observes every
-    remaining free direction.
+    remaining free direction.  Preliminary feasibility and final compatibility
+    are reported separately.  The projected-KKT residual checks optimality on
+    the final constraint manifold independently of the optimizer exit message.
     """
 
     position_world_m: NDArray[np.float64]
@@ -151,11 +154,16 @@ class TriangulationResult:
     constraint_rank: int
     constraints_satisfied: bool
     constraint_max_abs_rad: float
+    preliminary_constraint_max_abs_rad: float
+    constrained_optimization_performed: bool
     free_parameter_dimension: int
     reduced_information_eigenvalues: NDArray[np.float64]
     reduced_information_rank: int
     reduced_information_condition_number: float
     local_observability_rank: int
+    scaled_projected_kkt_residual: float
+    projected_kkt_tolerance: float
+    projected_kkt_satisfied: bool
     unobservable_directions_world: NDArray[np.float64]
     gdop_like_sqrt_trace_m: float
     horizontal_std_rss_m: float
@@ -463,13 +471,22 @@ def triangulate_bearings_spherical_wls(
     timestamp_tolerance_s: float | None = None,
     max_nfev: int = 300,
     constraint_tolerance_rad: float = 1e-10,
+    projected_kkt_tolerance: float = 1e-8,
 ) -> TriangulationResult:
     """Estimate one static 3-D source state by constrained spherical WLS.
 
     For every covariance eigensystem, positive eigenvalues produce ordinary
     whitened stochastic residuals.  Every numerical zero eigenvalue produces
-    an explicit nonlinear equality constraint.  ``constraint_tolerance_rad``
-    is only a numerical feasibility test; it does not regularize ``R``.
+    an explicit nonlinear equality constraint.  The preliminary feasibility
+    solve supplies only an initial point whenever a stochastic constrained
+    optimization is possible.  Compatibility is decided from the final
+    constraint residual.  ``constraint_tolerance_rad`` is only a numerical
+    feasibility test; it does not regularize ``R``.
+
+    ``scaled_projected_kkt_residual`` is ``||Z.T @ grad(J)||`` for the
+    covariance-whitened objective and an orthonormal basis ``Z`` of the final
+    constraint-Jacobian nullspace.  A trust-constr ``xtol`` success is not
+    accepted unless this residual is below ``projected_kkt_tolerance``.
     """
 
     poses, bearings = _matched_inputs(
@@ -496,6 +513,9 @@ def triangulate_bearings_spherical_wls(
     constraint_tolerance = float(constraint_tolerance_rad)
     if not np.isfinite(constraint_tolerance) or constraint_tolerance <= 0.0:
         raise ValueError("constraint_tolerance_rad must be finite and positive")
+    kkt_tolerance = float(projected_kkt_tolerance)
+    if not np.isfinite(kkt_tolerance) or kkt_tolerance <= 0.0:
+        raise ValueError("projected_kkt_tolerance must be finite and positive")
     subspaces = [
         _covariance_subspaces(item.covariance_tangent_rad2) for item in bearings
     ]
@@ -585,7 +605,8 @@ def triangulate_bearings_spherical_wls(
             optimizer_success = bool(optimizer.success)
             optimizer_message = str(optimizer.message)
             iterations = int(optimizer.nfev)
-            failure_override = None
+            preliminary_constraint_max_abs = float("nan")
+            constrained_optimization_performed = False
         else:
             feasibility = least_squares(
                 exact_constraints,
@@ -598,53 +619,52 @@ def triangulate_bearings_spherical_wls(
             )
             position = np.asarray(feasibility.x, dtype=float)
             feasibility_residual = exact_constraints(position)
-            feasibility_ok = bool(
-                feasibility.success
-                and np.max(np.abs(feasibility_residual), initial=0.0)
-                <= constraint_tolerance
+            preliminary_constraint_max_abs = float(
+                np.max(np.abs(feasibility_residual), initial=0.0)
             )
             iterations = int(feasibility.nfev)
-            if not feasibility_ok:
-                optimizer_success = False
-                optimizer_message = (
-                    "exact constraints incompatible: " + str(feasibility.message)
+            local_constraint_rank, _ = _constraint_nullspace(
+                exact_constraint_jacobian(position)
+            )
+            constrained_optimization_performed = bool(
+                positive_dimension > 0 and local_constraint_rank < 3
+            )
+            if constrained_optimization_performed:
+                nonlinear_constraint = NonlinearConstraint(
+                    exact_constraints,
+                    np.zeros(exact_dimension),
+                    np.zeros(exact_dimension),
+                    jac=exact_constraint_jacobian,
+                    # Constraint curvature matters along the feasible
+                    # manifold.  SR1 avoids the premature xtol termination
+                    # observed with a zero constraint Hessian while leaving
+                    # covariance eigenvalues untouched.
+                    hess=SR1(),
                 )
-                failure_override = "incompatible_exact_constraints"
-            else:
-                local_constraint_rank, _ = _constraint_nullspace(
-                    exact_constraint_jacobian(position)
-                )
-                if positive_dimension > 0 and local_constraint_rank < 3:
-                    nonlinear_constraint = NonlinearConstraint(
-                        exact_constraints,
-                        np.zeros(exact_dimension),
-                        np.zeros(exact_dimension),
-                        jac=exact_constraint_jacobian,
-                        # The exact residual is locally linearized by the
-                        # constrained Gauss--Newton step.  Supplying this
-                        # explicit local model avoids SciPy's quasi-Newton
-                        # update treating a zero curvature change as an
-                        # optimizer warning; no covariance eigenvalue is
-                        # regularized here.
-                        hess=lambda candidate, multipliers: np.zeros((3, 3)),
+
+                def objective(candidate: NDArray[np.float64]) -> float:
+                    weighted = stochastic_residual(candidate)
+                    return float(weighted @ weighted)
+
+                def objective_gradient(
+                    candidate: NDArray[np.float64],
+                ) -> NDArray[np.float64]:
+                    weighted = stochastic_residual(candidate)
+                    return 2.0 * stochastic_jacobian(candidate).T @ weighted
+
+                def objective_hessian(
+                    candidate: NDArray[np.float64],
+                ) -> NDArray[np.float64]:
+                    jacobian = stochastic_jacobian(candidate)
+                    return 2.0 * jacobian.T @ jacobian
+
+                with warnings.catch_warnings():
+                    # A zero SR1 gradient update is a legitimate locally
+                    # linear constraint step.  Keep this filter as narrow as
+                    # SciPy's own constraint-conversion filter.
+                    warnings.filterwarnings(
+                        "ignore", message="delta_grad == 0.0", category=UserWarning
                     )
-
-                    def objective(candidate: NDArray[np.float64]) -> float:
-                        weighted = stochastic_residual(candidate)
-                        return float(weighted @ weighted)
-
-                    def objective_gradient(
-                        candidate: NDArray[np.float64],
-                    ) -> NDArray[np.float64]:
-                        weighted = stochastic_residual(candidate)
-                        return 2.0 * stochastic_jacobian(candidate).T @ weighted
-
-                    def objective_hessian(
-                        candidate: NDArray[np.float64],
-                    ) -> NDArray[np.float64]:
-                        jacobian = stochastic_jacobian(candidate)
-                        return 2.0 * jacobian.T @ jacobian
-
                     constrained = minimize(
                         objective,
                         position,
@@ -660,14 +680,16 @@ def triangulate_bearings_spherical_wls(
                             "factorization_method": "SVDFactorization",
                         },
                     )
-                    position = np.asarray(constrained.x, dtype=float)
-                    iterations += int(constrained.niter)
-                    optimizer_success = bool(constrained.success)
-                    optimizer_message = str(constrained.message)
-                else:
-                    optimizer_success = True
-                    optimizer_message = "exact constraints determine the feasible solution"
-                failure_override = None
+                position = np.asarray(constrained.x, dtype=float)
+                iterations += int(constrained.niter)
+                optimizer_success = bool(constrained.success)
+                optimizer_message = str(constrained.message)
+            else:
+                optimizer_success = bool(np.all(np.isfinite(position)))
+                optimizer_message = (
+                    "exact constraints determine the feasible solution: "
+                    + str(feasibility.message)
+                )
         corrected_residuals = raw_residual(position).reshape(-1, 2)
         raw_jacobian = raw_jacobian_at(position)
     except (ValueError, AntipodalDirectionError) as error:
@@ -676,12 +698,16 @@ def triangulate_bearings_spherical_wls(
         )
 
     information = np.zeros((3, 3), dtype=float)
+    objective_gradient_final = np.zeros(3, dtype=float)
     objective = 0.0
     for index, (subspace, residual_value) in enumerate(
         zip(subspaces, corrected_residuals, strict=True)
     ):
         block = raw_jacobian[2 * index : 2 * index + 2]
         information += block.T @ subspace.inverse @ block
+        objective_gradient_final += (
+            2.0 * block.T @ subspace.inverse @ residual_value
+        )
         objective += float(residual_value @ subspace.inverse @ residual_value)
     eigenvalues, _, rank, condition = _symmetric_rank(information)
     constraint_residuals = exact_constraints(position)
@@ -723,6 +749,14 @@ def triangulate_bearings_spherical_wls(
             @ reduced_eigenvectors[:, reduced_eigenvalues <= reduced_tolerance]
         ).T
     local_observability_rank = constraint_rank + reduced_rank
+    scaled_projected_kkt_residual = float(
+        np.linalg.norm(free_basis.T @ objective_gradient_final)
+    )
+    projected_kkt_required = bool(constrained_optimization_performed)
+    projected_kkt_satisfied = bool(
+        not projected_kkt_required
+        or scaled_projected_kkt_residual <= kkt_tolerance
+    )
     offsets = position - np.asarray([pose.position_world_m for pose in poses])
     ranges = np.linalg.norm(offsets, axis=1)
     measured_world = np.asarray(
@@ -736,12 +770,12 @@ def triangulate_bearings_spherical_wls(
         1.0, float(np.linalg.norm(position))
     )
     optimizer_success = optimizer_success and np.all(np.isfinite(position))
-    if failure_override is not None:
-        valid = False
-        failure_reason = failure_override
-    elif not constraints_satisfied:
+    if not constraints_satisfied:
         valid = False
         failure_reason = "incompatible_exact_constraints"
+    elif not projected_kkt_satisfied:
+        valid = False
+        failure_reason = "projected_kkt_not_satisfied"
     elif not optimizer_success:
         valid = False
         failure_reason = "optimizer_failed"
@@ -792,11 +826,16 @@ def triangulate_bearings_spherical_wls(
         constraint_rank=constraint_rank,
         constraints_satisfied=constraints_satisfied,
         constraint_max_abs_rad=constraint_max_abs,
+        preliminary_constraint_max_abs_rad=preliminary_constraint_max_abs,
+        constrained_optimization_performed=constrained_optimization_performed,
         free_parameter_dimension=free_dimension,
         reduced_information_eigenvalues=_readonly(reduced_eigenvalues),
         reduced_information_rank=reduced_rank,
         reduced_information_condition_number=reduced_condition,
         local_observability_rank=local_observability_rank,
+        scaled_projected_kkt_residual=scaled_projected_kkt_residual,
+        projected_kkt_tolerance=kkt_tolerance,
+        projected_kkt_satisfied=projected_kkt_satisfied,
         unobservable_directions_world=_readonly(unobservable),
         gdop_like_sqrt_trace_m=gdop_like,
         horizontal_std_rss_m=horizontal_std,
@@ -836,11 +875,16 @@ def _invalid_triangulation(
         constraint_rank=0,
         constraints_satisfied=False,
         constraint_max_abs_rad=float("nan"),
+        preliminary_constraint_max_abs_rad=float("nan"),
+        constrained_optimization_performed=False,
         free_parameter_dimension=3,
         reduced_information_eigenvalues=_readonly(np.zeros(3)),
         reduced_information_rank=0,
         reduced_information_condition_number=float("inf"),
         local_observability_rank=0,
+        scaled_projected_kkt_residual=float("nan"),
+        projected_kkt_tolerance=float("nan"),
+        projected_kkt_satisfied=False,
         unobservable_directions_world=_readonly(np.eye(3)),
         gdop_like_sqrt_trace_m=float("nan"),
         horizontal_std_rss_m=float("nan"),
