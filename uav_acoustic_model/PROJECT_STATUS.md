@@ -9,10 +9,9 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **In review** из-за cross-platform projected-KKT gate в pinned Linux
-`numpy=2.4.6`, `scipy=1.17.1`. `ROADMAP.md` временно отмечает S7B как
-`In review`; S7C остаётся
-`Planned (Next)` и не начинался. S7A остаётся завершённым benchmark
+Статус: **Done** после локального pinned gate и зелёной GitHub Actions matrix
+Ubuntu/Windows Python 3.12. `ROADMAP.md` отмечает S7B как `Done`, а S7C как
+`Next`; S7C ещё не начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
 в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
@@ -21,6 +20,12 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — cross-platform gate commit `aac36f1` завершён зелёной GitHub
+  Actions matrix: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989049)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989250)
+  установили зависимости строго из `requirements.txt` и успешно выполнили
+  pytest, `pip check`, `git diff --check`. S7B переведён в **Done**, S7C — в
+  **Next**, но S7C не начат.
 - 2026-08-31 — реализован cross-platform KKT corrective gate, CI ещё не
   запускался, поэтому S7B остаётся **In review**. Теперь отдельно сохраняются
   `raw_projected_gradient_norm=||Z^T grad J||`, dimensionless
