@@ -9,8 +9,9 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **Done** после корректирующей приёмки singular covariance. `ROADMAP.md`
-отмечает S7B как `Done`; S7C остаётся `Planned (Next)` и не начинался. S7A остаётся завершённым benchmark
+Статус: **Done** после numerical-robustness gate preliminary feasibility и
+projected-KKT. `ROADMAP.md` отмечает S7B как `Done`; S7C остаётся
+`Planned (Next)` и не начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
 в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
@@ -19,6 +20,49 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — numerical-robustness приёмка S7B завершена. Полный pytest:
+  **255 passed in 44.01s**; профильный gate: **23 passed in 22.15s**;
+  `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  `multistation_static_validation.ipynb` программно выполнен без ошибок;
+  аудит всех **12/12 notebooks**: `nbformat` valid, error-output `0`, unrun
+  nonempty code cells `0`, missing cell IDs `0`. Только этот notebook
+  импортирует изменённый triangulator. Полноранговый
+  `multistation_static_summary.csv` после regeneration совпал с tip
+  `5309cf0` по всем 68 non-runtime полям точно (`max abs/rel=0/0`), после
+  чего runtime-only rewrite убран; committed CSV остаётся побитово неизменным.
+
+  Итоговый randomized audit: 1000 совместимых двухстанционных rank-1 сцен,
+  seed `20260831`, false-invalid **0**, preliminary residual выше `1e-10`
+  встречался 13 раз, max final constraint residual
+  `2.458754593756406e-16 rad`, max covariance-scaled projected-KKT
+  `7.746729289788835e-9` при acceptance `1e-8`. Targeted regression:
+  preliminary `1.5262609922398919e-10 rad`, final `5.040341608778079e-17
+  rad`, KKT `4.476730845207426e-14`, valid. Заведомо несовместимый случай:
+  preliminary/final residual `0.0361929475478882 rad`,
+  `incompatible_exact_constraints`, all-NaN covariance. S7B=`Done`,
+  S7C=`Planned (Next)`; tracking не добавлен.
+- 2026-08-31 — исправлен preliminary-feasibility control flow и добавлен
+  scaled projected-KKT gate `||Z^T grad J||`. На воспроизведённой совместимой
+  rank-1 сцене preliminary residual `1.5262609922398919e-10 rad` больше
+  tolerance, но constrained SR1 solve даёт final residual `5.04e-17 rad` и
+  KKT `4.48e-14`, поэтому результат valid. Искусственный optimizer
+  `success=True` с сообщением `xtol`, feasible constraints и большим KKT
+  корректно возвращает `projected_kkt_not_satisfied`. Randomized gate на
+  **1000** совместимых двухстанционных rank-1 сценах, seed `20260831`:
+  false-invalid `0`, preliminary exceedances `13`, max preliminary residual
+  `2.202425200253308e-10 rad`, max final residual
+  `2.458754593756406e-16 rad`, max scaled projected-KKT
+  `7.746729289788835e-9`. Заведомо несовместимый gate и общая приёмка ещё
+  выполняются; S7B остаётся **In review**, S7C не начинается. Профильный
+  pytest: **23 passed in 22.15s**.
+- 2026-08-31 — открыт corrective gate к tip `5309cf0`: preliminary
+  `least_squares` ошибочно мог окончательно объявить совместимые exact
+  constraints несовместимыми при residual `1.5381543336219373e-10 rad`,
+  лишь немного превышающем tolerance `1e-10 rad`, хотя последующий
+  constrained solve уменьшает residual до `1.2497494302150491e-17 rad`.
+  До исправления control flow, scaled projected-KKT diagnostic, targeted и
+  1000-scene randomized gates S7B имеет статус **In review**; S7C не
+  начинается.
 - 2026-08-31 — корректирующая приёмка S7B завершена. Финальный полный pytest:
   **252 passed in 18.42s**; `pip check`: `No broken requirements found`;
   `git diff --check`: PASS. Все **12/12 notebooks** выполнены через
