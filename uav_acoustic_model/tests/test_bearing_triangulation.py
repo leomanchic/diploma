@@ -348,16 +348,11 @@ def _preliminary_false_invalid_scene():
     return stations, measurements, target
 
 
-def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
-    """Return deterministic robustness diagnostics for compatible rank-1 scenes."""
+def _randomized_rank_one_scenes(*, scene_count=1000, seed=20260831):
+    """Yield pinned deterministic compatible two-station rank-1 scenes."""
 
     rng = np.random.default_rng(seed)
     microphone_array = tetrahedral_array(0.2)
-    failures = []
-    max_preliminary = 0.0
-    max_final = 0.0
-    max_kkt = 0.0
-    preliminary_exceedance_count = 0
     for trial in range(scene_count):
         baseline = rng.uniform(8.0, 40.0)
         baseline_azimuth = rng.uniform(-np.pi, np.pi)
@@ -407,6 +402,21 @@ def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
         measurements = _measurements_with_tangent_offsets(
             stations, target, offsets, covariance
         )
+        yield trial, stations, measurements
+
+
+def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
+    """Return deterministic robustness diagnostics for compatible rank-1 scenes."""
+
+    failures = []
+    max_preliminary = 0.0
+    max_final = 0.0
+    max_raw_gradient = 0.0
+    max_scaled_kkt = 0.0
+    preliminary_exceedance_count = 0
+    for trial, stations, measurements in _randomized_rank_one_scenes(
+        scene_count=scene_count, seed=seed
+    ):
         result = triangulate_bearings_spherical_wls(stations, measurements)
         if not result.valid:
             failures.append(
@@ -415,7 +425,10 @@ def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
                     result.failure_reason,
                     result.preliminary_constraint_max_abs_rad,
                     result.constraint_max_abs_rad,
+                    result.raw_projected_gradient_norm,
                     result.scaled_projected_kkt_residual,
+                    result.optimizer_success,
+                    result.optimizer_message,
                 )
             )
         preliminary_exceedance_count += int(
@@ -425,7 +438,12 @@ def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
             max_preliminary, result.preliminary_constraint_max_abs_rad
         )
         max_final = max(max_final, result.constraint_max_abs_rad)
-        max_kkt = max(max_kkt, result.scaled_projected_kkt_residual)
+        max_raw_gradient = max(
+            max_raw_gradient, result.raw_projected_gradient_norm
+        )
+        max_scaled_kkt = max(
+            max_scaled_kkt, result.scaled_projected_kkt_residual
+        )
     return {
         "scene_count": scene_count,
         "seed": seed,
@@ -434,7 +452,8 @@ def _run_randomized_rank_one_audit(*, scene_count=1000, seed=20260831):
         "preliminary_exceedance_count": preliminary_exceedance_count,
         "max_preliminary_constraint_residual_rad": max_preliminary,
         "max_final_constraint_residual_rad": max_final,
-        "max_scaled_projected_kkt_residual": max_kkt,
+        "max_raw_projected_gradient_norm": max_raw_gradient,
+        "max_scaled_projected_kkt_residual": max_scaled_kkt,
     }
 
 
@@ -497,6 +516,70 @@ def test_preliminary_feasibility_exceedance_does_not_cause_false_invalid():
     assert result.scaled_projected_kkt_residual < 1e-10
 
 
+@pytest.mark.parametrize("trial_index", [771, 793])
+def test_pinned_linux_rank_one_regressions_are_valid(trial_index):
+    scene = next(
+        scene
+        for scene in _randomized_rank_one_scenes(
+            scene_count=trial_index + 1, seed=20260831
+        )
+        if scene[0] == trial_index
+    )
+    _, stations, measurements = scene
+    result = triangulate_bearings_spherical_wls(stations, measurements)
+    assert result.valid, (
+        result.failure_reason,
+        result.optimizer_success,
+        result.optimizer_message,
+        result.constraint_max_abs_rad,
+        result.raw_projected_gradient_norm,
+        result.scaled_projected_kkt_residual,
+    )
+    assert np.all(np.isfinite(result.position_world_m))
+    assert result.constraints_satisfied
+    assert result.constraint_max_abs_rad < 1e-12
+    assert result.local_observability_rank == 3
+    assert result.projected_kkt_satisfied
+    assert result.scaled_projected_kkt_residual <= 1e-6
+
+
+def test_optimizer_exit_failure_is_diagnostic_when_acceptance_checks_pass(
+    monkeypatch,
+):
+    stations, measurements, _ = _preliminary_false_invalid_scene()
+    optimum = triangulate_bearings_spherical_wls(stations, measurements)
+    assert optimum.valid
+
+    def fake_failed_minimize(*args, **kwargs):
+        return SimpleNamespace(
+            x=np.asarray(optimum.position_world_m),
+            success=False,
+            message="The maximum number of function evaluations is exceeded.",
+            niter=1,
+        )
+
+    monkeypatch.setattr(triangulation_module, "minimize", fake_failed_minimize)
+    result = triangulation_module.triangulate_bearings_spherical_wls(
+        stations, measurements
+    )
+    assert not result.optimizer_success
+    assert result.optimizer_message.startswith("The maximum number")
+    assert np.all(np.isfinite(result.position_world_m))
+    assert result.constraints_satisfied
+    assert result.local_observability_rank == 3
+    assert result.projected_kkt_satisfied
+    assert result.valid
+    assert result.failure_reason is None
+
+
+def test_scaled_projected_kkt_default_tolerance_is_dimensionless_one_millionth():
+    stations, measurements, _ = _preliminary_false_invalid_scene()
+    result = triangulate_bearings_spherical_wls(stations, measurements)
+    assert result.valid
+    assert result.projected_kkt_tolerance == pytest.approx(1e-6)
+    assert result.scaled_projected_kkt_residual <= 1e-6
+
+
 def test_xtol_success_is_rejected_when_projected_kkt_is_not_satisfied(monkeypatch):
     stations, measurements, target = _preliminary_false_invalid_scene()
 
@@ -526,7 +609,8 @@ def test_randomized_compatible_two_station_rank_one_scenes_have_no_false_invalid
     assert audit["false_invalid_count"] == 0, audit["failures"][:5]
     assert audit["preliminary_exceedance_count"] > 0
     assert audit["max_final_constraint_residual_rad"] < 1e-12
-    assert audit["max_scaled_projected_kkt_residual"] <= 1e-8
+    assert np.isfinite(audit["max_raw_projected_gradient_norm"])
+    assert audit["max_scaled_projected_kkt_residual"] <= 1e-6
 
 
 def test_incompatible_deterministic_bearings_return_explicit_invalid():
@@ -613,6 +697,12 @@ def test_singular_constrained_solution_preserves_permutation_and_rigid_invarianc
         rtol=2e-8,
         atol=2e-12,
     )
+    np.testing.assert_allclose(
+        permuted.scaled_projected_kkt_residual,
+        baseline.scaled_projected_kkt_residual,
+        rtol=5e-2,
+        atol=1e-8,
+    )
 
     global_rotation = Rotation.from_euler("xyz", [0.3, -0.2, 0.6]).as_matrix()
     translation = np.asarray([100.0, -40.0, 25.0])
@@ -639,4 +729,38 @@ def test_singular_constrained_solution_preserves_permutation_and_rigid_invarianc
         global_rotation @ baseline.covariance_position_m2 @ global_rotation.T,
         rtol=2e-8,
         atol=2e-12,
+    )
+    np.testing.assert_allclose(
+        transformed.scaled_projected_kkt_residual,
+        baseline.scaled_projected_kkt_residual,
+        rtol=5e-2,
+        atol=1e-8,
+    )
+
+    scale = 7.5
+    scaled_stations = [
+        StationPose(
+            station.station_id,
+            scale * station.position_world_m,
+            station.rotation_local_to_world,
+            scale * station.microphone_positions_local_m,
+        )
+        for station in stations
+    ]
+    scaled = triangulate_bearings_spherical_wls(scaled_stations, measurements)
+    assert scaled.valid
+    np.testing.assert_allclose(
+        scaled.position_world_m, scale * baseline.position_world_m, atol=2e-8
+    )
+    np.testing.assert_allclose(
+        scaled.covariance_position_m2,
+        scale**2 * baseline.covariance_position_m2,
+        rtol=2e-8,
+        atol=2e-10,
+    )
+    np.testing.assert_allclose(
+        scaled.scaled_projected_kkt_residual,
+        baseline.scaled_projected_kkt_residual,
+        rtol=5e-2,
+        atol=1e-8,
     )

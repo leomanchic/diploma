@@ -9,8 +9,9 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **Done** после numerical-robustness gate preliminary feasibility и
-projected-KKT. `ROADMAP.md` отмечает S7B как `Done`; S7C остаётся
+Статус: **In review** из-за cross-platform projected-KKT gate в pinned Linux
+`numpy=2.4.6`, `scipy=1.17.1`. `ROADMAP.md` временно отмечает S7B как
+`In review`; S7C остаётся
 `Planned (Next)` и не начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
@@ -20,6 +21,35 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — реализован cross-platform KKT corrective gate, CI ещё не
+  запускался, поэтому S7B остаётся **In review**. Теперь отдельно сохраняются
+  `raw_projected_gradient_norm=||Z^T grad J||`, dimensionless
+  `scaled_projected_kkt_residual=0.5*sqrt(g_Z^T solve(I_Z,g_Z))`,
+  `optimizer_success` и `optimizer_message`; default scaled tolerance — `1e-6`.
+  `optimizer_success=False` больше не является самостоятельной причиной
+  invalid при конечной позиции, выполненных exact constraints, full local
+  observability, forward rays и scaled-KKT PASS. Локальный pinned audit
+  (`numpy=2.4.6`, `scipy=1.17.1`, seed `20260831`) на **1000** совместимых
+  rank-1 сценах: false-invalid `0`, preliminary exceedances `13`, max final
+  constraint `2.458754593756406e-16 rad`, max raw projected gradient
+  `7.746729289788835e-9`, max scaled KKT `5.233099289902724e-9`. Профильные
+  tests: **20 passed**; полный pytest: **259 passed**. Добавлены регрессии
+  trials `771/793`, diagnostic-only optimizer-exit test, truly-suboptimal
+  `xtol` rejection и rigid/scale/permutation invariance checks. `pip check`:
+  `No broken requirements found`; `git diff --check`: PASS. Все **12/12**
+  notebooks выполнены в изолированной копии: `nbformat` valid, error-output
+  `0`, unrun nonempty code cells `0`, missing cell IDs `0`. Оба полноранговых
+  multistation CSV побитово неизменны относительно `9b2e749`. Добавлена GitHub
+  Actions matrix Ubuntu/Windows Python 3.12 со строгой установкой из
+  `requirements.txt`; до её зелёного результата S7B остаётся **In review**.
+  S7C не начат.
+- 2026-08-31 — открыт cross-platform corrective gate к commit `9b2e749`.
+  Pinned Linux full pytest дал `1 failed, 254 passed`: совместимые trials
+  `771/793` имеют final constraints `4.9117431969933596e-17` и
+  `7.253739856973443e-18 rad`, но отвергаются из-за platform-dependent
+  optimizer exit/raw-gradient threshold. До dimensionless Newton-correction
+  KKT, deterministic regressions, 1000-scene gate и зелёной Ubuntu/Windows
+  GitHub Actions matrix S7B имеет статус **In review**; S7C не начинается.
 - 2026-08-31 — numerical-robustness приёмка S7B завершена. Полный pytest:
   **255 passed in 44.01s**; профильный gate: **23 passed in 22.15s**;
   `pip check`: `No broken requirements found`; `git diff --check`: PASS.

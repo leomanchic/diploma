@@ -139,6 +139,7 @@ class TriangulationResult:
     failure_reason: str | None
     objective: float
     iterations: int
+    optimizer_success: bool
     contributing_station_ids: tuple[str, ...]
     residuals_tangent_rad: NDArray[np.float64]
     ranges_m: NDArray[np.float64]
@@ -161,6 +162,7 @@ class TriangulationResult:
     reduced_information_rank: int
     reduced_information_condition_number: float
     local_observability_rank: int
+    raw_projected_gradient_norm: float
     scaled_projected_kkt_residual: float
     projected_kkt_tolerance: float
     projected_kkt_satisfied: bool
@@ -471,7 +473,7 @@ def triangulate_bearings_spherical_wls(
     timestamp_tolerance_s: float | None = None,
     max_nfev: int = 300,
     constraint_tolerance_rad: float = 1e-10,
-    projected_kkt_tolerance: float = 1e-8,
+    projected_kkt_tolerance: float = 1e-6,
 ) -> TriangulationResult:
     """Estimate one static 3-D source state by constrained spherical WLS.
 
@@ -483,10 +485,12 @@ def triangulate_bearings_spherical_wls(
     constraint residual.  ``constraint_tolerance_rad`` is only a numerical
     feasibility test; it does not regularize ``R``.
 
-    ``scaled_projected_kkt_residual`` is ``||Z.T @ grad(J)||`` for the
-    covariance-whitened objective and an orthonormal basis ``Z`` of the final
-    constraint-Jacobian nullspace.  A trust-constr ``xtol`` success is not
-    accepted unless this residual is below ``projected_kkt_tolerance``.
+    ``raw_projected_gradient_norm`` is ``||g_Z||`` with
+    ``g_Z=Z.T @ grad(J)``.  For full-rank reduced information
+    ``I_Z=Z.T @ I @ Z``, the dimensionless KKT diagnostic is
+    ``0.5*sqrt(g_Z.T @ solve(I_Z, g_Z))``.  It estimates the remaining Newton
+    correction in local-standard-deviation units.  Optimizer exit status is
+    reported but is not itself an acceptance condition.
     """
 
     poses, bearings = _matched_inputs(
@@ -685,7 +689,7 @@ def triangulate_bearings_spherical_wls(
                 optimizer_success = bool(constrained.success)
                 optimizer_message = str(constrained.message)
             else:
-                optimizer_success = bool(np.all(np.isfinite(position)))
+                optimizer_success = bool(feasibility.success)
                 optimizer_message = (
                     "exact constraints determine the feasible solution: "
                     + str(feasibility.message)
@@ -749,10 +753,24 @@ def triangulate_bearings_spherical_wls(
             @ reduced_eigenvectors[:, reduced_eigenvalues <= reduced_tolerance]
         ).T
     local_observability_rank = constraint_rank + reduced_rank
-    scaled_projected_kkt_residual = float(
-        np.linalg.norm(free_basis.T @ objective_gradient_final)
-    )
-    projected_kkt_required = bool(constrained_optimization_performed)
+    projected_gradient = free_basis.T @ objective_gradient_final
+    raw_projected_gradient_norm = float(np.linalg.norm(projected_gradient))
+    if free_dimension == 0:
+        scaled_projected_kkt_residual = 0.0
+    elif reduced_rank == free_dimension:
+        reduced_information_symmetric = 0.5 * (
+            reduced_information + reduced_information.T
+        )
+        newton_quadratic = float(
+            projected_gradient
+            @ np.linalg.solve(reduced_information_symmetric, projected_gradient)
+        )
+        scaled_projected_kkt_residual = 0.5 * float(
+            np.sqrt(max(newton_quadratic, 0.0))
+        )
+    else:
+        scaled_projected_kkt_residual = float("inf")
+    projected_kkt_required = bool(local_observability_rank == 3)
     projected_kkt_satisfied = bool(
         not projected_kkt_required
         or scaled_projected_kkt_residual <= kkt_tolerance
@@ -769,22 +787,22 @@ def triangulate_bearings_spherical_wls(
     forward_tolerance = 256.0 * np.finfo(float).eps * max(
         1.0, float(np.linalg.norm(position))
     )
-    optimizer_success = optimizer_success and np.all(np.isfinite(position))
-    if not constraints_satisfied:
+    position_finite = bool(np.all(np.isfinite(position)))
+    if not position_finite:
+        valid = False
+        failure_reason = "nonfinite_position_estimate"
+    elif not constraints_satisfied:
         valid = False
         failure_reason = "incompatible_exact_constraints"
-    elif not projected_kkt_satisfied:
-        valid = False
-        failure_reason = "projected_kkt_not_satisfied"
-    elif not optimizer_success:
-        valid = False
-        failure_reason = "optimizer_failed"
     elif np.any(signed_ranges <= forward_tolerance):
         valid = False
         failure_reason = "estimated_source_not_forward_of_all_rays"
     elif local_observability_rank < 3:
         valid = False
         failure_reason = "degenerate_constrained_position_information"
+    elif not projected_kkt_satisfied:
+        valid = False
+        failure_reason = "projected_kkt_not_satisfied"
     else:
         valid = True
         failure_reason = None
@@ -811,6 +829,7 @@ def triangulate_bearings_spherical_wls(
         failure_reason=failure_reason,
         objective=objective,
         iterations=iterations,
+        optimizer_success=optimizer_success,
         contributing_station_ids=tuple(item.station_id for item in bearings),
         residuals_tangent_rad=_readonly(corrected_residuals),
         ranges_m=_readonly(ranges),
@@ -833,6 +852,7 @@ def triangulate_bearings_spherical_wls(
         reduced_information_rank=reduced_rank,
         reduced_information_condition_number=reduced_condition,
         local_observability_rank=local_observability_rank,
+        raw_projected_gradient_norm=raw_projected_gradient_norm,
         scaled_projected_kkt_residual=scaled_projected_kkt_residual,
         projected_kkt_tolerance=kkt_tolerance,
         projected_kkt_satisfied=projected_kkt_satisfied,
@@ -860,6 +880,7 @@ def _invalid_triangulation(
         failure_reason=reason,
         objective=float("nan"),
         iterations=0,
+        optimizer_success=False,
         contributing_station_ids=tuple(station.station_id for station in stations),
         residuals_tangent_rad=_readonly(np.full((count, 2), np.nan)),
         ranges_m=_readonly(np.full(count, np.nan)),
@@ -882,6 +903,7 @@ def _invalid_triangulation(
         reduced_information_rank=0,
         reduced_information_condition_number=float("inf"),
         local_observability_rank=0,
+        raw_projected_gradient_norm=float("nan"),
         scaled_projected_kkt_residual=float("nan"),
         projected_kkt_tolerance=float("nan"),
         projected_kkt_satisfied=False,
