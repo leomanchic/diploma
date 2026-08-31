@@ -77,7 +77,7 @@ def test_position_covariance_scales_with_scene_scale_squared():
     )
 
 
-def test_zero_and_singular_angular_covariance_are_not_hidden_by_epsilon():
+def test_zero_and_singular_angular_covariance_use_exact_constraints_without_epsilon():
     positions = [
         np.asarray([0.0, 0.0, 0.0]),
         np.asarray([20.0, 0.0, 0.0]),
@@ -88,10 +88,14 @@ def test_zero_and_singular_angular_covariance_are_not_hidden_by_epsilon():
         positions, target, np.zeros((2, 2))
     )
     zero = triangulate_bearings_spherical_wls(zero_stations, zero_measurements)
-    assert not zero.valid
+    assert zero.valid
     assert zero.information_rank == 0
-    assert np.all(np.isnan(zero.covariance_position_m2))
-    assert zero.failure_reason == "degenerate_position_information"
+    assert zero.local_observability_rank == 3
+    assert zero.constraint_rank == 3
+    assert zero.exact_constraint_dimension == 6
+    assert zero.constraints_satisfied
+    np.testing.assert_allclose(zero.position_world_m, target, atol=2e-13)
+    np.testing.assert_array_equal(zero.covariance_position_m2, np.zeros((3, 3)))
 
     singular_stations, singular_measurements = _ideal_scene(
         positions, target, np.diag([np.deg2rad(0.2) ** 2, 0.0])
@@ -99,8 +103,8 @@ def test_zero_and_singular_angular_covariance_are_not_hidden_by_epsilon():
     singular = triangulate_bearings_spherical_wls(
         singular_stations, singular_measurements
     )
-    assert singular.information_rank <= 3
-    if singular.information_rank < 3:
+    assert singular.local_observability_rank <= 3
+    if singular.local_observability_rank < 3:
         assert not singular.valid
         assert np.all(np.isnan(singular.covariance_position_m2))
         assert singular.unobservable_directions_world.shape[0] >= 1
@@ -122,4 +126,3 @@ def test_nearly_parallel_geometry_has_larger_covariance_than_wide_intersection()
     assert near.valid and far.valid
     assert far.information_condition_number > near.information_condition_number
     assert far.gdop_like_sqrt_trace_m > 100.0 * near.gdop_like_sqrt_trace_m
-

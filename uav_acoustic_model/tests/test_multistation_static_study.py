@@ -44,6 +44,9 @@ def test_smoke_study_uses_disjoint_splits_calibration_only_and_bearing_level_tru
     assert len(records) == 2 * len(default_static_scenarios())
     assert geometry["closest_rays_rank"] == 3
     assert not geometry["truth_used_online"]
+    assert geometry["world_frame_definition"] == "ENU_x_east_y_north_z_up_m"
+    assert geometry["station_position_reference"] == "microphone_array_centroid"
+    assert len(geometry) == 24
     assert {row["split"] for row in records} == {"calibration", "evaluation"}
     assert all(row["bearing_covariance_source_split"] == "calibration" for row in records)
     assert all(not row["evaluation_residual_used_to_fit_bearing_covariance"] for row in records)
@@ -80,4 +83,4 @@ def test_csv_writer_produces_separate_summary_and_geometry_tables(tmp_path):
     assert len(geometries) == 9
     assert summary_path.read_text(encoding="utf-8").count("\n") == len(records) + 1
     assert geometry_path.read_text(encoding="utf-8").count("\n") == len(geometries) + 1
-
+    assert len(geometries[0]) == 24
