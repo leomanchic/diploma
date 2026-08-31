@@ -59,6 +59,11 @@
   covariance is only a local Gaussian linearization benchmark. Do not hide
   position-information rank deficiency with epsilon, an ordinary inverse, a
   ground constraint, or an unreported `z>=0` bound.
+- A singular tangent bearing covariance defines a degenerate Gaussian, not an
+  unweighted residual component. Whiten only its positive-eigenvalue subspace
+  and enforce every zero-eigenvalue component as an exact equality constraint.
+  Report incompatible deterministic constraints as invalid; never replace a
+  zero eigenvalue by epsilon or silently discard its nullspace.
 - S7B fuses only bearings referring to one static source state/time and first
   validates fusion with direct bearing-level noise. For future dynamics,
   `t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`; equal reception timestamps can

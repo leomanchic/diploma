@@ -9,8 +9,8 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **этап завершён**. `ROADMAP.md` отмечает S7B как `Done`, S7C как
-`Planned (Next)`. S7A остаётся завершённым калиброванным benchmark
+Статус: **Done** после корректирующей приёмки singular covariance. `ROADMAP.md`
+отмечает S7B как `Done`; S7C остаётся `Planned (Next)` и не начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
 в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
@@ -19,15 +19,82 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
-- 2026-08-31 — финальная приёмка S7B завершена. После исправления временного
-  контракта полный pytest: **247 passed in 20.33s**; `pip check`:
+- 2026-08-31 — корректирующая приёмка S7B завершена. Финальный полный pytest:
+  **252 passed in 18.42s**; `pip check`: `No broken requirements found`;
+  `git diff --check`: PASS. Все **12/12 notebooks** выполнены через
+  `nbconvert` на отдельных executed-копиях без перезаписи пользовательского
+  `moving_source_3d.ipynb`; единый аудит: `nbformat` valid, error-output `0`,
+  unrun nonempty code cells `0`, missing cell IDs `0`. Финальный
+  `multistation_static_validation.ipynb` дополнительно выполнен in-place:
+  12 cells/9 code, те же четыре нулевых audit-counts.
+
+  Численная constrained-WLS проверка: три exact nonparallel bearings при
+  `R=0` дали position error `8.93e-15 m`, constraint residual `0 rad` и
+  нулевую covariance; dimensions `(positive, exact, constraint-rank,
+  free, local-rank)=(0,6,3,0,3)`. Rank-1 `R` дал max exact residual
+  `4.85e-17 rad` и max `A C A^T=3.40e-21`. Несовместимые exact bearings
+  явно вернули invalid с `incompatible_exact_constraints` и residual
+  `3.6193e-2 rad`. Расстояние finite-variance решения до constrained при
+  `lambda=1e-4,1e-6,1e-8,1e-10,1e-12 rad^2` монотонно уменьшилось:
+  `7.5187e-2, 1.0957e-3, 1.1011e-5, 1.1011e-7, 1.1011e-9 m`.
+  Station-permutation mismatch: `0 m / 3.47e-18 m²`; global rigid-transform
+  mismatch: `7.11e-15 m / 7.63e-17 m²`.
+
+  CSV имеют **126×69** и **9×24**. Полноранговая summary после перехода от
+  эквивалентного symmetric whitening к буквальному
+  `Lambda+^(-1/2) U+^T r` не побитово совпала с `4ff91c4`, но categorical,
+  coverage и failure fields не изменились. Среди scalar metrics max absolute
+  difference `2.031e-3` относится к condition `1.670e5` (relative
+  `1.216e-8`), max relative difference `3.976e-7` — к covariance-ratio
+  diagnostic; position RMSE max absolute/relative differences равны
+  `1.016e-6 m / 9.075e-9`. Wall-clock runtime исключён из сравнения. Exact
+  constraint acceptance использует явный numerical solver
+  tolerance `1e-10 rad`, но covariance eigenvalues не заменяются epsilon и
+  nullspace не игнорируется. Запрошенные критерии не ослаблялись. S7B=`Done`,
+  S7C=`Planned (Next)`; tracking в этом commit не добавлен.
+- 2026-08-31 — полный static study повторён после constrained-WLS fix:
+  `multistation_static_summary.csv` имеет **126×69**, geometry CSV —
+  **9×24**. Первое сравнение при эквивалентном symmetric whitener было
+  побитово идентично commit `4ff91c4`; финальная буквальная spectral-coordinate
+  реализация изменила только floating-point младшие разряды с maxima,
+  перечисленными в финальном gate выше, без categorical/coverage/failure
+  изменений. Исключено `mean_runtime_per_estimate_s`, потому что это новое
+  wall-clock измерение.
+  Новые geometry-поля: `world_frame_definition=ENU_x_east_y_north_z_up_m` и
+  `station_position_reference=microphone_array_centroid`. Этап остаётся
+  **In review** до notebook и общих regression gates.
+- 2026-08-31 — constrained WLS реализован и прошёл профильный gate:
+  **20 passed in 3.45s**. Для каждого `R` отдельно сохраняются `U+`,
+  положительные `Lambda+` и `U0`; objective использует whitened residual
+  `Lambda+^(-1/2) U+^T r`, а `U0^T r=0` передаётся оптимизатору как equality
+  constraint. Несовместимые constraints дают
+  `failure_reason=incompatible_exact_constraints` и `NaN` position
+  covariance. Diagnostics разделяют finite-variance information,
+  constraint Jacobian/rank и reduced information на допустимом manifold.
+  Geometry record расширен полями `world_frame_definition` и
+  `station_position_reference`, поэтому после регенерации CSV будет иметь
+  фактическую, а не заявленную, ширину 24. Этап остаётся **In review** до
+  full pytest/notebook/pip/diff gates.
+- 2026-08-31 — открыт корректирующий acceptance gate к commit `4ff91c4`.
+  Обнаружена математическая ошибка: прежнее применение `R^+` трактовало
+  covariance nullspace как нулевой вес, тогда как вырожденная Gaussian-модель
+  требует точных ограничений `U0^T r(q)=0`. До constrained WLS, новых
+  deterministic/limit tests, пересчёта CSV/notebook и полной повторной
+  приёмки S7B имеет статус **In review**, S7C не реализуется. Фактический
+  geometry CSV commit `4ff91c4` содержит **9×22**, несмотря на ошибочную
+  запись `9×24`; будут добавлены и документированы два поля мировой системы,
+  после чего схема действительно станет 24-column.
+- 2026-08-31 — предыдущая приёмка, зафиксированная в commit `4ff91c4`
+  и теперь superseded корректирующим gate выше. После исправления временного
+  контракта тогда полный pytest дал **247 passed in 20.33s**; `pip check`:
   `No broken requirements found`. Все **12/12 committed notebooks** выполнены
   через `nbconvert`; единый аудит дал `nbformat` valid, error-output `0`,
   unrun nonempty code cells `0`, missing cell IDs `0` для каждого. Размеры
-  новых CSV подтверждены как `126×69` и `9×24`; все 13 прежних
+  В том отчёте размеры CSV были ошибочно записаны как `126×69` и `9×24`:
+  фактическая geometry-таблица commit `4ff91c4` имела **9×22**. Все 13 прежних
   контролируемых CSV также сохранили ожидаемое число строк. `git diff
-  --check` проходит. S7B=`Done`, S7C=`Planned (Next)`; dynamic 3D tracking не
-  реализован.
+  --check` проходил. Эта приёмка не учитывала exact nullspace constraints и
+  потому не является финальной; dynamic 3D tracking не был реализован.
 - 2026-08-31 — исправлена промежуточная ошибка временной семантики нового
   API: первоначально static triangulator по умолчанию требовал одинаковые
   reception timestamps. Это неверно для разнесённых станций, потому что один
@@ -105,7 +172,8 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
   bearing-level realizations на физическую конфигурацию**; P99 по 256
   evaluation realizations будет только sampled diagnostic. Full study,
   notebook execution и общая приёмка ещё не выполнены.
-- 2026-08-30 — реализован `estimators/bearing_triangulation.py`: прозрачный
+- 2026-08-30 — в исходной реализации commit `4ff91c4` был создан
+  `estimators/bearing_triangulation.py`: прозрачный
   closest-rays baseline
   `q=pinv(sum w(I-dd^T)) sum w(I-dd^T)p` и основной spherical weighted
   nonlinear least squares с residual
@@ -114,8 +182,10 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
   каждого принятого луча. Результат сохраняет residuals, ranges, raw
   Jacobian, position information/eigen/rank/condition, ненаблюдаемые мировые
   направления и local Gaussian covariance benchmark только при полном ранге.
-  Singular/zero `R` обрабатывается спектральной pseudoinverse без epsilon;
-  rank deficiency возвращает explicit invalid и all-NaN covariance.
+  Историческая реализация обрабатывала singular/zero `R` только спектральной
+  pseudoinverse без epsilon и тем самым ошибочно отбрасывала zero-variance
+  constraints; это поведение заменено constrained WLS в корректирующем gate
+  2026-08-31 выше.
 - 2026-08-30 — выведен и реализован аналитический `dr/dq`; его log-map часть
   использует `a=u^T y`, `v=y-au`, `theta=atan2(||v||,a)` и производную
   `(theta/||v||)v`, включая connection terms меняющегося az/el tangent basis.
@@ -160,18 +230,32 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 `d_k=Q_k u_hat_k`,
 `u_pred,k(q)=Q_k^T(q-p_k)/||q-p_k||`.
 
-Основной residual и information:
+Основной residual и спектральное разложение covariance:
 
 `r_k(q)=tangent_residual(u_pred,k(q),u_hat_k)-mu_cal,k`,
-`J(q)=sum r_k^T R_k^+ r_k`,
-`I_q=sum H_k^T R_k^+ H_k`.
+`R_k=U_{+,k} Lambda_{+,k} U_{+,k}^T + U_{0,k} 0 U_{0,k}^T`.
 
-Только при `rank(I_q)=3` возвращается
-`C_q≈solve(I_q,I)` как **local Gaussian covariance benchmark**. Это не точная
-CRLB signal-level модели. При rank deficiency covariance содержит `NaN`, а
-result хранит eigenvalues и ненаблюдаемые мировые направления. Closest-rays
-baseline использует pseudoinverse; обычное обращение вырожденной матрицы,
-скрытое `z>=0`, ground constraint и arbitrary epsilon отсутствуют.
+Constrained WLS решает
+
+`min_q sum ||Lambda_{+,k}^(-1/2) U_{+,k}^T r_k(q)||^2`
+
+при точных equality constraints
+
+`U_{0,k}^T r_k(q)=0`.
+
+Finite-variance information равна
+`I_+=sum H_k^T U_{+,k} Lambda_{+,k}^-1 U_{+,k}^T H_k`. Пусть `A` —
+Якобиан всех точных constraints, а столбцы `Z` образуют `null(A)`. Тогда
+combined local observability rank равен
+`rank(A)+rank(Z^T I_+ Z)`, а при полном combined rank локальная covariance
+на допустимом manifold равна `C_q=Z(Z^T I_+ Z)^-1 Z^T`. Если `Z` пуст,
+точные constraints локально фиксируют все три координаты и `C_q=0`. Если
+constraints несовместимы либо combined rank меньше трёх, result invalid и
+covariance содержит `NaN`; сохраняются constraint/reduced-information ranks,
+eigenvalues и ненаблюдаемые мировые направления. Это не точная CRLB
+signal-level модели. Closest-rays baseline использует pseudoinverse; обычное
+обращение вырожденной матрицы, скрытое `z>=0`, ground constraint и arbitrary
+epsilon отсутствуют.
 
 Проверено: ENU/local-world transforms, proper rotations, centroid/permutation,
 2/3 stations, forward rays, wrap `-pi/pi`, analytic Jacobian, global

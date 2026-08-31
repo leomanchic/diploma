@@ -26,17 +26,28 @@ r_world = p_k + Q_k r_local
 d_k = Q_k u_hat_local,k
 u_pred_local,k(q) = Q_k.T (q-p_k) / ||q-p_k||
 r_k(q) = tangent_residual(u_pred_local,k(q), u_hat_local,k) - mu_cal,k
-J(q) = sum_k r_k(q).T R_k^+ r_k(q)
+R_k = U_{+,k} Lambda_{+,k} U_{+,k}.T + U_{0,k} 0 U_{0,k}.T
+min_q sum_k ||Lambda_{+,k}^(-1/2) U_{+,k}.T r_k(q)||^2
+subject to U_{0,k}.T r_k(q) = 0
 ```
 
 Closed-form closest-rays baseline использует
 `pinv(sum w_k(I-d_k d_k.T))`; основной результат получает spherical weighted
 nonlinear least squares. Initial point и online measurement не содержат true
 position/range. Проверяются forward rays, analytic/numeric Jacobian, rank,
-eigenvalues и condition position information. При полном ранге
-`C_q≈I_q^-1` называется только **local Gaussian covariance benchmark**. При
-вырождении finite covariance не возвращается, ground/`z>=0` constraint скрыто
-не вводится.
+eigenvalues и condition position information. Без exact constraints и при
+полном ранге `C_q≈I_q^-1`. В constrained случае для базиса `Z` nullspace
+constraint Jacobian используется `C_q=Z(Z^T I_+ Z)^-1 Z^T`; это только
+**local Gaussian covariance benchmark** на допустимом manifold. Если
+combined local observability rank неполон, finite covariance не возвращается,
+ground/`z>=0` constraint скрыто не вводится.
+
+Нулевые собственные значения tangent covariance не означают нулевой вес:
+они задают точные детерминированные ограничения. Стохастическая information
+вычисляется только из положительно-дисперсионного подпространства, а position
+covariance — в nullspace Якобиана точных ограничений. Несовместимые точные
+ограничения возвращают explicit invalid result; eigenvalues не заменяются
+произвольным epsilon.
 
 `BearingMeasurement` содержит station/sequence/frame IDs, reception/available
 timestamps, local unit direction, calibration-only tangent `R,mu_cal`,

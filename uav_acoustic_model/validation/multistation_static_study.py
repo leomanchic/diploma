@@ -467,6 +467,8 @@ def _geometry_record(config: StaticStudyConfig, stations, target):
         "station_geometry": config.station_geometry,
         "station_count": 3,
         "orientation_mode": config.orientation_mode,
+        "world_frame_definition": "ENU_x_east_y_north_z_up_m",
+        "station_position_reference": "microphone_array_centroid",
         "baseline_m": baseline,
         "station_positions_world_m_json": _json_array(positions),
         "target_coordinates_world_m_json": _json_array(target),
