@@ -134,4 +134,3 @@ def test_invalid_measurement_has_no_fictitious_direction_or_covariance():
     assert not measurement.valid
     assert np.all(np.isnan(measurement.direction_local))
     assert np.all(np.isnan(measurement.covariance_tangent_rad2))
-

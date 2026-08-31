@@ -61,6 +61,14 @@ diagnostics, но `optimizer.success=False` сам по себе не откло
 feasible, forward-ray, полнонаблюдаемую и KKT-согласованную позицию.
 Exact-constraint tolerance остаётся `1e-10 rad`.
 
+В constrained `trust-constr` SciPy SR1 иногда вычисляет обратную величину для
+практически нулевого update denominator и выдаёт узкий `RuntimeWarning:
+overflow encountered in scalar divide`. Вызов подавляет только это сообщение
+из `scipy.optimize._hessian_update_strategy`: формула SR1 не меняется, а
+результат по-прежнему обязан независимо пройти final exact-constraint,
+forward-ray, observability и scaled-KKT gates. Остальные numerical warnings не
+подавляются.
+
 `BearingMeasurement` содержит station/sequence/frame IDs, reception/available
 timestamps, local unit direction, calibration-only tangent `R,mu_cal`,
 estimator/quality/valid metadata. В нём намеренно нет truth direction,
