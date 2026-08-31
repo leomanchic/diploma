@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "uav-acoustic-model"
 version = "0.1.0"
-description = "Reproducible TDOA direction model for a UAV microphone array"
+description = "Reproducible multi-station acoustic bearing and 3D UAV localization model"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

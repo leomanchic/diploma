@@ -1,18 +1,200 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-08-29
+Последнее обновление: 2026-08-31
 
 ## Текущий этап
 
-Текущий этап: **S7A — Bearing Measurement Uncertainty and Calibration**.
-Цель — статистически корректная calibration/evaluation модель неопределённости
-независимых покадровых GCC/WLS и equal-weight SRP-PHAT bearing-измерений.
-EKF/UKF, alpha-beta filter и любой другой tracking не добавляются.
+Текущий этап: **S7B — Three-station Geometry and Static Bearing
+Triangulation**. Цель — правая мировая ENU-система, неизменяемые позы станций,
+общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
+диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **этап завершён**. `ROADMAP.md` отмечает S7A как `Done`, S7B как
-`Next`; `PROJECT_STATUS.md` остаётся журналом формул, численных результатов и
-проверок. Итог: **calibrated bearing measurement benchmark, not tracking and
-not a signal-level CRLB**.
+Статус: **этап завершён**. `ROADMAP.md` отмечает S7B как `Done`, S7C как
+`Planned (Next)`. S7A остаётся завершённым калиброванным benchmark
+single-station bearing-измерений. Single-station S7B tracker из прежнего плана
+заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
+в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
+fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Одна станция
+по-прежнему измеряет только bearing, не дальность.
+
+### Журнал S7B
+
+- 2026-08-31 — финальная приёмка S7B завершена. После исправления временного
+  контракта полный pytest: **247 passed in 20.33s**; `pip check`:
+  `No broken requirements found`. Все **12/12 committed notebooks** выполнены
+  через `nbconvert`; единый аудит дал `nbformat` valid, error-output `0`,
+  unrun nonempty code cells `0`, missing cell IDs `0` для каждого. Размеры
+  новых CSV подтверждены как `126×69` и `9×24`; все 13 прежних
+  контролируемых CSV также сохранили ожидаемое число строк. `git diff
+  --check` проходит. S7B=`Done`, S7C=`Planned (Next)`; dynamic 3D tracking не
+  реализован.
+- 2026-08-31 — исправлена промежуточная ошибка временной семантики нового
+  API: первоначально static triangulator по умолчанию требовал одинаковые
+  reception timestamps. Это неверно для разнесённых станций, потому что один
+  source state/emission может иметь разные propagation delays. Теперь
+  обязательная association задаётся общими `sequence_id/frame_index`, разные
+  reception timestamps разрешены, а их равенство доступно только как явная
+  опциональная проверка. Профильный gate **11 passed in 7.60s**, полный
+  **247 passed**. Никакого true emission time в online measurement не
+  добавлено.
+- 2026-08-31 — количественная invariance/Jacobian проверка после финальной
+  коррекции: ideal position max abs error `7.11e-15 m`, station permutation
+  position/covariance mismatch `5.33e-15 m / 5.20e-18 m²`, global
+  rotation+translation position/covariance mismatch `1.42e-14 m /
+  2.60e-18 m²`, analytic/numeric Jacobian max abs mismatch `2.63e-11`,
+  coordinate-scale covariance relative Frobenius mismatch `9.78e-17`.
+- 2026-08-30 — полный статический study выполнен и затем воспроизводимо
+  повторён внутри нового notebook. Использованы 9 физических конфигураций,
+  **128 calibration + 256 evaluation** независимых direct-bearing
+  realizations на конфигурацию, то есть 3456 уникальных role/config
+  realizations; семь matched scenarios дают **24192 spherical WLS estimates**
+  на common random numbers. `multistation_static_summary.csv` содержит
+  **126 строк × 69 полей** (63/63 calibration/evaluation),
+  `multistation_geometry_summary.csv` — **9 × 24**. Девять calibration и
+  девять evaluation seeds уникальны по роли, overlap `0`. GCC/SRP, truth и
+  true range online не использовались.
+- 2026-08-30 — в ideal-known-pose three-station evaluation position RMSE
+  находится в `0.2964…38.5498 m`, P95 `0.5040…64.8676 m`, P99
+  `0.6390…134.4900 m`; диапазон отражает dimensionless geometry sweep, а не
+  одну дальность. Worst-conditioned geometry — `near_collinear_far`:
+  median information condition `1692.90`, RMSE `38.55 m`, P95 `64.87 m`.
+  Лучший `equilateral_near` даёт condition `5.37`, RMSE `0.296 m`, P95
+  `0.504 m`. На данной sampled grid ideal-three RMSE ниже обоих выбранных
+  two-station subsets во всех 9 конфигурациях, но это не универсальное
+  утверждение: результат зависит от intersection angle и measurement quality.
+- 2026-08-30 — local Gaussian covariance benchmark численно проверен, а не
+  принят по отсутствию исключений. Для 9 ideal-three evaluation групп
+  `trace(C_emp)/trace(mean C_pred)=0.810…1.195`; nominal 95% ellipsoid
+  coverage `0.840…0.965`. Ухудшение coverage в elongated/nearly-collinear
+  случаях показывает предел локальной Gaussian linearization. Один
+  `5°/-2°` erroneous bearing не отбрасывается скрыто: median scenario RMSE
+  `19.66 m`, worst RMSE `815.59 m`, maximum failure fraction `0.0547`.
+  Position/orientation/covariance mismatch также сохранены отдельными
+  сценариями. P99 при 256 evaluation realizations — sampled diagnostic,
+  не operational tail guarantee.
+- 2026-08-30 — `multistation_static_validation.ipynb` успешно выполнен за
+  ~74 s: 12/12 cells имеют ID, `nbformat` valid, error-output `0`, unrun
+  nonempty code `0`. Notebook повторяет CSV study, строит RMSE/intersection-
+  angle и covariance/coverage diagnostics, а также good/poor ENU scenes с
+  validation-only truth marker. Обновлены `README.md`, `AGENTS.md` и
+  `ROADMAP.md`; dynamic 3D tracking, retarded-time fusion, synchronization,
+  ветер, отражения, SRP-Harmonics и hardware I/O всё ещё не реализованы.
+  Полный pytest после документации и аудит остальных committed notebooks ещё
+  не выполнены, поэтому S7B пока не объявлен завершённым.
+- 2026-08-30 — реализован bearing-level Monte Carlo
+  `validation/multistation_static_study.py`. Девять физических конфигураций
+  охватывают equilateral/elongated/nearly-collinear station layouts,
+  baseline `10/20/40/50 m`, несколько `range/baseline` и
+  `altitude/baseline`, aligned/varied local orientations. Семь matched
+  сценариев на одних tangent-noise draws сравнивают ideal 3/2 stations,
+  отказ одной из трёх, position/orientation calibration mismatch, bearing
+  covariance mismatch и один `5°/-2°` erroneous bearing. Шум генерируется
+  непосредственно в сферической tangent plane с известными `mu,R`, не через
+  GCC/SRP. Calibration/evaluation bearing-noise seeds раздельны; `mu_cal,R`
+  fit только по calibration. Число 2D residual components явно не называется
+  independent trials. Smoke gate с `12/16` realizations: все coverage `1.0`,
+  outlier RMSE больше ideal-three более чем втрое; профильный набор study +
+  deterministic tests **15 passed in 3.33s**.
+- 2026-08-30 — создан `visualization/multistation_scene.py`: ENU stations и
+  их локальные оси, bearing rays без фиктивной station range, closest-point
+  residuals, estimated 3D point и local 95% Gaussian covariance ellipsoid.
+  True position разрешена только с явным `validation_mode=True`. Создан
+  12-cell `multistation_static_validation.ipynb`; `nbformat` valid до
+  исполнения. Визуализационный/study gate **4 passed in 3.88s**. Для full
+  study зафиксированы **128 calibration + 256 evaluation независимых
+  bearing-level realizations на физическую конфигурацию**; P99 по 256
+  evaluation realizations будет только sampled diagnostic. Full study,
+  notebook execution и общая приёмка ещё не выполнены.
+- 2026-08-30 — реализован `estimators/bearing_triangulation.py`: прозрачный
+  closest-rays baseline
+  `q=pinv(sum w(I-dd^T)) sum w(I-dd^T)p` и основной spherical weighted
+  nonlinear least squares с residual
+  `tangent_residual(u_pred_local,u_hat)-mu_cal`. Initial point не использует
+  truth; ground/`z>=0` constraint отсутствует; source обязан лежать впереди
+  каждого принятого луча. Результат сохраняет residuals, ranges, raw
+  Jacobian, position information/eigen/rank/condition, ненаблюдаемые мировые
+  направления и local Gaussian covariance benchmark только при полном ранге.
+  Singular/zero `R` обрабатывается спектральной pseudoinverse без epsilon;
+  rank deficiency возвращает explicit invalid и all-NaN covariance.
+- 2026-08-30 — выведен и реализован аналитический `dr/dq`; его log-map часть
+  использует `a=u^T y`, `v=y-au`, `theta=atan2(||v||,a)` и производную
+  `(theta/||v||)v`, включая connection terms меняющегося az/el tangent basis.
+  Центральные разности подтверждают Якобиан также при переходе azimuth через
+  `-pi/pi`. Обнаружена численная потеря точности прежнего малого log-map через
+  `arccos(dot)`; она исправлена на устойчивый `atan2(||projection||,dot)`.
+  Добавлены deterministic tests для 2/3 станций, разных локальных ориентаций,
+  global translation/rotation, station permutation, backward bearing,
+  collinear/nearly-parallel геометрии, масштаба covariance и `R,mu_cal`.
+  Старый `test_cycle_projection` больше не использует хрупкий фиксированный
+  `2e-19`: roundoff-допуск равен machine epsilon, умноженному на норму данных
+  и явный малый operation factor. Профильный gate **18 passed in 0.64s**;
+  полный регрессионный gate **243 passed in 17.31s**. Monte Carlo/CSV/notebook
+  ещё не выполнены, этап остаётся в работе.
+- 2026-08-30 — реализованы `model/station.py` и `model/measurements.py`.
+  `StationPose` задаёт правую ENU-систему (`x=East,y=North,z=Up`), проверяет
+  `Q^TQ=I`, `det(Q)=+1`, хранит решётку относительно centroid и вычисляет
+  `r_world=p+Q r_local`; numpy-массивы защищены от изменения. Общий
+  `BearingMeasurement` содержит только online-доступные timestamps, локальный
+  единичный bearing, tangent `R`/`mu_cal`, estimator/quality/valid metadata и
+  намеренно не имеет truth/error/emission-time полей. Singular PSD covariance
+  разрешена без epsilon; invalid record хранит all-NaN direction/covariance,
+  а не фиктивное измерение. Проверены local/world round-trip, глобальные
+  перенос/поворот, permutation микрофонов, неверные rotations, centroid и
+  неизменяемость: профильный gate **13 passed in 0.47s**. Триангуляция и
+  observability ещё не реализованы, этап остаётся в работе.
+- 2026-08-30 — новое ТЗ прочитано полностью вместе с `AGENTS.md`,
+  `PROJECT_STATUS.md`, `README.md` и `ROADMAP.md`. Рабочее дерево было чистым
+  на точном commit `a48d000e30bc446c1df0995d90f56bde4a9458bc`; поскольку этот
+  commit не слит в `main`, создана отдельная ветка
+  `feature/multistation-foundation` непосредственно от него. Зафиксирована
+  граница этапа: сначала bearing-level статическая триангуляция и
+  наблюдаемость, без смешивания с ошибками GCC/SRP и без dynamic tracking.
+  Реализация, deterministic/smoke/full gates, CSV и notebook ещё не
+  выполнены, поэтому этап не объявляется завершённым.
+
+### Формулы и ограничения S7B
+
+Для station pose `p_k,Q_k` и локального измерения `u_hat_k` мировой луч и
+предсказание имеют вид
+
+`d_k=Q_k u_hat_k`,
+`u_pred,k(q)=Q_k^T(q-p_k)/||q-p_k||`.
+
+Основной residual и information:
+
+`r_k(q)=tangent_residual(u_pred,k(q),u_hat_k)-mu_cal,k`,
+`J(q)=sum r_k^T R_k^+ r_k`,
+`I_q=sum H_k^T R_k^+ H_k`.
+
+Только при `rank(I_q)=3` возвращается
+`C_q≈solve(I_q,I)` как **local Gaussian covariance benchmark**. Это не точная
+CRLB signal-level модели. При rank deficiency covariance содержит `NaN`, а
+result хранит eigenvalues и ненаблюдаемые мировые направления. Closest-rays
+baseline использует pseudoinverse; обычное обращение вырожденной матрицы,
+скрытое `z>=0`, ground constraint и arbitrary epsilon отсутствуют.
+
+Проверено: ENU/local-world transforms, proper rotations, centroid/permutation,
+2/3 stations, forward rays, wrap `-pi/pi`, analytic Jacobian, global
+translation/rotation, station permutation, масштабирование, singular/zero
+angular covariance, collinear/nearly-parallel geometry, calibration-only
+`R,mu_cal`, disjoint seeds и empirical-vs-predicted covariance.
+
+Не реализовано: dynamic/asynchronous 3D tracking, retarded-time fusion,
+clock synchronization/transport, signal-level multi-station GCC/SRP fusion,
+ветер, температура, отражения, SRP-Harmonics, hardware I/O и field data.
+Статический estimator принимает только bearings, заранее ассоциированные с
+одним source state (`sequence_id/frame_index`); он не должен применяться к
+движущемуся источнику с несогласованными states.
+
+Ослабления и статистические ограничения: быстрый smoke использует `12/16`,
+полный study — `128/256` independent calibration/evaluation realizations на
+физическую конфигурацию; P99 по 256 samples является только sampled
+diagnostic. Семь scenarios используют common random numbers, поэтому 24192
+estimator calls не являются 24192 уникальными noise realizations. Допуск
+cycle projection масштабируется как `64*eps*||data||`; он заменил хрупкое
+фиксированное `2e-19`, а не был подобран под один остаток. Финальных
+проваленных критериев нет. Промежуточно исправлены малый log-map
+`arccos→atan2` и неверное равенство reception timestamps.
 
 ### Журнал S7A
 

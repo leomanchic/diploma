@@ -74,9 +74,9 @@ def sphere_log_map(
     tangent_norm = float(np.linalg.norm(tangent))
     if tangent_norm <= np.finfo(float).eps * 8.0:
         return np.zeros(3, dtype=float)
-    theta = float(np.arccos(dot))
-    if theta == 0.0:
-        theta = float(np.arctan2(tangent_norm, dot))
+    # atan2 retains the first-order angle when ``dot`` has already rounded
+    # close to one; arccos(dot) loses several digits in this regime.
+    theta = float(np.arctan2(tangent_norm, dot))
     # theta / ||projection|| is theta/sin(theta), but the projection norm is
     # numerically more accurate than sin(arccos(dot)) for small angles.
     return tangent * (theta / tangent_norm)
