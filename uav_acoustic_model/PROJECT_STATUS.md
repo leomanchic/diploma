@@ -9,9 +9,10 @@ Triangulation**. Цель — правая мировая ENU-система, н
 общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
 диагностика наблюдаемости для нескольких разнесённых станций.
 
-Статус: **Done** после локального pinned gate и зелёной GitHub Actions matrix
-Ubuntu/Windows Python 3.12. `ROADMAP.md` отмечает S7B как `Done`, а S7C как
-`Next`; S7C ещё не начинался. S7A остаётся завершённым benchmark
+Статус: **In review**: финальный Windows Python 3.12 job зелёный, но финальный
+Ubuntu Python 3.12 job упал на pytest и исследуется в pinned Linux окружении.
+`ROADMAP.md` отмечает S7B как `In review`, а S7C как `Planned (Next)`; S7C ещё
+не начинался. S7A остаётся завершённым benchmark
 single-station bearing-измерений. Single-station S7B tracker из прежнего плана
 заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
 в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
@@ -20,6 +21,16 @@ fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Од�
 
 ### Журнал S7B
 
+- 2026-08-31 — финальный status commit `147a84c` временно вернул S7B в
+  **In review**: [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459311852)
+  прошёл, но [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459312050)
+  упал на pytest. Предыдущий кодовый commit `aac36f1` прошёл обе платформы,
+  поэтому выполнено повторное pinned Linux воспроизведение в read-only Docker
+  mount: полный suite дал **259 passed in 44.25s**. Дополнительно 10 отдельных
+  Linux pytest-процессов выполнили один и тот же 1000-scene randomized gate:
+  **10/10 PASS**, суммарно 10000 сцен и false-invalid `0`. В workflow добавлена
+  публичная failure-аннотация последних 120 строк pytest для точной диагностики
+  любого повторного CI failure; S7C не начат.
 - 2026-08-31 — cross-platform gate commit `aac36f1` завершён зелёной GitHub
   Actions matrix: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989049)
   и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989250)
