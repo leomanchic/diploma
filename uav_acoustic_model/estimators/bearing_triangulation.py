@@ -17,11 +17,9 @@ from scipy.optimize import NonlinearConstraint, SR1, least_squares, minimize
 
 from model.bearing_statistics import (
     AntipodalDirectionError,
-    sphere_log_map,
-    tangent_basis,
     tangent_residual,
+    tangent_residual_jacobian_wrt_true_direction,
 )
-from model.geometry import direction_angles
 from model.measurements import BearingMeasurement
 from model.station import StationPose
 
@@ -375,41 +373,13 @@ def bearing_residual_jacobian(
     if distance == 0.0:
         raise ValueError("candidate source cannot coincide with a station")
     world_direction = world_offset / distance
-    u = _unit(station.world_to_local_direction(world_direction), name="predicted direction")
-    y = _unit(measurement.direction_local, name="measured direction")
-    phi, elevation = direction_angles(u)
-    horizontal = float(np.hypot(u[0], u[1]))
-    if horizontal <= 1e-10:
-        raise ValueError("azimuth/elevation tangent basis is undefined at a local pole")
-    basis = tangent_basis(phi, elevation)
-    dot = float(np.clip(u @ y, -1.0, 1.0))
-    projection = y - dot * u
-    sine = float(np.linalg.norm(projection))
-    if dot <= -1.0 + 1e-10:
-        raise AntipodalDirectionError(
-            "sphere residual Jacobian is not unique for antipodal bearings"
-        )
-    if sine <= 1e-7:
-        log_map = sphere_log_map(u, y)
-        log_derivative = -(np.eye(3) - u[:, None] * u[None, :])
-    else:
-        theta = float(np.arctan2(sine, dot))
-        k = theta / sine
-        alpha = -1.0 / sine**2 + theta * dot / sine**3
-        log_map = k * projection
-        log_derivative = (
-            -k * (u[:, None] * y[None, :] + dot * np.eye(3))
-            + alpha * projection[:, None] * projection[None, :]
-        )
-    residual_uncorrected = basis @ log_map
-    phi_gradient = np.asarray([-u[1], u[0], 0.0]) / horizontal**2
-    connection = np.asarray(
-        [
-            np.sin(elevation) * residual_uncorrected[1],
-            -np.sin(elevation) * residual_uncorrected[0],
-        ]
-    )[:, None] * phi_gradient[None, :]
-    residual_wrt_local_direction = basis @ log_derivative + connection
+    local_direction = _unit(
+        station.world_to_local_direction(world_direction),
+        name="predicted direction",
+    )
+    residual_wrt_local_direction = tangent_residual_jacobian_wrt_true_direction(
+        local_direction, measurement.direction_local
+    )
     direction_wrt_position = (
         station.rotation_local_to_world.T
         @ (np.eye(3) - world_direction[:, None] * world_direction[None, :])

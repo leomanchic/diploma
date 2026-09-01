@@ -4,11 +4,11 @@
 результаты выполненных проверок ведутся отдельно в [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 Конечная цель — воспроизводимая система из трёх пространственно разнесённых
-микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Текущий S7B
-реализует проверенный статический фундамент: каждая станция выдаёт только
-калиброванный bearing, после чего несколько одновременных bearings
-триангулируются в общей мировой системе. Динамическое 3D tracking будет
-отдельным этапом S7C.
+микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
+фундамент S7B завершён. Текущий S7C-A проверяет только retarded-time bearing
+measurement model и 6D Jacobian для заданного constant-velocity состояния.
+Причинный event stream, offline batch reference и EKF относятся к отдельным
+S7C-B/S7C-C; на S7C-A state update и tracking не реализованы.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -80,6 +80,35 @@ position, angular error, future estimates или true emission time.
 станций может соответствовать разным emission times. Простое пересечение
 асинхронных лучей движущегося источника не считается корректной dynamic
 localization.
+
+## Retarded-time bearing model S7C-A
+
+Для `x(t0)=[q0,v]`, синхронизированного reception time `t_r` и centroid
+станции `p_k` модель решает
+
+```text
+t_r = t_e + ||q0 + v(t_e-t0) - p_k||/c
+Delta = t_e-t0
+u = (q(t_e)-p_k)/||q(t_e)-p_k||
+gamma = 1 + u.T v/c
+dt_e/dx = -[u.T, Delta u.T]/(c gamma)
+dq(t_e)/dx = [I, Delta I] + v (dt_e/dx)
+du_world/dx = (I-u u.T)/range * dq(t_e)/dx
+du_local/dx = Q_k.T du_world/dx
+```
+
+Residual остаётся общей со статическим S7B сферической моделью:
+`tangent_residual(u_pred_local,u_measured_local)-mu_cal`; сырая разность
+azimuth/elevation не используется. Closed-form constant-velocity emission
+time независимо сверяется с общим Newton/Brent solver из moving-source
+генератора. `reception_center_timestamp_s` входит в физическое уравнение;
+`available_timestamp_s` задаёт только причинный порядок. `StationPose.clock_*`
+не применяется повторно, поскольку timestamps уже находятся в общей шкале.
+
+`stack_retarded_bearing_observability` складывает residual/Jacobian для одного
+переданного candidate state и сообщает singular values/rank/condition и IDs.
+Он не оптимизирует состояние, не использует будущие измерения и не является
+tracker или covariance/CRLB расчётом.
 
 ## Соглашения
 
@@ -247,6 +276,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `model/bearing_statistics.py` — spherical log-map residual, tangent covariance и NIS;
 - `model/station.py` — immutable ENU station poses и local/world transforms;
 - `model/measurements.py` — truth-free calibrated bearing measurement contract;
+- `model/dynamic_state.py` — immutable constant-velocity 6D state, rebasing и exact transition;
+- `model/retarded_bearing.py` — retarded bearing prediction, spherical residual,
+  analytic 6D Jacobian, causal availability и local observability diagnostics;
 - `estimators/wls_doa.py` — WLS на единичной верхней полусфере;
 - `estimators/gcc_phat.py` — ориентированный sub-sample GCC-PHAT;
 - `estimators/srp_phat.py` — direct/vectorized equal-pair far-field SRP-PHAT;
@@ -281,6 +313,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   calibration/evaluation covariance, NIS и observable-quality benchmark;
 - `validation/multistation_static_study.py` — direct-bearing three-station
   calibration/evaluation Monte Carlo, pose/covariance mismatch и station loss;
+- `validation/retarded_bearing_validation.py` — 1000-scene analytic/numeric
+  emission-time/Jacobian audit и 6D rank/conditioning examples без tracking;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `visualization/multistation_scene.py` — ENU station axes, bearing rays,
@@ -304,6 +338,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   covariance conditioning, evaluation NIS и quality/error associations;
 - `notebooks/multistation_static_validation.ipynb` — geometry/observability,
   position tails, covariance benchmark и good/poor 3D scenes;
+- `notebooks/retarded_bearing_model_validation.ipynb` — ENU retarded rays,
+  reception/emission timing, 6D singular values и static/infinite-`c` limits;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -338,6 +374,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.sequential_doa_study import run_sequential_doa_study; run_sequential_doa_study()"
 .\.venv\Scripts\python.exe -c "from validation.bearing_uncertainty_study import run_bearing_uncertainty_study; run_bearing_uncertainty_study()"
 .\.venv\Scripts\python.exe -c "from validation.multistation_static_study import run_multistation_static_study; run_multistation_static_study()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -350,6 +387,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\sequential_doa_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 notebooks\bearing_uncertainty_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\multistation_static_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -365,6 +403,7 @@ SRP-Harmonics, отражения, ветер, коррелированный ф
 не реализованы.
 
 Статическая 3D-триангуляция S7B проверена сначала на непосредственных
-bearing-измерениях, поэтому её ошибки не смешаны с GCC/SRP. Clock
-offset/drift пока только входят в station contract: синхронизация,
-асинхронный retarded-time fusion и central dynamic 3D tracker не реализованы.
+bearing-измерениях, поэтому её ошибки не смешаны с GCC/SRP. S7C-A реализует
+retarded-time prediction/Jacobian для уже синхронизированных timestamps, но
+не оценивает clock offset/drift. Причинный asynchronous event fusion, state
+update и central dynamic 3D tracker ещё не реализованы.

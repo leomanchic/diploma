@@ -1,23 +1,92 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-08-31
+Последнее обновление: 2026-09-01
 
 ## Текущий этап
 
-Текущий этап: **S7B — Three-station Geometry and Static Bearing
-Triangulation**. Цель — правая мировая ENU-система, неизменяемые позы станций,
-общий online-контракт bearing-измерения, статическая 3D-триангуляция и явная
-диагностика наблюдаемости для нескольких разнесённых станций.
+Текущий этап: **S7C-A — Retarded-time Bearing Measurement Model** в составе
+S7C. Цель подэтапа — математически проверить отображение constant-velocity
+6D-состояния в асинхронные bearing-измерения трёх станций с физическим
+запаздывающим временем и аналитическим Jacobian.
 
-Статус: **Done** после повторного pinned Linux воспроизведения, 10-кратного
-randomized stress-run и зелёной GitHub Actions matrix Ubuntu/Windows Python
-3.12. `ROADMAP.md` отмечает S7B как `Done`, а S7C как `Next`; S7C ещё не
-начинался. S7A остаётся завершённым benchmark
-single-station bearing-измерений. Single-station S7B tracker из прежнего плана
-заменён фундаментом многопозиционной системы; dynamic 3D tracker переносится
-в S7C. На S7B не реализованы EKF/UKF, signal-level fusion, retarded-time
-fusion, ветер, отражения, SRP-Harmonics или hardware I/O. Одна станция
-по-прежнему измеряет только bearing, не дальность.
+Статус: **In review** до cross-platform CI. В ветке
+`feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
+аналитическое/численное emission time, retarded bearing prediction,
+spherical tangent residual/Jacobian и локальная диагностика stacked 6D
+observability. Локальный полный gate: **282 passed in 44.71s**, `pip check`
+PASS, 13 notebooks/84 code cells проходят `nbformat` audit без error-output и
+невыполненных cells; новый notebook выполнен через `nbconvert`. EKF/UKF,
+particle filter, state update и tracking не реализованы.
+
+### Журнал S7C-A
+
+- 2026-09-01 — локальная приёмка завершена. Pinned environment:
+  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `282 passed in 44.71s`;
+  `pip check` и `git diff --check` PASS. Проверены 13 notebooks и 84 code
+  cells: `nbformat` valid, error outputs `0`, unexecuted cells `0`.
+  `notebooks/retarded_bearing_model_validation.ipynb` программно выполнен.
+- 2026-09-01 — randomized FD audit использовал seed `20260901`, 1000 valid
+  scenes: 950 с `|v|=0…60 m/s`, 50 stress scenes с `|v|=0.75c…0.9c`, range
+  `10…500 m`. Максимумы: retarded-equation residual `1.1102230246251565e-15
+  s`, analytic/numeric emission-time difference `4.884981308350689e-15 s`,
+  `dt_e/dx` absolute mismatch `6.915884531721872e-12`, local-direction
+  Jacobian mismatch `4.486511717693986e-10`, tangent-residual Jacobian
+  mismatch `2.725225094202255e-9`, relative mismatch по компонентам с
+  `|J_numeric|>1e-7` — `3.861468973416781e-6`. Допуски `2e-8` absolute и
+  `2e-5` relative не ослаблялись после запуска.
+- 2026-09-01 — observability examples: одна станция/один bearing имеет rank
+  `2`; три станции и три reception epochs имеют rank `6`, condition
+  `9.577896723107909`, smallest singular value `0.010160665945304471`.
+  Почти коллинеарные станции и окно `0.002 s` сохраняют numerical rank `6`,
+  но ухудшают condition до `4316.373666947092`, smallest singular value до
+  `8.72927229583684e-6`. Это local parameterization diagnostic заданного
+  candidate state, не estimator, covariance или CRLB.
+- 2026-09-01 — S7B CSV подтверждены побитово неизменными: geometry SHA-256
+  `190F5470FAC0F4C46A478C5EB2EBEB8790C201A256E1CB620CA0D423BB24FF05`,
+  static SHA-256
+  `7B9C3E7722689488F0F37C5C65DE9EAB760653F00BC1C2ED46596CB76A2013B3`.
+- 2026-09-01 — статическая и динамическая модели переведены на одну общую
+  производную spherical tangent residual по predicted direction; targeted
+  regression S7B остался зелёным: `28 passed`.
+- 2026-09-01 — уравнение использует только синхронизированный
+  `reception_center_timestamp_s`:
+  `t_r=t_e+||q(t_e)-p_k||/c`. `available_timestamp_s` участвует только в
+  причинном отборе событий, а `StationPose.clock_*` не применяется повторно.
+- 2026-09-01 — добавлены проверки analytic/numeric emission time, статического
+  предела, причинности, rigid/time/rebase invariance, pole/antipode и
+  finite-difference Jacobian. Targeted результат: `22 passed`.
+
+### Формулы и допущения S7C-A
+
+- `q(t_e)=q0+v(t_e-t0)`,
+  `t_r=t_e+||q(t_e)-p_k||/c`, `|v|<c`, `t_e<t_r`, range `>0`.
+- Для `Delta=t_e-t0`, `u=(q(t_e)-p_k)/range` и
+  `gamma=1+u^T v/c`:
+  `dt_e/dx=-[u^T,Delta u^T]/(c gamma)`,
+  `dq_e/dx=[I,Delta I]+v(dt_e/dx)`,
+  `du_world/dx=(I-uu^T)dq_e/dx/range`,
+  `du_local/dx=Q_k^T du_world/dx`.
+- Residual:
+  `tangent_residual(u_pred_local,u_measured_local)-mu_cal` в радианах дуги.
+  Производная spherical residual общая со статическим S7B. Pole и antipode
+  отклоняются явно; raw azimuth/elevation subtraction не применяется.
+- Timestamps считаются уже синхронизированными. `reception_center_timestamp_s`
+  входит в propagation equation; `available_timestamp_s` только ограничивает
+  причинную доступность; `StationPose.clock_offset_s/clock_drift_s_per_s` не
+  применяются второй раз.
+- Среда однородна, неподвижна, `c` постоянно. Не моделируются process noise,
+  ускорение внутри constant-velocity state, clock uncertainty, ветер,
+  отражения, signal-level fusion и tracking.
+
+### Команды проверки S7C-A
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
+git diff --check origin/main...HEAD
+```
 
 ### Журнал S7B
 
