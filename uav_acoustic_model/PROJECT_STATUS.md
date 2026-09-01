@@ -9,18 +9,66 @@ S7C. Цель подэтапа — математически проверить
 6D-состояния в асинхронные bearing-измерения трёх станций с физическим
 запаздывающим временем и аналитическим Jacobian.
 
-Статус: **Done**. В ветке
+Статус: **Done** после corrective gate наблюдаемости одной станции.
+В ветке
 `feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
 аналитическое/численное emission time, retarded bearing prediction,
 spherical tangent residual/Jacobian и локальная диагностика stacked 6D
-observability. Локальный полный gate: **283 passed in 44.59s**, `pip check`
-PASS, 13 notebooks/84 code cells проходят `nbformat` audit без error-output и
-невыполненных cells; новый notebook выполнен через `nbconvert`. GitHub Actions
-matrix Ubuntu/Windows Python 3.12 зелёная. Следующий подэтап — **S7C-B**.
+observability. Локальный полный gate: **286 passed in 43.51s**, `pip check`
+PASS, все 13 notebooks/84 code cells заново выполнены в чистых kernels и
+проходят `nbformat` audit без error-output, невыполненных cells и пропущенных
+cell IDs. Следующий подэтап — **S7C-B**.
 EKF/UKF, particle filter, state update и tracking не реализованы.
 
 ### Журнал S7C-A
 
+- 2026-09-01 — corrective gate завершён: S7C-A переведён в **Done**, S7C-B —
+  **Next**. Полный pytest: `286 passed in 43.51s`; `pip check`: `No broken
+  requirements found`; `git diff --check`: PASS. Все 13 notebooks заново
+  выполнены отдельными свежими kernels: `array_comparison` 9.867 s,
+  `bearing_uncertainty_validation` 55.561 s,
+  `far_field_fractional_delay_validation` 85.827 s, `gcc_phat_monte_carlo`
+  25.721 s, `gcc_phat_validation` 7.166 s, `gcc_statistical_validation`
+  1609.543 s, `monte_carlo_crlb_validation` 102.484 s, `moving_source_3d`
+  6.341 s, `moving_source_validation` 6.410 s,
+  `multistation_static_validation` 85.160 s,
+  `retarded_bearing_model_validation` 9.872 s,
+  `sequential_doa_validation` 9.429 s и `srp_phat_validation` 7.355 s.
+  Строгий аудит 13 notebooks/84 code cells: invalid nbformat `0`, error-output
+  `0`, unexecuted nonempty code cells `0`, missing cell IDs `0`.
+- 2026-09-01 — полный свежий notebook run перезаписал измеряемые runtime-поля,
+  а не физические эталоны: `fractional_delay_benchmark.csv` изменил только
+  четыре timing/speedup columns; `multistation_static_summary.csv` — только
+  `mean_runtime_per_estimate_s` (max absolute change `6.132234373126266e-4
+  s`); оба sequential CSV — только runtime/availability-derived latency
+  columns (max runtime delta `5.1549999807321e-3 s`). В
+  `gcc_doa_summary.csv` deterministic Monte Carlo-метрики, seeds и основная
+  схема неизменны; только два noiseless diagnostic bias fields изменились на
+  не более `5.2154667089186735e-9 deg` и `8.537721090694117e-7 deg` из-за
+  floating-point решения. Эти изменения являются результатом обязательного
+  свежего исполнения, а не подгонкой эталонов под tests.
+- 2026-09-01 — one-station observability теперь разделена математически.
+  Радиальный пример имеет rank `4`, `s_min=1.5312424663145318e-18`.
+  Нерадиальный finite-`c=343 m/s` пример имеет формальный rank `6`,
+  `s_min=1.6270620060085154e-8`, SI-scaled condition
+  `2670001.46786563`. Независимый instantaneous Jacobian имеет rank `5` и
+  scale-null residual `1.0408340855860843e-16`. При `c=343, 3430, 34300 m/s`
+  слабые singular values равны `1.6270620059271063e-8`,
+  `1.611393764476606e-9`, `1.6098350716521786e-10`, а spectral distances до
+  instantaneous limit — `5.131610546002005e-3`, `5.13609396293407e-4`,
+  `5.136613363563169e-5`. Формальный rank 6 не интерпретируется как
+  практически устойчивое single-station ranging.
+- 2026-09-01 — открыт corrective gate после независимого аудита вывода о
+  single-station observability. Требуется разделить мгновенный bearing,
+  радиальное движение, формальный full-rank нерaдиальный retarded-time случай
+  и практическую устойчивость. До полного pytest и повторного исполнения всех
+  13 notebooks S7C-A имеет статус **In review**; S7C-B не начинается.
+- 2026-09-01 — реализованы независимый instantaneous Jacobian без передачи
+  `np.inf` в production solver и три one-station сценария. Профильный gate:
+  `19 passed in 4.20s`. Для нерaдиального движения finite-difference mismatch
+  `5.663698676716677e-13`, то есть `3.480935978961724e-5` от smallest
+  singular value `1.6270620060085154e-8`; SVD tolerance остаётся стандартным
+  `max(shape)*eps*s_max` и не подбирается под ожидаемый rank.
 - 2026-09-01 — усиленный one-station temporal gate выявил существующую
   cross-platform нестабильность двух near-zero angular checks на Ubuntu:
   `arccos(dot)` квантовал почти совпадающие directions в

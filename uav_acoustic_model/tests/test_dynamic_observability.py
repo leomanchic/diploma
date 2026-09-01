@@ -7,9 +7,14 @@ from model.geometry import tetrahedral_array
 from model.measurements import BearingMeasurement
 from model.retarded_bearing import (
     predict_retarded_bearing,
+    predicted_local_direction_jacobian,
+    retarded_bearing_residual,
     stack_retarded_bearing_observability,
 )
 from model.station import StationPose
+from validation.retarded_bearing_validation import (
+    stacked_instantaneous_world_direction_jacobian,
+)
 
 
 def _stations(scale=1.0):
@@ -41,7 +46,7 @@ def _ideal_measurements(state, stations, times):
     return result
 
 
-def test_one_station_cannot_observe_full_position_and_velocity():
+def test_one_station_radial_motion_retains_two_unobservable_state_directions():
     # Pure radial constant velocity keeps the bearing fixed.  Even four
     # reception epochs leave two exact local state directions unobservable.
     state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, 5.0, 4.0], 0.0)
@@ -50,6 +55,99 @@ def test_one_station_cannot_observe_full_position_and_velocity():
     diagnostic = stack_retarded_bearing_observability(state, stations, measurements)
     assert diagnostic.rank == 4
     assert np.isinf(diagnostic.condition_number)
+
+
+def test_one_station_nonradial_retarded_stack_is_formally_rank_six_and_fd_verified():
+    state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, -3.0, 1.0], 0.0)
+    station = _stations()[0]
+    times = [1.0, 2.0, 3.0, 4.0]
+    measurements = _ideal_measurements(state, [station], times)
+    diagnostic = stack_retarded_bearing_observability(
+        state, [station], measurements
+    )
+
+    step = 2e-4
+    numerical_columns = []
+    for axis in range(6):
+        delta = np.zeros(6)
+        delta[axis] = step
+        plus_state = ConstantVelocityState(
+            state.vector[:3] + delta[:3],
+            state.vector[3:] + delta[3:],
+            state.reference_time_s,
+        )
+        minus_state = ConstantVelocityState(
+            state.vector[:3] - delta[:3],
+            state.vector[3:] - delta[3:],
+            state.reference_time_s,
+        )
+        plus = np.concatenate(
+            [retarded_bearing_residual(plus_state, station, item) for item in measurements]
+        )
+        minus = np.concatenate(
+            [retarded_bearing_residual(minus_state, station, item) for item in measurements]
+        )
+        numerical_columns.append((plus - minus) / (2.0 * step))
+    numerical = np.stack(numerical_columns, axis=1)
+    maximum_mismatch = float(np.max(np.abs(diagnostic.jacobian - numerical)))
+
+    assert diagnostic.rank == 6
+    assert 1e-8 < diagnostic.singular_values[-1] < 3e-8
+    assert 2e6 < diagnostic.condition_number < 4e6
+    assert maximum_mismatch < diagnostic.singular_values[-1] * 1e-3
+
+
+def test_independent_instantaneous_limit_has_scale_null_direction_and_rank_five():
+    state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, -3.0, 1.0], 0.0)
+    station = _stations()[0]
+    jacobian = stacked_instantaneous_world_direction_jacobian(
+        state, station, [1.0, 2.0, 3.0, 4.0]
+    )
+    singular_values = np.linalg.svd(jacobian, compute_uv=False)
+    tolerance = max(jacobian.shape) * np.finfo(float).eps * singular_values[0]
+    rank = int(np.count_nonzero(singular_values > tolerance))
+    scale_direction = np.concatenate(
+        (
+            state.position_at_reference_world_m - station.position_world_m,
+            state.velocity_world_mps,
+        )
+    )
+    assert rank == 5
+    np.testing.assert_allclose(jacobian @ scale_direction, 0.0, atol=2e-16)
+
+
+def test_finite_sound_speed_jacobians_converge_to_instantaneous_limit_without_forced_rank():
+    state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, -3.0, 1.0], 0.0)
+    station = _stations()[0]
+    times = [1.0, 2.0, 3.0, 4.0]
+    instantaneous = stacked_instantaneous_world_direction_jacobian(
+        state, station, times
+    )
+    smallest = []
+    distances = []
+    for sound_speed in (343.0, 3430.0, 34300.0):
+        retarded = np.vstack(
+            [
+                predicted_local_direction_jacobian(
+                    state, station, reception, sound_speed=sound_speed
+                )
+                for reception in times
+            ]
+        )
+        smallest.append(float(np.linalg.svd(retarded, compute_uv=False)[-1]))
+        distances.append(float(np.linalg.norm(retarded - instantaneous, ord=2)))
+    assert smallest[0] > smallest[1] > smallest[2] > 0.0
+    assert distances[0] > distances[1] > distances[2] > 0.0
+    np.testing.assert_allclose(
+        np.asarray(smallest[:-1]) / np.asarray(smallest[1:]),
+        10.0,
+        rtol=0.02,
+    )
+    np.testing.assert_allclose(
+        np.asarray(distances[:-1]) / np.asarray(distances[1:]),
+        10.0,
+        rtol=0.02,
+    )
 
 
 def test_three_stations_and_temporal_bearings_can_reach_rank_six():

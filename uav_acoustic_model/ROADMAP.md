@@ -9,11 +9,13 @@ bearing-измерениям определяет и затем причинно
 `tau_ij = T_i - T_j`, единицы SI, явные допущения и автоматическую численную
 приёмку.
 
-Одна микрофонная станция измеряет только направление (bearing). Её temporal
-bearing tracking может сглаживать последовательность направлений, но не даёт
-наблюдаемую 3D-дальность. 3D localization требует как минимум нескольких
-пространственно разнесённых и синхронизированных станций либо независимого
-источника информации о дальности; это отдельная многопозиционная задача.
+Одно мгновенное измерение одной микрофонной станции определяет только bearing,
+но не дальность. В instantaneous temporal модели сохраняется масштабная
+неоднозначность. Идеальная exact retarded-time модель с известным конечным `c`,
+строго постоянной и нерадиальной скоростью может формально дать слабую
+информацию о масштабе, однако это не является практически устойчивой заменой
+нескольким пространственно разнесённым синхронизированным станциям или другому
+независимому источнику дальности.
 
 ## Этапы
 
@@ -30,7 +32,7 @@ bearing tracking может сглаживать последовательно�
 | S7A | Done | Калибровать неопределённость bearing-измерений | spherical residual, calibration/evaluation study, covariance/quality CSV | split isolation, PSD `R`, calibration-bias-centered evaluation NIS, notebook | S7 |
 | S7B | Done | Задать ENU, station poses, общий measurement contract и статическую 3D bearing-триангуляцию | `StationPose`, `BearingMeasurement`, constrained spherical WLS, observability/Monte Carlo/visualization | deterministic invariance/Jacobian gates, exact nullspace constraints, dimensionless projected-KKT optimality, cross-platform CI, явное вырождение, full static study | S7A |
 | S7C | In progress | Реализовать центральный причинный dynamic 3D tracker по проверенным подэтапам | S7C-A…S7C-D | отдельная приёмка measurement model, event stream, filter и robustness benchmark | S7B |
-| S7C-A | Done | Проверить retarded-time bearing measurement model для 6D constant-velocity state | dynamic state, retarded prediction/residual/Jacobian, observability notebook | analytic/numeric emission time и Jacobian, invariance, rank diagnostics | S7B |
+| S7C-A | Done | Проверить retarded-time bearing measurement model для 6D constant-velocity state | dynamic state, retarded prediction/residual/Jacobian, observability notebook | analytic/numeric emission time и Jacobian, radial/nonradial/instantaneous rank diagnostics, invariance | S7B |
 | S7C-B | Next | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, batch baseline | available-time causality и отсутствие future access | S7C-A |
 | S7C-C | Planned | Реализовать первый центральный EKF baseline | EKF и matched no-filter/static baselines | consistency и causal Monte Carlo без скрытого truth | S7C-B |
 | S7C-D | Planned | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark и failure reporting | reproducible stress gates и явные ограничения | S7C-C |
@@ -59,12 +61,14 @@ S7A завершён как калиброванный benchmark неопред�
 compatibility проверяется по финальному constrained solution, а projected-KKT
 остаётся dimensionless Newton-correction metric, инвариантной к rigid
 transforms и масштабу сцены. S7C имеет статус `In progress`: S7C-A завершён
-как retarded-time measurement model и проверенный 6D Jacobian. S7C-B имеет
-статус `Next` и задаст causal event stream и offline batch reference, S7C-C
+после corrective gate radial/nonradial/instantaneous observability. S7C-B —
+`Next`; он задаст causal event stream и offline batch reference, а S7C-C
 будет отдельным EKF baseline, а S7C-D — отдельным robustness benchmark. В
-S7C-A tracking и state update не добавлены.
+S7C-A tracking и state update не добавляются.
 
-Bearing tracking одной станции — это временная фильтрация направления без
-наблюдаемой дальности. Multi-station 3D localization объединяет bearings из
-нескольких известных поз в общей ENU-системе и может наблюдать положение при
-достаточной геометрии. Эти задачи и их критерии не взаимозаменяемы.
+Одно мгновенное bearing-измерение одной станции не определяет дальность.
+Temporal retarded-time модель при строгом constant velocity и известном
+конечном `c` может формально получить дополнительную слабую информацию о
+масштабе, но это не заменяет практически устойчивую multi-station 3D
+localization. Несколько известных поз в общей ENU-системе обеспечивают
+геометрическую устойчивость; эти задачи и их критерии не взаимозаменяемы.
