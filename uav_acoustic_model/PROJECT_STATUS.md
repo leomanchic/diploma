@@ -13,7 +13,7 @@ S7C. Цель подэтапа — математически проверить
 `feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
 аналитическое/численное emission time, retarded bearing prediction,
 spherical tangent residual/Jacobian и локальная диагностика stacked 6D
-observability. Локальный полный gate: **282 passed in 44.71s**, `pip check`
+observability. Локальный полный gate: **282 passed in 40.00s**, `pip check`
 PASS, 13 notebooks/84 code cells проходят `nbformat` audit без error-output и
 невыполненных cells; новый notebook выполнен через `nbconvert`. GitHub Actions
 matrix Ubuntu/Windows Python 3.12 зелёная. Следующий подэтап — **S7C-B**.
@@ -26,7 +26,7 @@ EKF/UKF, particle filter, state update и tracking не реализованы.
   и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566671).
   S7C-A переведён в **Done**, S7C-B — в **Next**.
 - 2026-09-01 — локальная приёмка завершена. Pinned environment:
-  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `282 passed in 44.71s`;
+  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `282 passed in 40.00s`;
   `pip check` и `git diff --check` PASS. Проверены 13 notebooks и 84 code
   cells: `nbformat` valid, error outputs `0`, unexecuted cells `0`.
   `notebooks/retarded_bearing_model_validation.ipynb` программно выполнен.
@@ -39,8 +39,10 @@ EKF/UKF, particle filter, state update и tracking не реализованы.
   mismatch `2.725225094202255e-9`, relative mismatch по компонентам с
   `|J_numeric|>1e-7` — `3.861468973416781e-6`. Допуски `2e-8` absolute и
   `2e-5` relative не ослаблялись после запуска.
-- 2026-09-01 — observability examples: одна станция/один bearing имеет rank
-  `2`; три станции и три reception epochs имеют rank `6`, condition
+- 2026-09-01 — observability examples: четыре temporal bearings одной станции
+  для радиального constant-velocity движения имеют rank `4` и две численно
+  нулевые singular directions (smallest singular value
+  `1.5312424663145318e-18`); три станции и три reception epochs имеют rank `6`, condition
   `9.577896723107909`, smallest singular value `0.010160665945304471`.
   Почти коллинеарные станции и окно `0.002 s` сохраняют numerical rank `6`,
   но ухудшают condition до `4316.373666947092`, smallest singular value до

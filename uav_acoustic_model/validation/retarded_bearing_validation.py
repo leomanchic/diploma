@@ -209,7 +209,13 @@ def observability_examples() -> dict[str, float | int]:
 
     state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, -3.0, 1.0], 0.0)
     stations = validation_stations()
-    one = [_measurement(stations[0], state, 1.0, 0)]
+    radial_state = ConstantVelocityState(
+        [80.0, 50.0, 40.0], [8.0, 5.0, 4.0], 0.0
+    )
+    one = [
+        _measurement(stations[0], radial_state, reception, frame)
+        for frame, reception in enumerate((1.0, 2.0, 3.0, 4.0))
+    ]
     temporal = [
         _measurement(station, state, reception, frame)
         for frame, reception in enumerate((1.0, 2.5, 4.0))
@@ -229,7 +235,9 @@ def observability_examples() -> dict[str, float | int]:
         for frame, reception in enumerate((1.0, 1.001, 1.002))
         for station in poor_stations
     ]
-    one_result = stack_retarded_bearing_observability(state, stations[:1], one)
+    one_result = stack_retarded_bearing_observability(
+        radial_state, stations[:1], one
+    )
     temporal_result = stack_retarded_bearing_observability(
         state, stations, temporal
     )
@@ -237,7 +245,10 @@ def observability_examples() -> dict[str, float | int]:
         state, poor_stations, poor
     )
     return {
-        "one_station_single_bearing_rank": one_result.rank,
+        "one_station_temporal_radial_rank": one_result.rank,
+        "one_station_temporal_radial_smallest_singular_value": float(
+            one_result.singular_values[-1]
+        ),
         "three_station_temporal_rank": temporal_result.rank,
         "three_station_temporal_condition_number": temporal_result.condition_number,
         "poor_geometry_short_window_rank": poor_result.rank,

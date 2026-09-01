@@ -42,11 +42,13 @@ def _ideal_measurements(state, stations, times):
 
 
 def test_one_station_cannot_observe_full_position_and_velocity():
-    state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, -3.0, 1.0], 0.0)
+    # Pure radial constant velocity keeps the bearing fixed.  Even four
+    # reception epochs leave two exact local state directions unobservable.
+    state = ConstantVelocityState([80.0, 50.0, 40.0], [8.0, 5.0, 4.0], 0.0)
     stations = _stations()[:1]
-    measurements = _ideal_measurements(state, stations, [1.0])
+    measurements = _ideal_measurements(state, stations, [1.0, 2.0, 3.0, 4.0])
     diagnostic = stack_retarded_bearing_observability(state, stations, measurements)
-    assert diagnostic.rank < 6
+    assert diagnostic.rank == 4
     assert np.isinf(diagnostic.condition_number)
 
 
