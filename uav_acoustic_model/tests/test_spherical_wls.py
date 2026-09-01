@@ -4,7 +4,11 @@ import numpy as np
 import pytest
 
 from estimators.wls_doa import estimate_doa_spherical_wls, estimate_doa_wls
-from model.geometry import all_pairs, comparison_arrays
+from model.geometry import (
+    all_pairs,
+    comparison_arrays,
+    geodesic_angle_between_directions,
+)
 from model.tdoa import directional_spherical_tdoa
 
 
@@ -40,7 +44,11 @@ def test_plane_estimator_retains_nonzero_near_field_model_bias():
     truth = np.asarray(
         [np.cos(elevation) * np.cos(phi), np.cos(elevation) * np.sin(phi), np.sin(elevation)]
     )
-    plane_error = np.rad2deg(np.arccos(np.clip(plane.direction @ truth, -1.0, 1.0)))
-    exact_error = np.rad2deg(np.arccos(np.clip(exact.direction @ truth, -1.0, 1.0)))
+    plane_error = np.rad2deg(
+        geodesic_angle_between_directions(plane.direction, truth)
+    )
+    exact_error = np.rad2deg(
+        geodesic_angle_between_directions(exact.direction, truth)
+    )
     assert plane_error > 1e-3
     assert exact_error < 1e-6

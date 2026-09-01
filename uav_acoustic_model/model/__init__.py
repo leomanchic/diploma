@@ -10,7 +10,11 @@ from .dynamic_state import (
     constant_velocity_transition_jacobian,
     rebase_constant_velocity_state,
 )
-from .geometry import DEFAULT_SOUND_SPEED, direction_vector
+from .geometry import (
+    DEFAULT_SOUND_SPEED,
+    direction_vector,
+    geodesic_angle_between_directions,
+)
 from .measurements import BearingMeasurement
 from .retarded_bearing import (
     DynamicObservabilityResult,
@@ -36,6 +40,7 @@ __all__ = [
     "available_bearing_measurements",
     "constant_velocity_transition_jacobian",
     "direction_vector",
+    "geodesic_angle_between_directions",
     "emission_time_jacobian_wrt_state",
     "predict_retarded_bearing",
     "predict_retarded_bearing_measurement",
