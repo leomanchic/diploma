@@ -13,7 +13,7 @@ S7C. Цель подэтапа — математически проверить
 `feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
 аналитическое/численное emission time, retarded bearing prediction,
 spherical tangent residual/Jacobian и локальная диагностика stacked 6D
-observability. Локальный полный gate: **282 passed in 40.00s**, `pip check`
+observability. Локальный полный gate: **283 passed in 44.59s**, `pip check`
 PASS, 13 notebooks/84 code cells проходят `nbformat` audit без error-output и
 невыполненных cells; новый notebook выполнен через `nbconvert`. GitHub Actions
 matrix Ubuntu/Windows Python 3.12 зелёная. Следующий подэтап — **S7C-B**.
@@ -21,12 +21,19 @@ EKF/UKF, particle filter, state update и tracking не реализованы.
 
 ### Журнал S7C-A
 
+- 2026-09-01 — усиленный one-station temporal gate выявил существующую
+  cross-platform нестабильность двух near-zero angular checks на Ubuntu:
+  `arccos(dot)` квантовал почти совпадающие directions в
+  `1.2074182697257333e-6 deg`. Порог `1e-6 deg` не ослаблен; общая скалярная
+  метрика заменена математически эквивалентной устойчивой формулой
+  `atan2(||u×v||,u^T v)`, сохраняющей first-order resolution около нуля.
+  Retarded-time формулы и сохранённые S7B CSV не менялись.
 - 2026-09-01 — commit `6696014d1ee4dba63cb56babbeb97fbfb38499af`
   прошёл обе CI jobs: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566879)
   и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566671).
   S7C-A переведён в **Done**, S7C-B — в **Next**.
 - 2026-09-01 — локальная приёмка завершена. Pinned environment:
-  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `282 passed in 40.00s`;
+  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `283 passed in 44.59s`;
   `pip check` и `git diff --check` PASS. Проверены 13 notebooks и 84 code
   cells: `nbformat` valid, error outputs `0`, unexecuted cells `0`.
   `notebooks/retarded_bearing_model_validation.ipynb` программно выполнен.

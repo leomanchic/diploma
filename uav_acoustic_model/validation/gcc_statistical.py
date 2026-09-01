@@ -27,6 +27,7 @@ from model.geometry import (
     all_pairs,
     comparison_arrays,
     direction_vector,
+    geodesic_angle_between_directions,
     incidence_matrix,
 )
 from model.tdoa import far_field_tdoa, tdoa_covariance_from_independent_toa
@@ -982,10 +983,10 @@ def run_spherical_model_configuration(
     )
     truth_direction = direction_vector(*true_angles)
     noiseless_plane_bias = np.rad2deg(
-        np.arccos(np.clip(noiseless_plane.direction @ truth_direction, -1.0, 1.0))
+        geodesic_angle_between_directions(noiseless_plane.direction, truth_direction)
     )
     noiseless_exact_bias = np.rad2deg(
-        np.arccos(np.clip(noiseless_exact.direction @ truth_direction, -1.0, 1.0))
+        geodesic_angle_between_directions(noiseless_exact.direction, truth_direction)
     )
     measurement_errors = evaluation.estimated_tdoa - true_spherical
     measurement_valid = np.isfinite(measurement_errors) & ~evaluation.invalid

@@ -52,6 +52,30 @@ def direction_angles(direction: ArrayLike) -> tuple[float, float]:
     return phi, elevation
 
 
+def geodesic_angle_between_directions(
+    first_direction: ArrayLike, second_direction: ArrayLike
+) -> float:
+    """Return the stable spherical angle between two non-zero 3-D vectors.
+
+    ``atan2(||u x v||, u.T v)`` retains first-order accuracy near both zero
+    and pi, unlike ``arccos(u.T v)`` near coincident floating-point vectors.
+    """
+
+    first = np.asarray(first_direction, dtype=float)
+    second = np.asarray(second_direction, dtype=float)
+    if first.shape != (3,) or second.shape != (3,):
+        raise ValueError("directions must have shape (3,)")
+    if not np.all(np.isfinite(first)) or not np.all(np.isfinite(second)):
+        raise ValueError("directions must be finite")
+    first_norm = float(np.linalg.norm(first))
+    second_norm = float(np.linalg.norm(second))
+    if first_norm == 0.0 or second_norm == 0.0:
+        raise ValueError("directions must be non-zero")
+    first = first / first_norm
+    second = second / second_norm
+    return float(np.arctan2(np.linalg.norm(np.cross(first, second)), first @ second))
+
+
 def microphone_positions(positions: ArrayLike) -> NDArray[np.float64]:
     """Validate and return an ``(M, 3)`` microphone-coordinate array."""
 

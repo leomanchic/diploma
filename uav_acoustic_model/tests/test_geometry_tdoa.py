@@ -11,6 +11,7 @@ from model.geometry import (
     comparison_arrays,
     direction_angles,
     direction_vector,
+    geodesic_angle_between_directions,
 )
 from model.tdoa import far_field_tdoa, spherical_tdoa
 
@@ -27,6 +28,13 @@ def test_direction_angle_round_trip():
     expected = (1.1, 0.35)
     actual = direction_angles(direction_vector(*expected))
     assert actual == pytest.approx(expected, abs=1e-14)
+
+
+def test_geodesic_angle_retains_sub_sqrt_epsilon_resolution():
+    angle = geodesic_angle_between_directions(
+        np.array([1.0, 0.0, 0.0]), np.array([1.0, 1e-12, 0.0])
+    )
+    assert angle == pytest.approx(1e-12, rel=1e-12)
 
 
 def test_spherical_tdoa_is_antisymmetric():
