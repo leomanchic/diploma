@@ -62,8 +62,11 @@ def _measurement(
     reception: float,
     frame: int,
     offset: np.ndarray | None = None,
+    sound_speed: float = 343.0,
 ) -> BearingMeasurement:
-    prediction = predict_retarded_bearing(state, station, reception)
+    prediction = predict_retarded_bearing(
+        state, station, reception, sound_speed=sound_speed
+    )
     measured = prediction.direction_local
     if offset is not None:
         measured = _exp_map(measured, offset)
@@ -89,6 +92,93 @@ def _central(function, state: ConstantVelocityState, step: float = 2e-4) -> np.n
         minus = function(_state_from_vector(state.vector - delta, state.reference_time_s))
         columns.append((np.asarray(plus) - np.asarray(minus)) / (2.0 * step))
     return np.stack(columns, axis=-1)
+
+
+def _svd_diagnostics(jacobian: np.ndarray) -> tuple[np.ndarray, int, float]:
+    """Return singular values, numerical rank and full-rank condition number.
+
+    The tolerance is the standard backward-error scale
+    ``max(shape)*eps*s_max``.  It is not adjusted to obtain a desired rank.
+    Position and velocity columns retain their native SI units, so the
+    condition number depends on that parameter scaling.
+    """
+
+    matrix = np.asarray(jacobian, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[1] != 6 or not np.all(np.isfinite(matrix)):
+        raise ValueError("jacobian must have finite shape (N, 6)")
+    singular_values = np.linalg.svd(matrix, compute_uv=False)
+    scale = max(float(singular_values[0]), np.finfo(float).tiny)
+    tolerance = max(matrix.shape) * np.finfo(float).eps * scale
+    rank = int(np.count_nonzero(singular_values > tolerance))
+    condition = (
+        float(singular_values[0] / singular_values[-1])
+        if rank == 6 and singular_values.size >= 6
+        else float("inf")
+    )
+    return singular_values, rank, condition
+
+
+def instantaneous_world_direction_jacobian(
+    state: ConstantVelocityState,
+    station: StationPose,
+    reception_time_s: float,
+) -> np.ndarray:
+    """Independent ``c -> infinity`` Jacobian, without calling a solver.
+
+    The model is evaluated directly at reception time:
+    ``q=q0+v*(t_r-t0)`` and
+    ``du/dx=(I-u*u.T)/range @ [I,(t_r-t0)I]``.
+    """
+
+    reception = float(reception_time_s)
+    if not np.isfinite(reception):
+        raise ValueError("reception_time_s must be finite")
+    displacement = state.position_at(reception) - station.position_world_m
+    source_range = float(np.linalg.norm(displacement))
+    if source_range <= 0.0:
+        raise ValueError("source cannot coincide with station")
+    direction = displacement / source_range
+    delta = reception - state.reference_time_s
+    direct_state_jacobian = np.hstack((np.eye(3), delta * np.eye(3)))
+    return (
+        (np.eye(3) - np.outer(direction, direction))
+        @ direct_state_jacobian
+        / source_range
+    )
+
+
+def stacked_instantaneous_world_direction_jacobian(
+    state: ConstantVelocityState,
+    station: StationPose,
+    reception_times_s: tuple[float, ...] | list[float] | np.ndarray,
+) -> np.ndarray:
+    """Stack the independent instantaneous direction Jacobian over time."""
+
+    times = np.asarray(reception_times_s, dtype=float)
+    if times.ndim != 1 or times.size == 0 or not np.all(np.isfinite(times)):
+        raise ValueError("reception_times_s must be a non-empty finite vector")
+    return np.vstack(
+        [
+            instantaneous_world_direction_jacobian(state, station, reception)
+            for reception in times
+        ]
+    )
+
+
+def _stacked_retarded_direction_jacobian(
+    state: ConstantVelocityState,
+    station: StationPose,
+    reception_times_s: tuple[float, ...],
+    sound_speed: float,
+) -> np.ndarray:
+    return np.vstack(
+        [
+            predicted_local_direction_jacobian(
+                state, station, reception, sound_speed=sound_speed
+            )
+            for reception in reception_times_s
+        ]
+    )
 
 
 def finite_difference_audit(
@@ -238,6 +328,65 @@ def observability_examples() -> dict[str, float | int]:
     one_result = stack_retarded_bearing_observability(
         radial_state, stations[:1], one
     )
+    one_station = stations[0]
+    one_station_times = (1.0, 2.0, 3.0, 4.0)
+    nonradial = [
+        _measurement(one_station, state, reception, frame)
+        for frame, reception in enumerate(one_station_times)
+    ]
+    nonradial_result = stack_retarded_bearing_observability(
+        state, stations[:1], nonradial
+    )
+    numerical_nonradial_jacobian = _central(
+        lambda candidate: np.concatenate(
+            [
+                retarded_bearing_residual(candidate, one_station, measurement)
+                for measurement in nonradial
+            ]
+        ),
+        state,
+    )
+    fd_difference = nonradial_result.jacobian - numerical_nonradial_jacobian
+    fd_max_abs = float(np.max(np.abs(fd_difference)))
+    fd_spectral_norm = float(np.linalg.norm(fd_difference, ord=2))
+
+    instantaneous_jacobian = stacked_instantaneous_world_direction_jacobian(
+        state, one_station, one_station_times
+    )
+    instantaneous_singular, instantaneous_rank, instantaneous_condition = (
+        _svd_diagnostics(instantaneous_jacobian)
+    )
+    scale_null_direction = np.concatenate(
+        (
+            state.position_at_reference_world_m - one_station.position_world_m,
+            state.velocity_world_mps,
+        )
+    )
+    instantaneous_null_residual = instantaneous_jacobian @ scale_null_direction
+
+    finite_speed_metrics: dict[str, float | int] = {}
+    for sound_speed in (343.0, 3430.0, 34300.0):
+        retarded_direction_jacobian = _stacked_retarded_direction_jacobian(
+            state, one_station, one_station_times, sound_speed
+        )
+        singular_values, rank, condition = _svd_diagnostics(
+            retarded_direction_jacobian
+        )
+        label = f"c_{int(sound_speed)}"
+        finite_speed_metrics[f"one_station_nonradial_{label}_rank"] = rank
+        finite_speed_metrics[
+            f"one_station_nonradial_{label}_smallest_singular_value"
+        ] = float(singular_values[-1])
+        finite_speed_metrics[
+            f"one_station_nonradial_{label}_condition_number"
+        ] = condition
+        finite_speed_metrics[
+            f"one_station_nonradial_{label}_to_instantaneous_spectral_norm"
+        ] = float(
+            np.linalg.norm(
+                retarded_direction_jacobian - instantaneous_jacobian, ord=2
+            )
+        )
     temporal_result = stack_retarded_bearing_observability(
         state, stations, temporal
     )
@@ -249,12 +398,35 @@ def observability_examples() -> dict[str, float | int]:
         "one_station_temporal_radial_smallest_singular_value": float(
             one_result.singular_values[-1]
         ),
+        "one_station_temporal_nonradial_rank": nonradial_result.rank,
+        "one_station_temporal_nonradial_smallest_singular_value": float(
+            nonradial_result.singular_values[-1]
+        ),
+        "one_station_temporal_nonradial_condition_number": (
+            nonradial_result.condition_number
+        ),
+        "one_station_temporal_nonradial_fd_max_abs_mismatch": fd_max_abs,
+        "one_station_temporal_nonradial_fd_spectral_norm_mismatch": (
+            fd_spectral_norm
+        ),
+        "one_station_temporal_nonradial_fd_max_to_smin_ratio": (
+            fd_max_abs / float(nonradial_result.singular_values[-1])
+        ),
+        "one_station_instantaneous_rank": instantaneous_rank,
+        "one_station_instantaneous_smallest_singular_value": float(
+            instantaneous_singular[-1]
+        ),
+        "one_station_instantaneous_condition_number": instantaneous_condition,
+        "one_station_instantaneous_scale_null_max_abs": float(
+            np.max(np.abs(instantaneous_null_residual))
+        ),
         "three_station_temporal_rank": temporal_result.rank,
         "three_station_temporal_condition_number": temporal_result.condition_number,
         "poor_geometry_short_window_rank": poor_result.rank,
         "poor_geometry_short_window_condition_number": poor_result.condition_number,
         "three_station_smallest_singular_value": float(temporal_result.singular_values[-1]),
         "poor_geometry_smallest_singular_value": float(poor_result.singular_values[-1]),
+        **finite_speed_metrics,
     }
 
 
@@ -281,7 +453,9 @@ __all__ = [
     "DEFAULT_AUDIT_SEED",
     "DEFAULT_SCENE_COUNT",
     "finite_difference_audit",
+    "instantaneous_world_direction_jacobian",
     "observability_examples",
     "run_retarded_bearing_validation",
+    "stacked_instantaneous_world_direction_jacobian",
     "validation_stations",
 ]

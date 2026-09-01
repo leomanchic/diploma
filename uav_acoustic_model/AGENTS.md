@@ -84,3 +84,10 @@
   offset/drift must not be applied a second time. Do not add a state update,
   EKF/UKF/particle filter, process noise, tracking Monte Carlo, signal-level
   GCC/SRP fusion, wind, reflections, or SRP-Harmonics during S7C-A.
+- Distinguish one-station observability cases explicitly. One instantaneous
+  bearing has no range; a radial constant-velocity temporal stack remains
+  rank deficient. Under the ideal exact retarded-time model, known finite
+  sound speed and strictly constant non-radial velocity can give formal local
+  rank 6, but the scale information is weak and vanishes in the independently
+  derived instantaneous `c -> infinity` limit, which has rank 5. Do not turn
+  this formal finite-speed rank into a claim of robust single-station ranging.

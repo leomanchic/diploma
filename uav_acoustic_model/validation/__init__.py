@@ -54,8 +54,10 @@ from .multistation_static_study import (
 )
 from .retarded_bearing_validation import (
     finite_difference_audit,
+    instantaneous_world_direction_jacobian,
     observability_examples,
     run_retarded_bearing_validation,
+    stacked_instantaneous_world_direction_jacobian,
     validation_stations,
 )
 
@@ -99,7 +101,9 @@ __all__ = [
     "run_multistation_static_study",
     "run_static_configuration",
     "finite_difference_audit",
+    "instantaneous_world_direction_jacobian",
     "observability_examples",
     "run_retarded_bearing_validation",
+    "stacked_instantaneous_world_direction_jacobian",
     "validation_stations",
 ]
