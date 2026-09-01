@@ -9,17 +9,22 @@ S7C. Цель подэтапа — математически проверить
 6D-состояния в асинхронные bearing-измерения трёх станций с физическим
 запаздывающим временем и аналитическим Jacobian.
 
-Статус: **In review** до cross-platform CI. В ветке
+Статус: **Done**. В ветке
 `feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
 аналитическое/численное emission time, retarded bearing prediction,
 spherical tangent residual/Jacobian и локальная диагностика stacked 6D
 observability. Локальный полный gate: **282 passed in 44.71s**, `pip check`
 PASS, 13 notebooks/84 code cells проходят `nbformat` audit без error-output и
-невыполненных cells; новый notebook выполнен через `nbconvert`. EKF/UKF,
-particle filter, state update и tracking не реализованы.
+невыполненных cells; новый notebook выполнен через `nbconvert`. GitHub Actions
+matrix Ubuntu/Windows Python 3.12 зелёная. Следующий подэтап — **S7C-B**.
+EKF/UKF, particle filter, state update и tracking не реализованы.
 
 ### Журнал S7C-A
 
+- 2026-09-01 — commit `6696014d1ee4dba63cb56babbeb97fbfb38499af`
+  прошёл обе CI jobs: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566879)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566671).
+  S7C-A переведён в **Done**, S7C-B — в **Next**.
 - 2026-09-01 — локальная приёмка завершена. Pinned environment:
   `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `282 passed in 44.71s`;
   `pip check` и `git diff --check` PASS. Проверены 13 notebooks и 84 code
