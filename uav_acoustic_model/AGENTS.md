@@ -78,3 +78,9 @@
   correspond to different emission times. Do not intersect asynchronous
   moving-source rays and call it dynamic localization. Central causal
   retarded-time 3-D tracking belongs to S7C.
+- S7C-A is only the retarded-time bearing measurement foundation for a
+  constant-velocity 6-D state. Use synchronized reception timestamps in the
+  physical equation; availability is causal metadata, and station clock
+  offset/drift must not be applied a second time. Do not add a state update,
+  EKF/UKF/particle filter, process noise, tracking Monte Carlo, signal-level
+  GCC/SRP fusion, wind, reflections, or SRP-Harmonics during S7C-A.

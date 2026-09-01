@@ -97,6 +97,65 @@ def tangent_residual(
     )
 
 
+def tangent_residual_jacobian_wrt_true_direction(
+    true_direction: ArrayLike,
+    estimated_direction: ArrayLike,
+    *,
+    antipodal_tolerance: float = 1e-10,
+    pole_tolerance: float = 1e-10,
+) -> NDArray[np.float64]:
+    """Differentiate the 2-D spherical residual with respect to its base.
+
+    The returned ``2x3`` matrix acts on tangent perturbations of the unit
+    ``true_direction``.  It includes the connection term caused by motion of
+    the azimuth/elevation tangent basis.  The local azimuth basis is undefined
+    at a pole, and the sphere log-map is non-unique at the antipode; both are
+    rejected explicitly.
+    """
+
+    u = _unit_vector(true_direction, name="true_direction")
+    y = _unit_vector(estimated_direction, name="estimated_direction")
+    tolerance = float(antipodal_tolerance)
+    pole_limit = float(pole_tolerance)
+    if not np.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("antipodal_tolerance must be finite and positive")
+    if not np.isfinite(pole_limit) or pole_limit <= 0.0:
+        raise ValueError("pole_tolerance must be finite and positive")
+    phi, elevation = direction_angles(u)
+    horizontal = float(np.hypot(u[0], u[1]))
+    if horizontal <= pole_limit:
+        raise ValueError("azimuth/elevation tangent basis is undefined at a local pole")
+    basis = tangent_basis(phi, elevation)
+    dot = float(np.clip(u @ y, -1.0, 1.0))
+    projection = y - dot * u
+    sine = float(np.linalg.norm(projection))
+    if dot <= -1.0 + tolerance:
+        raise AntipodalDirectionError(
+            "sphere residual Jacobian is not unique for antipodal bearings"
+        )
+    if sine <= 1e-7:
+        log_map = sphere_log_map(u, y, antipodal_tolerance=tolerance)
+        log_derivative = -(np.eye(3) - u[:, None] * u[None, :])
+    else:
+        theta = float(np.arctan2(sine, dot))
+        scale = theta / sine
+        alpha = -1.0 / sine**2 + theta * dot / sine**3
+        log_map = scale * projection
+        log_derivative = (
+            -scale * (u[:, None] * y[None, :] + dot * np.eye(3))
+            + alpha * projection[:, None] * projection[None, :]
+        )
+    residual_uncorrected = basis @ log_map
+    phi_gradient = np.asarray([-u[1], u[0], 0.0]) / horizontal**2
+    connection = np.asarray(
+        [
+            np.sin(elevation) * residual_uncorrected[1],
+            -np.sin(elevation) * residual_uncorrected[0],
+        ]
+    )[:, None] * phi_gradient[None, :]
+    return basis @ log_derivative + connection
+
+
 @dataclass(frozen=True)
 class BearingCovarianceCalibration:
     """Sample mean/covariance and numerical diagnostics for valid residuals."""
@@ -184,4 +243,5 @@ __all__ = [
     "sphere_log_map",
     "tangent_basis",
     "tangent_residual",
+    "tangent_residual_jacobian_wrt_true_direction",
 ]

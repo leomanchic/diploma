@@ -52,6 +52,12 @@ from .multistation_static_study import (
     run_multistation_static_study,
     run_static_configuration,
 )
+from .retarded_bearing_validation import (
+    finite_difference_audit,
+    observability_examples,
+    run_retarded_bearing_validation,
+    validation_stations,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -92,4 +98,8 @@ __all__ = [
     "default_static_study_configurations",
     "run_multistation_static_study",
     "run_static_configuration",
+    "finite_difference_audit",
+    "observability_examples",
+    "run_retarded_bearing_validation",
+    "validation_stations",
 ]

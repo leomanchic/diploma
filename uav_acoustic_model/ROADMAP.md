@@ -29,7 +29,11 @@ bearing tracking может сглаживать последовательно�
 | S7 | Done | Получить причинную последовательность кадров | continuous stream, chunking, sequential DOA | единый signal/noise stream и causal frame estimates | S6 |
 | S7A | Done | Калибровать неопределённость bearing-измерений | spherical residual, calibration/evaluation study, covariance/quality CSV | split isolation, PSD `R`, calibration-bias-centered evaluation NIS, notebook | S7 |
 | S7B | Done | Задать ENU, station poses, общий measurement contract и статическую 3D bearing-триангуляцию | `StationPose`, `BearingMeasurement`, constrained spherical WLS, observability/Monte Carlo/visualization | deterministic invariance/Jacobian gates, exact nullspace constraints, dimensionless projected-KKT optimality, cross-platform CI, явное вырождение, full static study | S7A |
-| S7C | Next | Реализовать центральный причинный dynamic 3D tracker | asynchronous retarded-time bearing model и tracker benchmark | causal timing, matched static/no-tracker baselines, consistency | S7B |
+| S7C | In progress | Реализовать центральный причинный dynamic 3D tracker по проверенным подэтапам | S7C-A…S7C-D | отдельная приёмка measurement model, event stream, filter и robustness benchmark | S7B |
+| S7C-A | In review | Проверить retarded-time bearing measurement model для 6D constant-velocity state | dynamic state, retarded prediction/residual/Jacobian, observability notebook | analytic/numeric emission time и Jacobian, invariance, rank diagnostics | S7B |
+| S7C-B | Planned (Next) | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, batch baseline | available-time causality и отсутствие future access | S7C-A |
+| S7C-C | Planned | Реализовать первый центральный EKF baseline | EKF и matched no-filter/static baselines | consistency и causal Monte Carlo без скрытого truth | S7C-B |
+| S7C-D | Planned | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark и failure reporting | reproducible stress gates и явные ограничения | S7C-C |
 | S8 | Planned | Добавить измеренные сигналы БПЛА и held-out datasets | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
@@ -54,10 +58,11 @@ S7A завершён как калиброванный benchmark неопред�
 измерений. S7B завершён после повторного cross-platform corrective gate:
 compatibility проверяется по финальному constrained solution, а projected-KKT
 остаётся dimensionless Newton-correction metric, инвариантной к rigid
-transforms и масштабу сцены. S7C имеет статус `Next`, ещё не начат и должен
-позднее реализовать
-центральный причинный dynamic 3D tracker с asynchronous/retarded-time bearing
-measurements; в S7B tracking не добавляется.
+transforms и масштабу сцены. S7C имеет статус `In progress`: текущий S7C-A
+проверяет только retarded-time measurement model и его 6D Jacobian. S7C-B
+следующим задаст causal event stream и offline batch reference, S7C-C будет
+отдельным EKF baseline, а S7C-D — отдельным robustness benchmark. В S7C-A
+tracking и state update не добавляются.
 
 Bearing tracking одной станции — это временная фильтрация направления без
 наблюдаемой дальности. Multi-station 3D localization объединяет bearings из
