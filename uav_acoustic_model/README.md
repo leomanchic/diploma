@@ -5,10 +5,10 @@
 
 Конечная цель — воспроизводимая система из трёх пространственно разнесённых
 микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
-фундамент S7B завершён. Текущий S7C-A проверяет только retarded-time bearing
-measurement model и 6D Jacobian для заданного constant-velocity состояния.
-Причинный event stream, offline batch reference и EKF относятся к отдельным
-S7C-B/S7C-C; на S7C-A state update и tracking не реализованы.
+фундамент S7B и retarded-time measurement model S7C-A завершены. Текущий
+S7C-B проверяет причинный асинхронный event stream и пакетную оценку одного
+строго constant-velocity 6D-состояния. Это **batch constant-velocity state
+estimate**, не recursive tracking. EKF/UKF, process noise и S7C-C не начаты.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -123,6 +123,45 @@ retarded-time модели при нерaдиальном движении, ст
 Архитектура из трёх разнесённых станций сохраняется ради устойчивой геометрии,
 а не на основании категорического запрета идеализированной one-station
 наблюдаемости.
+
+## Causal event stream и retarded-time batch S7C-B
+
+Каждое truth-free `BearingMeasurement` имеет физическое время центра приёмного
+кадра `reception_center_timestamp_s` и время появления на центральном узле
+`available_timestamp_s`. Первое входит в retarded-time equation, второе только
+ограничивает причинный доступ. `CausalBearingEventStream.advance_to(T)` строит
+неизменяемый cumulative prefix из событий с `available_timestamp_s <= T`.
+Равновременные события имеют канонический порядок; exact duplicate не получает
+повторный вес, conflicting payload с тем же ID карантинирует обе версии, а
+invalid/drop/wrong-estimator события явно остаются в journal. В одном опыте
+выбирается один estimator variant, поэтому несколько оценивателей одного
+audio frame не считаются независимыми измерениями.
+
+Offline и causal-prefix оценки вызывают один objective и один optimizer:
+
+```text
+x = [q0, v],  q(te) = q0 + v (te - t0)
+tr = te + ||q(te)-pk||/c
+r_k(x) = tangent_residual(u_pred_local,k(x), u_measured_local,k) - mu_cal,k
+min_x 1/2 sum_k ||Lambda_{+,k}^(-1/2) U_{+,k}.T r_k(x)||^2
+subject to U_{0,k}.T r_k(x) = 0,  ||v|| < c
+```
+
+Emission time пересчитывается для каждого candidate state. Положительные
+eigenvalues covariance задают whitening, нулевые eigenvalues — точные equality
+constraints без epsilon. Дозвуковость обеспечивается гладкой открытой
+параметризацией скорости. Initial point строится только из station poses,
+timestamps и измеренных rays. Приёмка результата независимо проверяет exact
+constraints, forward rays, local rank и dimensionless projected-KKT residual;
+`optimizer_success` сохраняется как diagnostic, но сам по себе не является
+математическим gate. Конечная 6x6 covariance — только local Gaussian
+linearization benchmark и не возвращается при неполной наблюдаемости.
+
+Validation использует 96 независимых целых sequences: две геометрии, три
+скорости, два уровня прямого tangent-angular noise, два delivery schedule и
+четыре seeds. Пять causal prefixes одной sequence статистически зависимы и не
+называются независимыми trials. Full offline и последний causal prefix обязаны
+совпадать, поскольку содержат один и тот же окончательный набор событий.
 
 ## Соглашения
 
@@ -293,6 +332,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `model/dynamic_state.py` — immutable constant-velocity 6D state, rebasing и exact transition;
 - `model/retarded_bearing.py` — retarded bearing prediction, spherical residual,
   analytic 6D Jacobian, causal availability и local observability diagnostics;
+- `model/bearing_events.py` — truth-free asynchronous event identity, causal
+  replay, deduplication/conflict/drop rules и immutable audit prefixes;
 - `estimators/wls_doa.py` — WLS на единичной верхней полусфере;
 - `estimators/gcc_phat.py` — ориентированный sub-sample GCC-PHAT;
 - `estimators/srp_phat.py` — direct/vectorized equal-pair far-field SRP-PHAT;
@@ -300,6 +341,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   физически согласованных TDOA;
 - `estimators/bearing_triangulation.py` — closest-rays baseline, spherical
   weighted static 3D triangulation, Jacobian и position observability;
+- `estimators/retarded_state_batch.py` — exact retarded-time offline и
+  causal-prefix batch constant-velocity state estimate с constrained WLS;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -329,6 +372,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   calibration/evaluation Monte Carlo, pose/covariance mismatch и station loss;
 - `validation/retarded_bearing_validation.py` — 1000-scene analytic/numeric
   emission-time/Jacobian audit и 6D rank/conditioning examples без tracking;
+- `validation/retarded_batch_study.py` — independent-sequence direct-bearing
+  Monte Carlo, asynchronous delivery journal и matched offline/causal prefixes;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `visualization/multistation_scene.py` — ENU station axes, bearing rays,
@@ -354,6 +399,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   position tails, covariance benchmark и good/poor 3D scenes;
 - `notebooks/retarded_bearing_model_validation.ipynb` — ENU retarded rays,
   reception/emission timing, 6D singular values и static/infinite-`c` limits;
+- `notebooks/retarded_batch_validation.ipynb` — S7C-B position/speed errors,
+  causal coverage, failure modes, conditioning, KKT и runtime diagnostics;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -389,6 +436,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.bearing_uncertainty_study import run_bearing_uncertainty_study; run_bearing_uncertainty_study()"
 .\.venv\Scripts\python.exe -c "from validation.multistation_static_study import run_multistation_static_study; run_multistation_static_study()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -402,6 +450,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 notebooks\bearing_uncertainty_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\multistation_static_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 

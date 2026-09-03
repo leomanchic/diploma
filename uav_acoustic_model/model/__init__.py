@@ -5,6 +5,14 @@ from .bearing_statistics import (
     tangent_residual,
     tangent_residual_jacobian_wrt_true_direction,
 )
+from .bearing_events import (
+    BearingEventLogEntry,
+    BearingEventPrefix,
+    CausalBearingEventStream,
+    ScheduledBearingEvent,
+    audio_frame_id,
+    bearing_event_id,
+)
 from .dynamic_state import (
     ConstantVelocityState,
     constant_velocity_transition_jacobian,
@@ -32,12 +40,18 @@ from .station import StationPose
 
 __all__ = [
     "BearingMeasurement",
+    "BearingEventLogEntry",
+    "BearingEventPrefix",
+    "CausalBearingEventStream",
     "ConstantVelocityState",
     "DEFAULT_SOUND_SPEED",
     "DynamicObservabilityResult",
     "RetardedBearingPrediction",
     "StationPose",
+    "ScheduledBearingEvent",
+    "audio_frame_id",
     "available_bearing_measurements",
+    "bearing_event_id",
     "constant_velocity_transition_jacobian",
     "direction_vector",
     "geodesic_angle_between_directions",

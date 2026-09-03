@@ -1,24 +1,133 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-01
+Последнее обновление: 2026-09-03
 
 ## Текущий этап
 
-Текущий этап: **S7C-A — Retarded-time Bearing Measurement Model** в составе
-S7C. Цель подэтапа — математически проверить отображение constant-velocity
-6D-состояния в асинхронные bearing-измерения трёх станций с физическим
-запаздывающим временем и аналитическим Jacobian.
+Текущий этап: **S7C-B — Causal Asynchronous Bearing Events and Retarded-time
+Batch State Estimation** в составе S7C. Цель подэтапа — воспроизводимо
+проигрывать асинхронные bearing-события трёх станций и оценивать одно
+constant-velocity 6D-состояние общей пакетной exact retarded-time моделью.
 
-Статус: **Done** после corrective gate наблюдаемости одной станции.
-В ветке
-`feature/s7c-retarded-bearing-model` реализованы immutable 6D state,
-аналитическое/численное emission time, retarded bearing prediction,
-spherical tangent residual/Jacobian и локальная диагностика stacked 6D
-observability. Локальный полный gate: **286 passed in 43.51s**, `pip check`
-PASS, все 13 notebooks/84 code cells заново выполнены в чистых kernels и
-проходят `nbformat` audit без error-output, невыполненных cells и пропущенных
-cell IDs. Следующий подэтап — **S7C-B**.
-EKF/UKF, particle filter, state update и tracking не реализованы.
+Статус: **In review**. Базовый принятый S7C-A commit —
+`31c68e9f398211d6935081d1e03fa3b18d77f615`; его полный gate дал **286
+passed in 43.51s**, `pip check` PASS и 13/13 свежих notebooks. S7C-B разделяет
+непричинный offline batch reference и causal-prefix batch, которому доступны
+только события с `available_timestamp_s <= T`. Это пакетная оценка
+constant-velocity состояния, не recursive tracking; EKF/UKF, process noise и
+S7C-C не начаты.
+
+### Журнал S7C-B
+
+- 2026-09-03 — S7C-B открыт со статусом **In progress** на чистом commit
+  `31c68e9f398211d6935081d1e03fa3b18d77f615`. Зафиксированы границы:
+  синхронизированные reception timestamps, известные station poses и
+  постоянный `c`, строго constant/subsonic velocity, direct bearing-level
+  measurements и синтетический angular noise. Event replay обязан разделять
+  physical reception time и causal availability, журналировать invalid/drop/
+  duplicate/conflict и не использовать truth/future data внутри estimator.
+- 2026-09-03 — реализованы truth-free causal event stream и общий offline/
+  causal-prefix batch estimator. Exact emission time пересчитывается для
+  каждого candidate state; objective использует covariance eigenspace
+  whitening, а zero-variance directions остаются equality constraints без
+  epsilon. Ограничение `||v||<c` обеспечивается гладким отображением
+  unconstrained velocity parameters в открытый дозвуковой шар. Начальный
+  deterministic gate: **14 passed in 1.53s**; recovery tolerances заранее
+  зафиксированы как `2e-8 m`, `2e-8 m/s`, maximum angular residual `2e-10
+  rad` для хорошо обусловленных noiseless сцен.
+- 2026-09-03 — завершены deterministic, exact-constraint и study gates:
+  **28 passed in 10.09s** для event/batch/study/dynamic-observability набора и
+  **307 passed in 52.59s** для полной регрессии. Тесты подтверждают отсутствие
+  future access, канонический equal-availability replay, exact duplicate без
+  повторного веса, quarantine conflicting ID, offline/final-causal equality,
+  статический предел, rigid/time/rebase/station-permutation invariance,
+  central-FD whitened Jacobian, exact `R=0`/rank-1 constraints и явные invalid
+  результаты для несовместимости/недостаточной наблюдаемости/antipodal rays.
+- 2026-09-03 — полный S7C-B direct-bearing study за seed `20260903` создал
+  **96 независимых целых sequences**, **576 sequence/prefix rows** и **144
+  aggregates**: 2 station geometries × 3 motions × 2 tangent-noise levels
+  (`0.05°`, `0.2°`) × 2 delivery schedules × 4 independent sequence seeds.
+  Пять causal prefixes внутри одной sequence явно помечены зависимыми.
+  Offline coverage `96/96`; causal coverage: `70/96` на первом publication
+  time и `96/96` на каждом из следующих четырёх. Все 26 invalid — ожидаемые
+  ранние случаи: 24 `insufficient_measurements`, 2
+  `insufficient_local_observability`. Full offline и последний causal prefix
+  совпали точно: maximum state/objective difference `0`.
+- 2026-09-03 — offline numerical benchmark: общий position RMSE/P95
+  `0.312518/0.708637 m`, speed RMSE/P95 `0.108351/0.213955 m/s`. По
+  geometry/noise position RMSE: wide `0.074203 m` (`0.05°`) и `0.303674 m`
+  (`0.2°`), compact `0.103977 m` и `0.531165 m`; speed RMSE соответственно
+  `0.024752`, `0.094480`, `0.039325`, `0.189405 m/s`. Эти synthetic
+  direct-bearing результаты не включают GCC/SRP signal-level errors и не
+  являются tracking benchmark. Максимальный accepted scaled projected-KKT
+  residual `9.341878238590161e-7` при gate `1e-6`; Monte Carlo использует
+  full-rank covariance, поэтому final exact-constraint residual равен `0`.
+- 2026-09-03 — добавлены reader-facing notebook, два CSV и README/API
+  документация. Новый notebook выполнен top-to-bottom: 6/6 code cells,
+  error-output `0`, unexecuted `0`; latest measured median/max batch runtime
+  `0.0493948/0.864921 s`. Общая приёмка всех committed notebooks, повторный
+  pytest, `pip check` и diff audit ещё выполняются; поэтому S7C-B остаётся
+  **In progress**.
+- 2026-09-03 — финальная локальная приёмка S7C-B завершена, статус переведён
+  в **In review** до отдельного решения о приёмке; S7C-C не начат. После
+  последней CSV-схемы полный pytest: **307 passed in 52.71s**; `pip check`:
+  `No broken requirements found`; `git diff --check`: PASS. Аудит всех
+  **14/14 notebooks**, **90 code cells**: invalid nbformat `0`, error-output
+  `0`, unexecuted nonempty cells `0`, missing IDs `0`. Измеренные времена
+  свежего общего запуска: `array_comparison` 9.685 s,
+  `bearing_uncertainty_validation` 55.927 s,
+  `far_field_fractional_delay_validation` 86.479 s,
+  `gcc_phat_monte_carlo` 25.395 s, `gcc_phat_validation` 7.052 s,
+  `gcc_statistical_validation` 1708.667 s,
+  `monte_carlo_crlb_validation` 106.749 s, `moving_source_3d` 6.284 s,
+  `moving_source_validation` 6.358 s, `multistation_static_validation`
+  83.473 s, `retarded_batch_validation` 33.841 s,
+  `retarded_bearing_model_validation` 9.838 s,
+  `sequential_doa_validation` 9.449 s и `srp_phat_validation` 7.374 s.
+  После добавления persistent full event journal релевантный S7C-B notebook
+  выполнен ещё раз; его 6/6 code cells также прошли строгий аудит.
+- 2026-09-03 — sequence CSV теперь сохраняет полный event journal в
+  `event_journal_json`, а также accepted/conflicted event IDs. Smoke regression
+  проверяет причины `accepted`, `duplicate_exact`, `excluded_dropped`; unit
+  event tests отдельно покрывают `excluded_invalid`, same-availability ordering
+  и conflicting-ID quarantine. Последний CSV имеет 576 строк и все 96 unique
+  sequence seeds; journal actions полного study — `accepted`,
+  `duplicate_exact`, `excluded_dropped`. Latest median/max batch runtime после
+  перегенерации `0.0497909/0.116140 s`.
+- 2026-09-03 — обязательное свежее выполнение прежних notebooks изменило
+  только runtime-derived поля прежних CSV. `fractional_delay_benchmark.csv`:
+  четыре timing/speedup columns (максимальная timing delta `1.9990e-4 s`);
+  `multistation_static_summary.csv`: только `mean_runtime_per_estimate_s`
+  (`5.63236e-4 s`); sequential frame CSV: runtime и две производные latency
+  columns (maximum delta `5.17350e-3 s`); sequential summary: только четыре
+  mean runtime/latency columns (maximum delta `3.35270e-4 s`). Физические,
+  error, coverage и seed поля этих старых результатов не изменились.
+
+### Формулы, допущения и команды S7C-B
+
+- Оценивается одно состояние `x=[q0,v]` с
+  `q(te)=q0+v(te-t0)`, `||v||<c`; для каждого candidate заново решается
+  `tr=te+||q(te)-p_k||/c`.
+- `reception_center_timestamp_s` входит в физическую модель;
+  `available_timestamp_s` только задаёт causal prefix. Offline и causal
+  используют один objective/optimizer и отличаются только доступным набором.
+- Для `R=U+ Lambda+ U+^T + U0 0 U0^T` objective использует
+  `Lambda+^(-1/2) U+^T r`, а `U0^T r=0` — exact constraints без epsilon.
+  Local 6x6 covariance — Gaussian linearization benchmark; при неполной
+  наблюдаемости finite covariance не возвращается.
+- Синтетический шум независим на уровне direct bearing events. Он не является
+  моделью ошибок перекрывающихся GCC/SRP audio frames. Independent Monte Carlo
+  unit — целая sequence; пять causal prefixes одной sequence зависимы. При
+  четырёх sequences/config устойчивые P99/P99.9 и operational thresholds не
+  заявляются.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
+git diff --check
+```
 
 ### Журнал S7C-A
 
