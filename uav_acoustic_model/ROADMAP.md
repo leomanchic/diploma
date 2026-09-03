@@ -33,7 +33,7 @@ bearing-измерениям определяет и затем причинно
 | S7B | Done | Задать ENU, station poses, общий measurement contract и статическую 3D bearing-триангуляцию | `StationPose`, `BearingMeasurement`, constrained spherical WLS, observability/Monte Carlo/visualization | deterministic invariance/Jacobian gates, exact nullspace constraints, dimensionless projected-KKT optimality, cross-platform CI, явное вырождение, full static study | S7A |
 | S7C | In progress | Реализовать центральный причинный dynamic 3D tracker по проверенным подэтапам | S7C-A…S7C-D | отдельная приёмка measurement model, event stream, filter и robustness benchmark | S7B |
 | S7C-A | Done | Проверить retarded-time bearing measurement model для 6D constant-velocity state | dynamic state, retarded prediction/residual/Jacobian, observability notebook | analytic/numeric emission time и Jacobian, radial/nonradial/instantaneous rank diagnostics, invariance | S7B |
-| S7C-B | Next | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, batch baseline | available-time causality и отсутствие future access | S7C-A |
+| S7C-B | In review | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, constrained retarded-time batch baseline | available-time causality, отсутствие future access, offline/final-prefix agreement и independent-sequence benchmark | S7C-A |
 | S7C-C | Planned | Реализовать первый центральный EKF baseline | EKF и matched no-filter/static baselines | consistency и causal Monte Carlo без скрытого truth | S7C-B |
 | S7C-D | Planned | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark и failure reporting | reproducible stress gates и явные ограничения | S7C-C |
 | S8 | Planned | Добавить измеренные сигналы БПЛА и held-out datasets | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
@@ -62,9 +62,10 @@ compatibility проверяется по финальному constrained solut
 остаётся dimensionless Newton-correction metric, инвариантной к rigid
 transforms и масштабу сцены. S7C имеет статус `In progress`: S7C-A завершён
 после corrective gate radial/nonradial/instantaneous observability. S7C-B —
-`Next`; он задаст causal event stream и offline batch reference, а S7C-C
-будет отдельным EKF baseline, а S7C-D — отдельным robustness benchmark. В
-S7C-A tracking и state update не добавляются.
+`In review`: локальные deterministic/statistical/notebook gates причинного
+event stream и offline/causal-prefix batch reference пройдены, но отдельная
+приёмка ещё не дана. S7C-C остаётся `Planned` и не начинается до этой приёмки;
+он будет отдельным EKF baseline, а S7C-D — отдельным robustness benchmark.
 
 Одно мгновенное bearing-измерение одной станции не определяет дальность.
 Temporal retarded-time модель при строгом constant velocity и известном

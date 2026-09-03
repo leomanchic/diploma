@@ -60,6 +60,14 @@ from .retarded_bearing_validation import (
     stacked_instantaneous_world_direction_jacobian,
     validation_stations,
 )
+from .retarded_batch_study import (
+    RetardedBatchScenario,
+    RetardedBatchStudyConfig,
+    default_retarded_batch_configurations,
+    generate_retarded_batch_scenario,
+    run_retarded_batch_configuration,
+    run_retarded_batch_study,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -106,4 +114,10 @@ __all__ = [
     "run_retarded_bearing_validation",
     "stacked_instantaneous_world_direction_jacobian",
     "validation_stations",
+    "RetardedBatchScenario",
+    "RetardedBatchStudyConfig",
+    "default_retarded_batch_configurations",
+    "generate_retarded_batch_scenario",
+    "run_retarded_batch_configuration",
+    "run_retarded_batch_study",
 ]

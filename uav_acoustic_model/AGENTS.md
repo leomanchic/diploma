@@ -91,3 +91,10 @@
   rank 6, but the scale information is weak and vanishes in the independently
   derived instantaneous `c -> infinity` limit, which has rank 5. Do not turn
   this formal finite-speed rank into a claim of robust single-station ranging.
+- During S7C-B, call the output a batch estimate of one constant-velocity
+  state, not tracking. `reception_center_timestamp_s` enters the retarded-time
+  physics; `available_timestamp_s` only gates causal access. An event may
+  affect estimates published after it arrives, but never rewrite an earlier
+  published result. Deduplicate exact event identities, reject conflicting
+  payloads explicitly, select one estimator variant per experiment, and keep
+  scenario truth outside the causal processor and estimator contracts.
