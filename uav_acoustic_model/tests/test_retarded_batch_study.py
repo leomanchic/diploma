@@ -2,7 +2,7 @@
 
 import json
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
 import numpy as np
 
@@ -34,7 +34,7 @@ def test_fixed_configuration_matrix_has_multiple_physical_axes():
 
 
 def test_all_sequence_noise_and_delivery_seeds_are_disjoint_and_reproducible():
-    configs = default_retarded_batch_configurations(sequence_count=2)
+    configs = default_retarded_batch_configurations(sequence_count=4)
     scenarios = [
         generate_retarded_batch_scenario(config, index)
         for config in configs
@@ -46,9 +46,11 @@ def test_all_sequence_noise_and_delivery_seeds_are_disjoint_and_reproducible():
     assert len(sequence_seeds) == len(set(sequence_seeds))
     assert len(noise_seeds) == len(set(noise_seeds))
     assert len(delivery_seeds) == len(set(delivery_seeds))
-    assert set(noise_seeds).isdisjoint(delivery_seeds)
+    assert len(sequence_seeds + noise_seeds + delivery_seeds) == len(
+        set(sequence_seeds + noise_seeds + delivery_seeds)
+    )
     repeated = generate_retarded_batch_scenario(configs[7], 1)
-    original = scenarios[7 * 2 + 1]
+    original = scenarios[7 * 4 + 1]
     assert repeated.sequence_seed == original.sequence_seed
     np.testing.assert_array_equal(
         repeated.truth_state.vector, original.truth_state.vector
@@ -62,6 +64,35 @@ def test_all_sequence_noise_and_delivery_seeds_are_disjoint_and_reproducible():
         assert measurements_are_exact_duplicates(
             repeated_event.measurement, original_event.measurement
         )
+
+
+def test_alternate_base_seed_changes_realization_not_physical_configuration():
+    baseline_config = default_retarded_batch_configurations(sequence_count=2)[0]
+    baseline = generate_retarded_batch_scenario(baseline_config, 0)
+    repeated = generate_retarded_batch_scenario(baseline_config, 0)
+    alternate_config = replace(baseline_config, base_seed=20260904)
+    alternate = generate_retarded_batch_scenario(alternate_config, 0)
+
+    assert baseline.sequence_seed == 20260903
+    assert baseline.bearing_noise_seed == 3182215699
+    assert baseline.delivery_seed == 603279027
+    assert repeated.sequence_seed == baseline.sequence_seed
+    np.testing.assert_array_equal(repeated.truth_state.vector, baseline.truth_state.vector)
+    assert alternate.sequence_seed != baseline.sequence_seed
+    assert alternate.bearing_noise_seed != baseline.bearing_noise_seed
+    assert alternate.delivery_seed != baseline.delivery_seed
+    assert (
+        alternate.config.geometry,
+        alternate.config.motion,
+        alternate.config.angular_noise_std_deg,
+        alternate.config.delivery_schedule,
+    ) == (
+        baseline.config.geometry,
+        baseline.config.motion,
+        baseline.config.angular_noise_std_deg,
+        baseline.config.delivery_schedule,
+    )
+    assert not np.array_equal(alternate.truth_state.vector, baseline.truth_state.vector)
 
 
 def test_scenario_truth_is_separate_from_truth_free_measurement_contract():

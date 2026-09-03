@@ -19,6 +19,74 @@ S7C-C не начаты.
 
 ### Журнал S7C-B
 
+- 2026-09-03 — открыт corrective gate по независимому аудиту commit
+  `e5a90fd66afe7fd19a02cc55fdc504e6056503e9`; статус остаётся **In
+  review**, S7C-C не начат. Воспроизведено: noiseless wide-сцена имеет valid/
+  rank `6/6/6` при requested reference epoch `0/2/30 s`, но при `100 s`
+  ошибочно получает rank `3` и `insufficient_local_observability`, несмотря
+  на trajectory error `4.0194e-14 m`. Причина — смешение безразмерного
+  optimizer velocity parameter с физическим `velocity_scale_mps` в rank/KKT/
+  covariance diagnostics. Также воспроизведён `ValueError: tuple.index(x): x
+  not in tuple` для `base_seed=20260904`: lookup ошибочно включал seed в
+  identity физической конфигурации. До исправления, regeneration и полного
+  regression/notebook gate этап не принимается.
+- 2026-09-03 — diagnostics разделены по координатам: dimensionless optimizer
+  velocity parameter используется только для поиска, а rank, condition,
+  exact-constraint nullspace, projected-KKT и Gaussian-linearization
+  covariance вычисляются по физическим Jacobian `[q0,v]` и SI scales
+  `[100 m,10 m/s]`. Rank threshold не ослаблялся, exact zero-variance
+  constraints сохранены. Профильный gate event/batch/study: **24 passed in
+  9.86s**. Для requested epochs `0/2/30/100 s` результаты теперь все valid и
+  rank 6; ошибки общей траектории `1.231e-14/0/3.035e-14/4.019e-14 m`, ошибки
+  скорости `4.172e-15/3.053e-15/5.604e-15/1.847e-14 m/s`. Physical scaled
+  condition соответственно `230.216/208.253/15724.142/1935475.586`; их
+  равенство намеренно не требуется. Максимальный absolute residual проверки
+  `P1=F P0 F^T` равен `9.2641e-11` при 100 s и проходит новый допуск
+  `atol=2e-10, rtol=5e-10`; заявленные position/speed допуски `2e-8` теперь
+  явно используют `rtol=0`.
+- 2026-09-03 — physical configuration identity отделена от `base_seed`.
+  Default mapping сохранён (`sequence/noise/delivery seeds` первой сцены:
+  `20260903/3182215699/603279027`); `base_seed=20260904` работает и меняет
+  realization без изменения geometry/motion/noise/schedule. Regression
+  проверяет воспроизводимость одинакового seed и отсутствие повторов среди
+  всех sequence/noise/delivery generator streams фиксированной 96-sequence
+  матрицы.
+- 2026-09-03 — S7C-B study повторён: **576 sequence rows**, **144 summaries**.
+  Относительно `e5a90fd` состояния, objective, position/speed errors, coverage,
+  failures и rank побитово неизменны: valid `550/576`, failures `24`
+  `insufficient_measurements` и `2` `insufficient_local_observability`, ranks
+  `0:24`, `5:2`, `6:550`. Изменились именно исправленные diagnostics:
+  finite condition min/median/max с `27687.334/221128.840/866730734.710` на
+  `96.912/987.525/217923903.822`; max KKT изменился только на roundoff с
+  `9.34187823859016e-7` до `9.34187823812051e-7`. Runtime также заново измерен
+  (maximum row delta `0.0388735 s`). Полный pytest/notebook gate ещё впереди;
+  статус остаётся **In review**.
+- 2026-09-03 — corrective gate завершён локально, S7C-B сохранён в статусе
+  **In review**, S7C-C не начат. Финальный профильный gate с S7C-A
+  observability: **32 passed in 10.01s**; полный post-notebook pytest: **311
+  passed in 51.81s**; `pip check`: `No broken requirements found`; `git diff
+  --check`: PASS. Все **14/14 committed notebooks** выполнены свежими kernels:
+  `array_comparison` 10.076 s, `bearing_uncertainty_validation` 56.919 s,
+  `far_field_fractional_delay_validation` 87.877 s,
+  `gcc_phat_monte_carlo` 23.377 s, `gcc_phat_validation` 7.295 s,
+  `gcc_statistical_validation` 1469.628 s,
+  `monte_carlo_crlb_validation` 104.008 s, `moving_source_3d` 6.093 s,
+  `moving_source_validation` 6.224 s, `multistation_static_validation`
+  83.822 s, `retarded_batch_validation` 32.722 s,
+  `retarded_bearing_model_validation` 9.673 s,
+  `sequential_doa_validation` 9.246 s и `srp_phat_validation` 7.225 s.
+  Строгий аудит **90 code cells**: invalid nbformat `0`, error-output `0`,
+  unexecuted nonempty `0`, missing IDs `0`.
+- 2026-09-03 — финальное сравнение с `e5a90fd`: S7C-B coverage/failures/rank,
+  estimates, objective и error metrics неизменны. Исправленные physical
+  diagnostics дают condition min/median/max
+  `96.9117/987.5251/217923903.8222`; max scaled KKT
+  `9.34187823812051e-7`. Latest runtime median/max `0.045998/0.838365 s`
+  (max — единичный timing outlier, не numerical failure). Свежий общий
+  notebook run изменил в legacy CSV только runtime/derived latency fields:
+  maximum timing delta `0.00390290 s` в fractional-delay benchmark,
+  `0.000737005 s` в static multi-station summary и `0.00338950 s` в
+  sequential frame results; error/coverage/seed fields не изменились.
 - 2026-09-03 — S7C-B открыт со статусом **In progress** на чистом commit
   `31c68e9f398211d6935081d1e03fa3b18d77f615`. Зафиксированы границы:
   синхронизированные reception timestamps, известные station poses и
