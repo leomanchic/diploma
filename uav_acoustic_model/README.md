@@ -157,11 +157,21 @@ constraints, forward rays, local rank и dimensionless projected-KKT residual;
 математическим gate. Конечная 6x6 covariance — только local Gaussian
 linearization benchmark и не возвращается при неполной наблюдаемости.
 
+Optimizer использует безразмерную открытую параметризацию скорости только для
+поиска. Observability, condition, exact-constraint nullspace, projected-KKT и
+covariance вычисляются отдельно по физическому Jacobian состояния `[q0,v]` с
+масштабами в метрах и м/с. Поэтому смена requested reference epoch не меняет
+физический rank; covariance между эпохами преобразуется как
+`P1=F P0 F.T`, `F=[[I,dt I],[0,I]]`. Внутренняя эпоха по будущей записи не
+выбирается: causal запуск использует только переданный доступный prefix.
+
 Validation использует 96 независимых целых sequences: две геометрии, три
 скорости, два уровня прямого tangent-angular noise, два delivery schedule и
 четыре seeds. Пять causal prefixes одной sequence статистически зависимы и не
 называются независимыми trials. Full offline и последний causal prefix обязаны
 совпадать, поскольку содержат один и тот же окончательный набор событий.
+Identity физической конфигурации не включает `base_seed`; смена seed меняет
+только воспроизводимую случайную реализацию и не ломает lookup конфигурации.
 
 ## Соглашения
 

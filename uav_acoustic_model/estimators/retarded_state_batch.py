@@ -633,6 +633,25 @@ def estimate_retarded_constant_velocity_batch(
             ]
         )
 
+    def physical_exact_jacobian(
+        parameter: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """Return exact-constraint derivatives in physical ``[q0, v]`` units.
+
+        Optimizer velocity coordinates are dimensionless.  They are suitable
+        for optimization but must not be combined with SI position/velocity
+        scales when diagnosing physical observability.
+        """
+
+        if not exact_dimension:
+            return np.empty((0, estimated_dimension))
+        state, _ = state_from_parameter(parameter)
+        system = assemble_retarded_batch_system(
+            stations, bearings, state, sound_speed=speed
+        )
+        blocks = np.asarray(system.exact_constraint_jacobian_state)
+        return blocks @ parameter_basis
+
     parameter = initial_parameter.copy()
     preliminary_constraint = float("nan")
     iterations = 0
@@ -656,7 +675,7 @@ def estimate_retarded_constant_velocity_batch(
                 np.max(np.abs(exact_residual(parameter)), initial=0.0)
             )
             constraint_rank_preliminary, _, _ = _rank_and_nullspace(
-                exact_jacobian(parameter) * parameter_scales[None, :]
+                physical_exact_jacobian(parameter) * parameter_scales[None, :]
             )
             if positive_dimension and constraint_rank_preliminary < estimated_dimension:
                 constraint = NonlinearConstraint(
@@ -725,7 +744,7 @@ def estimate_retarded_constant_velocity_batch(
             iterations = int(optimized.nfev)
             optimizer_success = bool(optimized.success)
             optimizer_message = str(optimized.message)
-        raw_residual, raw_jacobian_parameter, state = raw_components(parameter)
+        raw_residual, _, state = raw_components(parameter)
     except (ValueError, AntipodalDirectionError, np.linalg.LinAlgError) as error:
         return _invalid_result(
             start_time=started,
@@ -741,35 +760,28 @@ def estimate_retarded_constant_velocity_batch(
         )
 
     whitened = stochastic_residual(parameter)
-    whitened_jacobian = stochastic_jacobian(parameter)
     exact = exact_residual(parameter)
-    exact_jacobian_parameter = exact_jacobian(parameter)
-    _, state_derivative = state_from_parameter(parameter)
-    raw_jacobian_state = np.vstack(
-        [
-            retarded_bearing_residual_jacobian(
-                state, station_map[item.station_id], item, speed
-            )
-            for item in bearings
-        ]
+    final_system = assemble_retarded_batch_system(
+        stations, bearings, state, sound_speed=speed
     )
-    information_parameter = whitened_jacobian.T @ whitened_jacobian
-    information_state = np.zeros((6, 6), dtype=float)
-    for index, subspace in enumerate(subspaces):
-        if not subspace.positive_eigenvalues.size:
-            continue
-        block = raw_jacobian_state[2 * index : 2 * index + 2]
-        whiten = (
-            subspace.positive_basis.T @ block
-            / np.sqrt(subspace.positive_eigenvalues)[:, None]
-        )
-        information_state += whiten.T @ whiten
+    raw_jacobian_state = np.asarray(final_system.residual_jacobian_state)
+    whitened_jacobian_state = np.asarray(final_system.whitened_jacobian_state)
+    exact_jacobian_state = np.asarray(final_system.exact_constraint_jacobian_state)
+    information_state = whitened_jacobian_state.T @ whitened_jacobian_state
 
-    scaled_constraint = exact_jacobian_parameter * parameter_scales[None, :]
+    # All acceptance diagnostics below use physical state coordinates.  The
+    # optimizer's dimensionless velocity map is deliberately excluded so the
+    # declared SI scales have one consistent meaning.
+    whitened_jacobian_physical = whitened_jacobian_state @ parameter_basis
+    exact_jacobian_physical = exact_jacobian_state @ parameter_basis
+    information_physical = (
+        whitened_jacobian_physical.T @ whitened_jacobian_physical
+    )
+    scaled_constraint = exact_jacobian_physical * parameter_scales[None, :]
     constraint_rank, _, free_scaled_basis = _rank_and_nullspace(scaled_constraint)
     scaled_information = (
         parameter_scales[:, None]
-        * information_parameter
+        * information_physical
         * parameter_scales[None, :]
     )
     if free_scaled_basis.shape[1]:
@@ -784,7 +796,7 @@ def estimate_retarded_constant_velocity_batch(
         reduced_condition = 1.0
     local_rank = constraint_rank + reduced_rank
     stochastic_rank = _information_diagnostics(scaled_information)[1]
-    gradient_twice_objective = 2.0 * whitened_jacobian.T @ whitened
+    gradient_twice_objective = 2.0 * whitened_jacobian_physical.T @ whitened
     projected_gradient = free_scaled_basis.T @ (
         gradient_twice_objective * parameter_scales
     )
@@ -844,25 +856,27 @@ def estimate_retarded_constant_velocity_batch(
     covariance_state = np.full((6, 6), np.nan)
     if constraints_satisfied and local_rank == estimated_dimension:
         if free_scaled_basis.shape[1] == 0:
-            covariance_parameter = np.zeros((estimated_dimension, estimated_dimension))
+            covariance_physical = np.zeros((estimated_dimension, estimated_dimension))
         else:
             covariance_scaled = free_scaled_basis @ np.linalg.solve(
                 0.5 * (reduced_information + reduced_information.T),
                 free_scaled_basis.T,
             )
-            covariance_parameter = (
+            covariance_physical = (
                 parameter_scales[:, None]
                 * covariance_scaled
                 * parameter_scales[None, :]
             )
-        covariance_state = state_derivative @ covariance_parameter @ state_derivative.T
+        covariance_state = (
+            parameter_basis @ covariance_physical @ parameter_basis.T
+        )
         covariance_state = 0.5 * (covariance_state + covariance_state.T)
 
     if free_scaled_basis.shape[1] and reduced_rank < free_scaled_basis.shape[1]:
         _, vectors = np.linalg.eigh(0.5 * (reduced_information + reduced_information.T))
         unobservable_scaled = free_scaled_basis @ vectors[:, : free_scaled_basis.shape[1] - reduced_rank]
-        unobservable_parameter = parameter_scales[:, None] * unobservable_scaled
-        unobservable_state = (state_derivative @ unobservable_parameter).T
+        unobservable_physical = parameter_scales[:, None] * unobservable_scaled
+        unobservable_state = (parameter_basis @ unobservable_physical).T
     else:
         unobservable_state = np.empty((0, 6))
     maximum_residual = float(

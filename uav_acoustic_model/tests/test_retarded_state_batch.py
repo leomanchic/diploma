@@ -14,7 +14,10 @@ from estimators.retarded_state_batch import (
     estimate_retarded_constant_velocity_batch,
 )
 from model.bearing_statistics import tangent_basis
-from model.dynamic_state import ConstantVelocityState
+from model.dynamic_state import (
+    ConstantVelocityState,
+    constant_velocity_transition_jacobian,
+)
 from model.geometry import direction_angles, tetrahedral_array
 from model.measurements import BearingMeasurement
 from model.retarded_bearing import predict_retarded_bearing
@@ -105,15 +108,22 @@ def test_noiseless_well_conditioned_scenes_recover_state_from_nontruth_initializ
         result.state.position_at_reference_world_m,
         state.position_at_reference_world_m,
         atol=2e-8,
+        rtol=0.0,
     )
     np.testing.assert_allclose(
-        result.state.velocity_world_mps, state.velocity_world_mps, atol=2e-8
+        result.state.velocity_world_mps,
+        state.velocity_world_mps,
+        atol=2e-8,
+        rtol=0.0,
     )
     assert result.maximum_angular_residual_rad < 2e-10
     assert result.local_observability_rank == 6
 
 
-def test_future_events_cannot_change_current_prefix_initialization_or_diagnostics():
+@pytest.mark.parametrize("reference_time_s", [0.0, 100.0])
+def test_future_events_cannot_change_current_prefix_initialization_or_diagnostics(
+    reference_time_s,
+):
     stations = _stations()
     state = ConstantVelocityState([50.0, 40.0, 30.0], [5.0, -2.0, 1.0])
     events = _measurements(state, stations)
@@ -130,15 +140,17 @@ def test_future_events_cannot_change_current_prefix_initialization_or_diagnostic
         events,
         [cutoff],
         estimator_variant="direct",
-        reference_time_s=0.0,
+        reference_time_s=reference_time_s,
     )[0]
     second = estimate_causal_prefix_batches(
         stations,
         altered,
         [cutoff],
         estimator_variant="direct",
-        reference_time_s=0.0,
+        reference_time_s=reference_time_s,
     )[0]
+    assert first.estimate.valid, first.estimate.failure_reason
+    assert second.estimate.valid, second.estimate.failure_reason
     assert first.prefix == second.prefix
     assert first.estimate.used_event_ids == second.estimate.used_event_ids
     assert first.estimate.initialization_rank == second.estimate.initialization_rank
@@ -197,6 +209,7 @@ def test_fixed_zero_velocity_batch_matches_static_spherical_solver():
         dynamic.state.position_at_reference_world_m,
         static.position_world_m,
         atol=2e-10,
+        rtol=0.0,
     )
     np.testing.assert_array_equal(dynamic.state.velocity_world_mps, np.zeros(3))
 
@@ -233,7 +246,10 @@ def test_whitened_batch_jacobian_matches_central_finite_difference():
     np.testing.assert_allclose(analytic, numerical, rtol=2e-6, atol=2e-7)
 
 
-def test_zero_and_rank_one_covariances_preserve_exact_constraint_semantics():
+@pytest.mark.parametrize("reference_time_s", [0.0, 100.0])
+def test_zero_and_rank_one_covariances_preserve_exact_constraint_semantics(
+    reference_time_s,
+):
     stations = _stations()
     truth = ConstantVelocityState([50.0, 40.0, 30.0], [5.0, -2.0, 1.0])
     for covariance, expected_dimension in (
@@ -242,13 +258,24 @@ def test_zero_and_rank_one_covariances_preserve_exact_constraint_semantics():
     ):
         measurements = _measurements(truth, stations, covariance=covariance)
         result = estimate_retarded_constant_velocity_batch(
-            stations, measurements, reference_time_s=0.0
+            stations, measurements, reference_time_s=reference_time_s
         )
         assert result.valid, result.failure_reason
         assert result.exact_constraint_residuals.size == expected_dimension
         assert result.constraint_max_abs_rad < 2e-13
         assert result.constraints_satisfied
-        np.testing.assert_allclose(result.state.vector, truth.vector, atol=3e-9)
+        np.testing.assert_allclose(
+            result.state.position_at(0.0),
+            truth.position_at(0.0),
+            atol=3e-9,
+            rtol=0.0,
+        )
+        np.testing.assert_allclose(
+            result.state.velocity_world_mps,
+            truth.velocity_world_mps,
+            atol=3e-9,
+            rtol=0.0,
+        )
         assert result.local_observability_rank == 6
 
 
@@ -270,7 +297,9 @@ def test_small_positive_variance_converges_to_exact_constraint_solution():
         stations, nearly_exact, reference_time_s=0.0
     )
     assert exact.valid and limiting.valid
-    np.testing.assert_allclose(limiting.state.vector, exact.state.vector, atol=3e-8)
+    np.testing.assert_allclose(
+        limiting.state.vector, exact.state.vector, atol=3e-8, rtol=0.0
+    )
     assert np.all(np.isfinite(limiting.covariance_state_linearization))
 
 
@@ -302,17 +331,52 @@ def test_global_rigid_transform_station_permutation_and_reference_rebase_are_inv
         transformed.state.position_at_reference_world_m,
         rotation @ baseline.state.position_at_reference_world_m + translation,
         atol=2e-8,
+        rtol=0.0,
     )
     np.testing.assert_allclose(
         transformed.state.velocity_world_mps,
         rotation @ baseline.state.velocity_world_mps,
         atol=2e-8,
+        rtol=0.0,
     )
-    rebased = estimate_retarded_constant_velocity_batch(
-        stations, measurements, reference_time_s=2.0
-    )
-    np.testing.assert_allclose(rebased.state.position_at_reference_world_m, state.position_at(2.0), atol=2e-8)
-    np.testing.assert_allclose(rebased.state.velocity_world_mps, state.velocity_world_mps, atol=2e-8)
+
+
+def test_requested_reference_epochs_preserve_trajectory_velocity_and_covariance():
+    stations = _stations("wide")
+    truth = ConstantVelocityState([50.0, 40.0, 30.0], [5.0, -2.0, 1.0], 0.0)
+    measurements = _measurements(truth, stations)
+    epochs = (0.0, 2.0, 30.0, 100.0)
+    results = {}
+    for epoch in epochs:
+        result = estimate_retarded_constant_velocity_batch(
+            stations, measurements, reference_time_s=epoch
+        )
+        assert result.valid, (epoch, result.failure_reason)
+        assert result.local_observability_rank == 6
+        np.testing.assert_allclose(
+            result.state.position_at(0.0),
+            truth.position_at(0.0),
+            atol=2e-8,
+            rtol=0.0,
+        )
+        np.testing.assert_allclose(
+            result.state.velocity_world_mps,
+            truth.velocity_world_mps,
+            atol=2e-8,
+            rtol=0.0,
+        )
+        results[epoch] = result
+
+    baseline_covariance = results[0.0].covariance_state_linearization
+    for epoch in epochs[1:]:
+        transition = constant_velocity_transition_jacobian(epoch)
+        expected = transition @ baseline_covariance @ transition.T
+        np.testing.assert_allclose(
+            results[epoch].covariance_state_linearization,
+            expected,
+            atol=2e-10,
+            rtol=5e-10,
+        )
 
 
 def test_insufficient_radial_antipodal_and_incompatible_exact_cases_are_invalid():

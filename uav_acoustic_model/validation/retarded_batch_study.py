@@ -33,6 +33,13 @@ from model.station import StationPose
 DEFAULT_STUDY_SEED = 20260903
 DEFAULT_SEQUENCE_COUNT = 4
 PROCESSING_TIMES_S = (1.5, 2.5, 3.5, 4.5, 7.0)
+_PHYSICAL_CONFIGURATION_IDENTITIES = tuple(
+    (geometry, motion, noise, schedule)
+    for geometry in ("wide", "compact")
+    for motion in ("stationary", "oblique_slow", "oblique_fast")
+    for noise in (0.05, 0.2)
+    for schedule in ("ordered", "reordered_dropout")
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +67,9 @@ class RetardedBatchScenario:
 
 
 def default_retarded_batch_configurations(
-    *, sequence_count: int = DEFAULT_SEQUENCE_COUNT
+    *,
+    sequence_count: int = DEFAULT_SEQUENCE_COUNT,
+    base_seed: int = DEFAULT_STUDY_SEED,
 ) -> tuple[RetardedBatchStudyConfig, ...]:
     """Return the fixed pre-evaluation S7C-B study matrix."""
 
@@ -71,11 +80,9 @@ def default_retarded_batch_configurations(
             noise,
             schedule,
             sequence_count=sequence_count,
+            base_seed=base_seed,
         )
-        for geometry in ("wide", "compact")
-        for motion in ("stationary", "oblique_slow", "oblique_fast")
-        for noise in (0.05, 0.2)
-        for schedule in ("ordered", "reordered_dropout")
+        for geometry, motion, noise, schedule in _PHYSICAL_CONFIGURATION_IDENTITIES
     )
 
 
@@ -120,9 +127,20 @@ def generate_retarded_batch_scenario(
     index = int(sequence_index)
     if index < 0 or index >= config.sequence_count:
         raise ValueError("sequence_index outside configured sequence_count")
-    configuration_index = default_retarded_batch_configurations(
-        sequence_count=config.sequence_count
-    ).index(config)
+    physical_identity = (
+        config.geometry,
+        config.motion,
+        config.angular_noise_std_deg,
+        config.delivery_schedule,
+    )
+    try:
+        configuration_index = _PHYSICAL_CONFIGURATION_IDENTITIES.index(
+            physical_identity
+        )
+    except ValueError as error:
+        raise ValueError(
+            f"unknown physical S7C-B configuration: {physical_identity}"
+        ) from error
     sequence_seed = config.base_seed + 1000 * configuration_index + index
     seed_sequence = np.random.SeedSequence(sequence_seed)
     noise_seed, delivery_seed = [
@@ -471,12 +489,14 @@ def run_retarded_batch_study(
     output_directory: str | Path = "results",
     *,
     sequence_count: int = DEFAULT_SEQUENCE_COUNT,
+    base_seed: int = DEFAULT_STUDY_SEED,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     """Run the fixed study matrix and save sequence/aggregate CSV artifacts."""
 
     rows: list[dict[str, object]] = []
     for config in default_retarded_batch_configurations(
-        sequence_count=sequence_count
+        sequence_count=sequence_count,
+        base_seed=base_seed,
     ):
         rows.extend(run_retarded_batch_configuration(config))
     summaries = _summary_rows(rows)
