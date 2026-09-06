@@ -172,6 +172,32 @@ Validation использует 96 независимых целых sequences: 
 совпадать, поскольку содержат один и тот же окончательный набор событий.
 Identity физической конфигурации не включает `base_seed`; смена seed меняет
 только воспроизводимую случайную реализацию и не ломает lookup конфигурации.
+Noise и delivery streams строятся через
+`SeedSequence([base_seed, configuration_index, sequence_index, stream_id])`;
+run-aware provenance входит в sequence/event IDs и CSV. Это исключает
+арифметические коллизии соседних base seeds и индексов больше 1000, сохраняя
+common random realization для сравниваемых методов внутри сценария.
+
+## Corrective mathematical audit текущей реализации
+
+Far-field TDOA-WLS решается как квадратичная задача по единичному вектору
+направления. Положительный спектр PSD covariance задаёт whitening, её
+nullspace — точные линейные constraints. Реализация детерминированно
+перечисляет внутренние stationary/hard-case кандидаты и обе границы elevation,
+после чего выбирает минимальную допустимую стоимость. Поле
+`global_optimality="algebraic_quadratic_candidate_enumeration"` описывает этот
+численный контракт и не является символическим доказательством глобальности.
+Exact spherical WLS остаётся явно помеченным
+`deterministic_multistart_approximation`.
+
+Для вырожденной Gaussian support-aware NIS равен квадратичной форме только в
+положительно-дисперсионном подпространстве; нарушение zero-variance component
+даёт `inf`. Gaussian chi-square benchmark использует число степеней свободы,
+равное положительному рангу covariance; rank zero обрабатывается отдельно.
+Около локального zenith/nadir bearing fusion переключается на остаток
+`-B_y Log_y(u)` в фиксированном tangent frame измерения и согласованный
+аналитический Jacobian. Это устраняет координатный полюс, но не скрывает
+физическое вырождение или неединственность log-map в антиподе.
 
 ## Соглашения
 
@@ -219,7 +245,12 @@ TDOA оценивается на 32-кратно интерполированн�
 причину invalid и использованную спектральную энергию. Тишина и недостаточная
 энергия дают `delay=NaN`, а не произвольную задержку. Независимый медленный
 эталон напрямую вычисляет `sum_k Psi[k] exp(j 2 pi f_k tau)` на произвольной
-сетке задержек.
+сетке задержек. Поиск всегда остаётся внутри точного непрерывного интервала
+`[-maximum_delay_seconds,+maximum_delay_seconds]`: дробные endpoints
+вычисляются прямой спектральной суммой, а не постфактум clipping. При
+oversampled `irfft` исходный единственный Nyquist coefficient делится пополам
+до дополнения спектра; FFT и direct reference совпадают при включённом и
+исключённом Nyquist.
 
 Отдельный signal-level Monte Carlo добавляет только независимый Gaussian
 noise по каналам/отсчётам. SNR задаётся как
@@ -249,7 +280,7 @@ boundary flag и runtime diagnostics.
 calibration и `1000` evaluation реализаций в каждой из 198 конфигураций
 (297000 реализаций). Первые три evaluation trials каждой конфигурации
 проверяются exact vectorized SRP; максимум по этим **594 sampled exact trials**
-составил `0.031365°`. Он не относится ко всем 198000 evaluation trials.
+составил `0.0313428471°`. Он не относится ко всем 198000 evaluation trials.
 Runtime CSV хранит unique-count contribution только в exact-component строке,
 поэтому сумма `exact_reference_trial_count` равна 594, а не тройному счёту.
 Эти counts относятся к SRP study; полный GCC reporting
@@ -262,7 +293,14 @@ in a homogeneous stationary medium** с запаздывающим времен�
 `d/dt_e = 1+v_r/c>0` при `|v|<c`, корень единственен и причинен; естественный
 Doppler появляется через `dt_e/dt=1/(1+v_r/c)`. Fractional Kaiser-sinc time
 warp вычисляет `s(t_e)` без округления. Отдельный `frozen_delay` служит только
-диагностическим baseline.
+диагностическим baseline. API различает
+`reception_synchronous_delay_difference_seconds=d_i(t_r)-d_j(t_r)` и
+`same_emission_tdoa_seconds=(R_i(t_e)-R_j(t_e))/c` на общей сетке
+`same_emission_times_s`; первое не является разностью времён прихода одного
+излучённого события. Для конечной `PiecewiseLinearTrajectory` emission solver
+не экстраполирует траекторию. Если верхняя граница emitted band известна,
+генератор требует `f_max,emit * max(dt_e/dt_r) < fs/2`; для произвольного audio
+неизвестная полоса автоматически не угадывается.
 
 Покадровый paired study использует base seed `20260830`, 2160 конфигураций и
 20 moving/static пар на конфигурацию (43200 пар, 86400 кадров). Истинный DOA
@@ -304,7 +342,9 @@ sequences без произвольной диагональной регуля�
 `(r-mu_cal)^T R^+ (r-mu_cal)` для обоих split; evaluation mean не используется.
 Нецентрированная величина `r^T R^+ r` сохраняется отдельно как
 `raw_normalized_squared_error`. Только centered NIS сравнивается с
-`chi-square(2)`, и это сравнение является лишь Gaussian benchmark.
+`chi-square(rank(R))`, и это сравнение является лишь Gaussian benchmark. Для
+опубликованных calibration covariance ранг остаётся 2, поэтому прежний
+`chi-square(2)` вывод для этих конкретных строк не меняется.
 
 Основная сетка S7A: tetrahedral/square, SNR `-6/5/20 dB`, stationary/
 transverse/piecewise, random broadband/deterministic multisine, `L=1024`,

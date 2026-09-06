@@ -12,6 +12,7 @@ from validation.retarded_batch_study import (
     RetardedBatchStudyConfig,
     default_retarded_batch_configurations,
     generate_retarded_batch_scenario,
+    retarded_batch_seed_provenance,
     run_retarded_batch_configuration,
     run_retarded_batch_study,
 )
@@ -73,9 +74,6 @@ def test_alternate_base_seed_changes_realization_not_physical_configuration():
     alternate_config = replace(baseline_config, base_seed=20260904)
     alternate = generate_retarded_batch_scenario(alternate_config, 0)
 
-    assert baseline.sequence_seed == 20260903
-    assert baseline.bearing_noise_seed == 3182215699
-    assert baseline.delivery_seed == 603279027
     assert repeated.sequence_seed == baseline.sequence_seed
     np.testing.assert_array_equal(repeated.truth_state.vector, baseline.truth_state.vector)
     assert alternate.sequence_seed != baseline.sequence_seed
@@ -93,6 +91,21 @@ def test_alternate_base_seed_changes_realization_not_physical_configuration():
         baseline.config.delivery_schedule,
     )
     assert not np.array_equal(alternate.truth_state.vector, baseline.truth_state.vector)
+
+
+def test_structured_seed_space_has_no_shifted_index_or_large_count_overlap():
+    identifiers = []
+    generated_seeds = []
+    for base_seed in (20260903, 20260904):
+        for configuration_index in (0, 1):
+            for sequence_index in range(1001):
+                provenance = retarded_batch_seed_provenance(
+                    base_seed, configuration_index, sequence_index
+                )
+                identifiers.extend(provenance.identifiers)
+                generated_seeds.extend(provenance.generated_seeds)
+    assert len(identifiers) == len(set(identifiers))
+    assert len(generated_seeds) == len(set(generated_seeds))
 
 
 def test_scenario_truth_is_separate_from_truth_free_measurement_contract():

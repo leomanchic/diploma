@@ -98,3 +98,27 @@
   published result. Deduplicate exact event identities, reject conflicting
   payloads explicitly, select one estimator variant per experiment, and keep
   scenario truth outside the causal processor and estimator contracts.
+- Treat every PSD observation covariance as a degenerate Gaussian: whiten its
+  positive eigenspace and enforce the nullspace exactly. A residual outside
+  that support has infinite normalized squared error; chi-square diagnostics
+  use the positive covariance rank, with rank zero handled explicitly.
+- Far-field TDOA WLS must check interior, hard-case, and elevation-boundary
+  candidates of the unit-vector quadratic problem. Record the numerical
+  global-search contract; never equate one optimizer `success` flag with a
+  proof of the best admissible solution.
+- Near a local bearing pole, use a fixed measurement-anchored tangent frame
+  with covariance and calibration bias in the same coordinates. Keep the
+  antipodal log-map ambiguity explicit and do not hide physical rank loss.
+- GCC lag candidates and refinement must stay inside the exact continuous
+  delay interval. When zero-padding a one-sided real spectrum for an
+  oversampled inverse FFT, preserve the single-bin Nyquist weight and verify
+  against an independent direct spectral sum.
+- Moving-source metadata must distinguish equal-reception delay differences
+  from same-emission event TDOA. Never extrapolate a finite-support trajectory
+  silently. When the emitted band edge is known, enforce
+  `f_emit,max * max(dt_emit/dt_receive) < fs/2`; do not infer an arbitrary
+  waveform's band automatically.
+- Validation random streams must use structured `SeedSequence` coordinates
+  and separate child streams for distinct stochastic mechanisms. Include the
+  run seed in provenance/IDs and test for collisions across shifted base seeds,
+  configurations, and sequence indices beyond 1000.

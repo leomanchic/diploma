@@ -195,3 +195,14 @@ def test_programmatic_seed_audit_rejects_source_or_noise_overlap():
     }
     with pytest.raises(RuntimeError, match="source_seed_overlap_count=1"):
         _split_seed_audit(metadata)
+
+
+def test_rank_one_nis_uses_chi_square_one_benchmark():
+    residuals = np.asarray([[-0.2, 0.0], [-0.1, 0.0], [0.1, 0.0], [0.2, 0.0]])
+    calibration = calibrate_bearing_covariance(residuals)
+    assert calibration.rank == 1
+    fields = _nis_fields(residuals, calibration)
+    assert fields["nis_positive_covariance_rank"] == 1
+    assert fields["chi_square_degrees_of_freedom"] == 1
+    assert fields["chi_square_rank_p95"] == pytest.approx(3.841458820694124)
+    assert fields["centered_nis_support_violation_fraction"] == 0.0

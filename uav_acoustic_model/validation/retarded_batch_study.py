@@ -66,6 +66,38 @@ class RetardedBatchScenario:
     events: tuple[ScheduledBearingEvent, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RetardedBatchSeedProvenance:
+    """Structured, collision-auditable identifiers for one sequence."""
+
+    identifiers: tuple[str, str, str]
+    generated_seeds: tuple[int, int, int]
+
+
+def retarded_batch_seed_provenance(
+    base_seed: int, configuration_index: int, sequence_index: int
+) -> RetardedBatchSeedProvenance:
+    """Create independent sequence/noise/delivery streams by named axes."""
+
+    base = int(base_seed)
+    configuration = int(configuration_index)
+    sequence = int(sequence_index)
+    if configuration < 0 or sequence < 0:
+        raise ValueError("configuration_index and sequence_index must be non-negative")
+    labels = ("sequence", "bearing_noise", "delivery")
+    generated = tuple(
+        int(
+            np.random.SeedSequence([base, configuration, sequence, stream_index])
+            .generate_state(1, dtype=np.uint64)[0]
+        )
+        for stream_index in range(len(labels))
+    )
+    identifiers = tuple(
+        f"s7cb:{base}:{configuration}:{sequence}:{label}" for label in labels
+    )
+    return RetardedBatchSeedProvenance(identifiers, generated)
+
+
 def default_retarded_batch_configurations(
     *,
     sequence_count: int = DEFAULT_SEQUENCE_COUNT,
@@ -141,12 +173,10 @@ def generate_retarded_batch_scenario(
         raise ValueError(
             f"unknown physical S7C-B configuration: {physical_identity}"
         ) from error
-    sequence_seed = config.base_seed + 1000 * configuration_index + index
-    seed_sequence = np.random.SeedSequence(sequence_seed)
-    noise_seed, delivery_seed = [
-        int(child.generate_state(1, dtype=np.uint32)[0])
-        for child in seed_sequence.spawn(2)
-    ]
+    seed_provenance = retarded_batch_seed_provenance(
+        config.base_seed, configuration_index, index
+    )
+    sequence_seed, noise_seed, delivery_seed = seed_provenance.generated_seeds
     noise_rng = np.random.default_rng(noise_seed)
     delivery_rng = np.random.default_rng(delivery_seed)
     stations = _stations(config.geometry)
@@ -182,7 +212,7 @@ def generate_retarded_batch_scenario(
                 )
             measurement = BearingMeasurement(
                 station.station_id,
-                f"s7cb-{configuration_index}-{index}",
+                f"s7cb-{config.base_seed}-{configuration_index}-{index}",
                 frame_index,
                 float(reception),
                 float(reception + delay),
@@ -246,6 +276,16 @@ def _result_row(
         position_error = velocity_error = float("nan")
         estimate_vector = np.full(6, np.nan)
     actions = Counter(item.action for item in prefix.journal)
+    physical_identity = (
+        scenario.config.geometry,
+        scenario.config.motion,
+        scenario.config.angular_noise_std_deg,
+        scenario.config.delivery_schedule,
+    )
+    configuration_index = _PHYSICAL_CONFIGURATION_IDENTITIES.index(physical_identity)
+    provenance = retarded_batch_seed_provenance(
+        scenario.config.base_seed, configuration_index, scenario.sequence_index
+    )
     event_journal = [
         {
             "processing_time_s": item.processing_time_s,
@@ -271,6 +311,11 @@ def _result_row(
         "processing_time_s": processing_time_s,
         "reference_time_s": truth.reference_time_s,
         "sequence_index": scenario.sequence_index,
+        "base_seed": scenario.config.base_seed,
+        "seed_scheme": "SeedSequence([base_seed,configuration_index,sequence_index,stream_id])",
+        "sequence_provenance": provenance.identifiers[0],
+        "bearing_noise_provenance": provenance.identifiers[1],
+        "delivery_provenance": provenance.identifiers[2],
         "sequence_seed": scenario.sequence_seed,
         "bearing_noise_seed": scenario.bearing_noise_seed,
         "delivery_seed": scenario.delivery_seed,
@@ -409,6 +454,8 @@ def _summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
         summary.update(
             {
                 "row_type": "aggregate",
+                "base_seed": group[0]["base_seed"],
+                "seed_scheme": group[0]["seed_scheme"],
                 "processing_time_s": float(
                     np.mean([row["processing_time_s"] for row in group])
                 ),
@@ -511,9 +558,11 @@ __all__ = [
     "DEFAULT_STUDY_SEED",
     "PROCESSING_TIMES_S",
     "RetardedBatchScenario",
+    "RetardedBatchSeedProvenance",
     "RetardedBatchStudyConfig",
     "default_retarded_batch_configurations",
     "generate_retarded_batch_scenario",
+    "retarded_batch_seed_provenance",
     "run_retarded_batch_configuration",
     "run_retarded_batch_study",
 ]

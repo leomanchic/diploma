@@ -153,7 +153,7 @@ def test_common_time_coordinate_shift_preserves_physics():
     assert shifted.emission_time_s == pytest.approx(baseline.emission_time_s + shift, abs=2e-13)
 
 
-def test_invalid_subsonic_coincidence_pole_and_antipode_cases_are_explicit():
+def test_subsonic_coincidence_pole_and_antipode_cases_are_explicit():
     station = _station()
     with pytest.raises(ValueError, match=r"\|v\| < sound_speed"):
         predict_retarded_bearing(
@@ -165,8 +165,11 @@ def test_invalid_subsonic_coincidence_pole_and_antipode_cases_are_explicit():
     pole_state = ConstantVelocityState([0.0, 0.0, 30.0], np.zeros(3))
     pole_prediction = predict_retarded_bearing(pole_state, station, 1.0)
     pole_measurement = _measurement(station, pole_prediction.direction_local)
-    with pytest.raises(ValueError, match="pole"):
-        retarded_bearing_residual_jacobian(pole_state, station, pole_measurement)
+    pole_jacobian = retarded_bearing_residual_jacobian(
+        pole_state, station, pole_measurement
+    )
+    assert pole_jacobian.shape == (2, 6)
+    assert np.all(np.isfinite(pole_jacobian))
 
     ordinary_state = ConstantVelocityState([30.0, 5.0, 10.0], np.zeros(3))
     ordinary = predict_retarded_bearing(ordinary_state, station, 1.0)

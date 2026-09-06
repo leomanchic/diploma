@@ -75,3 +75,21 @@ def test_calibrated_covariance_is_symmetric_psd_and_nis_uses_pseudoinverse():
 def test_invalid_measurements_cannot_be_silently_calibrated():
     with pytest.raises(ValueError, match="finite"):
         calibrate_bearing_covariance([[0.0, 0.0], [np.nan, np.nan]])
+
+
+@pytest.mark.parametrize(
+    ("covariance", "compatible", "expected"),
+    [
+        (np.zeros((2, 2)), [0.0, 0.0], 0.0),
+        (np.zeros((2, 2)), [0.0, 0.1], np.inf),
+        (np.diag([0.01, 0.0]), [0.1, 0.0], 1.0),
+        (np.diag([0.01, 0.0]), [0.0, 0.1], np.inf),
+        (np.diag([0.01, 0.04]), [0.1, 0.2], 2.0),
+    ],
+)
+def test_nis_respects_degenerate_gaussian_support(covariance, compatible, expected):
+    value = normalized_innovation_squared(compatible, covariance)
+    if np.isinf(expected):
+        assert np.isinf(value)
+    else:
+        assert value == pytest.approx(expected, abs=1e-14)

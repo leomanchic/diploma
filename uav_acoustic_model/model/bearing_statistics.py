@@ -97,6 +97,70 @@ def tangent_residual(
     )
 
 
+def measurement_anchored_tangent_residual(
+    predicted_direction: ArrayLike,
+    measured_direction: ArrayLike,
+    *,
+    antipodal_tolerance: float = 1e-10,
+) -> NDArray[np.float64]:
+    """Return a pole-safe residual in the measured bearing's tangent frame.
+
+    The vector ``-Log_y(u)`` is the parallel transport of ``Log_u(y)`` to
+    the measured direction ``y``.  Expressing it in the fixed frame at ``y``
+    removes derivatives of a moving azimuth chart and remains well defined at
+    zenith/nadir (with the deterministic ``phi=0`` convention there).
+    Covariance and calibration bias consumed with this residual are therefore
+    coordinates in the measured-bearing tangent frame.
+    """
+
+    predicted = _unit_vector(predicted_direction, name="predicted_direction")
+    measured = _unit_vector(measured_direction, name="measured_direction")
+    phi, elevation = direction_angles(measured)
+    return -tangent_basis(phi, elevation) @ sphere_log_map(
+        measured, predicted, antipodal_tolerance=antipodal_tolerance
+    )
+
+
+def measurement_anchored_tangent_residual_jacobian(
+    predicted_direction: ArrayLike,
+    measured_direction: ArrayLike,
+    *,
+    antipodal_tolerance: float = 1e-10,
+) -> NDArray[np.float64]:
+    """Differentiate the pole-safe residual w.r.t. predicted direction."""
+
+    predicted_raw = np.asarray(predicted_direction, dtype=float)
+    predicted = _unit_vector(predicted_raw, name="predicted_direction")
+    measured = _unit_vector(measured_direction, name="measured_direction")
+    dot = float(np.clip(measured @ predicted, -1.0, 1.0))
+    tolerance = float(antipodal_tolerance)
+    if dot <= -1.0 + tolerance:
+        raise AntipodalDirectionError(
+            "sphere residual Jacobian is not unique for antipodal bearings"
+        )
+    basis = tangent_basis(*direction_angles(measured))
+    projector_measured = np.eye(3) - np.outer(measured, measured)
+    projection = projector_measured @ predicted
+    sine = float(np.linalg.norm(projection))
+    if sine <= 1e-7:
+        derivative = projector_measured
+    else:
+        theta = float(np.arctan2(sine, dot))
+        gradient_sine = projection / sine
+        gradient_theta = dot * gradient_sine - sine * measured
+        gradient_scale = (
+            sine * gradient_theta - theta * gradient_sine
+        ) / sine**2
+        derivative = (
+            (theta / sine) * projector_measured
+            + np.outer(projection, gradient_scale)
+        )
+    normalization_jacobian = (
+        np.eye(3) - np.outer(predicted, predicted)
+    ) / float(np.linalg.norm(predicted_raw))
+    return -basis @ derivative @ normalization_jacobian
+
+
 def tangent_residual_jacobian_wrt_true_direction(
     true_direction: ArrayLike,
     estimated_direction: ArrayLike,
@@ -212,7 +276,13 @@ def calibrate_bearing_covariance(residuals: ArrayLike) -> BearingCovarianceCalib
 def normalized_innovation_squared(
     residuals: ArrayLike, covariance_rad2: ArrayLike
 ) -> NDArray[np.float64]:
-    """Return ``r.T @ R^+ @ r`` for one or many tangent residuals."""
+    """Return support-aware normalized squared error for a PSD Gaussian.
+
+    Positive covariance eigenmodes contribute the usual whitened quadratic
+    form.  A residual outside the exact zero-variance support returns
+    ``inf``.  Consequently rank-zero covariance returns zero only for an
+    exactly compatible zero residual; no arbitrary epsilon is introduced.
+    """
 
     values = np.asarray(residuals, dtype=float)
     one = values.ndim == 1
@@ -225,13 +295,23 @@ def normalized_innovation_squared(
         raise ValueError("covariance_rad2 must be a finite 2x2 matrix")
     if not np.allclose(covariance, covariance.T, rtol=1e-12, atol=1e-18):
         raise ValueError("covariance_rad2 must be symmetric")
-    eigenvalues = np.linalg.eigvalsh(covariance)
-    tolerance = max(float(np.max(np.abs(eigenvalues))) * 1e-12, 1e-24)
+    eigenvalues, eigenvectors = np.linalg.eigh(0.5 * (covariance + covariance.T))
+    scale = float(np.max(np.abs(eigenvalues), initial=0.0))
+    tolerance = max(scale * 1e-12, 1e-24)
     if np.min(eigenvalues) < -tolerance:
         raise ValueError("covariance_rad2 must be positive semidefinite")
-    inverse = np.linalg.pinv(covariance, rcond=1e-12, hermitian=True)
-    result = np.einsum("ni,ij,nj->n", values, inverse, values)
-    result = np.maximum(result, 0.0)
+    positive = eigenvalues > tolerance
+    zero_basis = eigenvectors[:, ~positive]
+    exact = values @ zero_basis
+    support_tolerance = 1e-12
+    compatible = np.max(np.abs(exact), axis=1, initial=0.0) <= support_tolerance
+    if np.any(positive):
+        whitened = (values @ eigenvectors[:, positive]) / np.sqrt(eigenvalues[positive])
+        result = np.sum(whitened**2, axis=1)
+        result = np.maximum(result, 0.0)
+    else:
+        result = np.zeros(values.shape[0], dtype=float)
+    result[~compatible] = np.inf
     return result[0] if one else result
 
 
@@ -239,6 +319,8 @@ __all__ = [
     "AntipodalDirectionError",
     "BearingCovarianceCalibration",
     "calibrate_bearing_covariance",
+    "measurement_anchored_tangent_residual",
+    "measurement_anchored_tangent_residual_jacobian",
     "normalized_innovation_squared",
     "sphere_log_map",
     "tangent_basis",

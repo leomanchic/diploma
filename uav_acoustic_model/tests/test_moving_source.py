@@ -1,21 +1,25 @@
 """Strict retarded-time and moving-source propagation tests."""
 
 import numpy as np
+import pytest
 from scipy.signal import hilbert
 
 from model.geometry import all_pairs, comparison_arrays
 from simulation.moving_source import (
+    arrival_times_for_emission_event,
     constant_velocity_emission_time,
     emission_time_residual,
     retarded_time_doppler_factor,
     simulate_moving_source,
     solve_emission_time,
+    validate_doppler_bandlimit,
 )
 from simulation.propagation import simulate_propagation
 from simulation.signals import deterministic_bandlimited_signal
 from simulation.trajectory import (
     CircularTrajectory,
     ConstantVelocityTrajectory,
+    PiecewiseLinearTrajectory,
     StationaryTrajectory,
 )
 
@@ -52,8 +56,10 @@ def test_zero_velocity_generator_matches_existing_static_generator():
         moving_api.channels[:, start:stop], static.channels[:, start:stop], atol=3e-12
     )
     np.testing.assert_allclose(
-        moving_api.tdoa_seconds,
-        np.broadcast_to(static.tdoa_seconds[:, None], moving_api.tdoa_seconds.shape),
+        moving_api.same_emission_tdoa_seconds,
+        np.broadcast_to(
+            static.tdoa_seconds[:, None], moving_api.same_emission_tdoa_seconds.shape
+        ),
         rtol=0.0,
         atol=3e-16,
     )
@@ -177,7 +183,18 @@ def test_translation_of_entire_scene_preserves_tdoa_and_channels_without_attenua
     source = deterministic_bandlimited_signal(FS, 0.04, maximum_frequency_hz=8_000.0)
     original = simulate_moving_source(source, FS, positions, trajectory)
     shifted = simulate_moving_source(source, FS, positions + offset, translated)
-    np.testing.assert_allclose(shifted.tdoa_seconds, original.tdoa_seconds, atol=2e-16)
+    np.testing.assert_allclose(
+        shifted.same_emission_tdoa_seconds,
+        original.same_emission_tdoa_seconds,
+        rtol=0.0,
+        atol=2e-16,
+    )
+    np.testing.assert_allclose(
+        shifted.reception_synchronous_delay_difference_seconds,
+        original.reception_synchronous_delay_difference_seconds,
+        rtol=0.0,
+        atol=2e-16,
+    )
     np.testing.assert_allclose(shifted.channels, original.channels, atol=3e-12)
 
 
@@ -189,5 +206,61 @@ def test_frozen_delay_is_a_diagnostic_constant_tdoa_baseline():
         source, FS, positions, trajectory, emission_solver="frozen_delay"
     )
     np.testing.assert_allclose(
-        np.ptp(frozen.tdoa_seconds, axis=1), 0.0, atol=2e-17
+        np.ptp(frozen.reception_synchronous_delay_difference_seconds, axis=1),
+        0.0,
+        rtol=0.0,
+        atol=2e-17,
     )
+
+
+def test_same_emission_tdoa_is_distinct_from_equal_reception_delay_difference():
+    positions = np.asarray([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]])
+    source = deterministic_bandlimited_signal(FS, 0.01, maximum_frequency_hz=8_000.0)
+    expected = 0.2 / C
+    reception_values = []
+    for velocity in (30.0, -30.0):
+        result = simulate_moving_source(
+            source,
+            FS,
+            positions,
+            ConstantVelocityTrajectory([50.0, 0.0, 0.0], [velocity, 0.0, 0.0]),
+        )
+        reception_values.append(
+            float(np.median(result.reception_synchronous_delay_difference_seconds[0]))
+        )
+        np.testing.assert_allclose(
+            result.same_emission_tdoa_seconds[0], expected, rtol=0.0, atol=2e-15
+        )
+    assert reception_values[0] == pytest.approx(536.193e-6, abs=0.01e-6)
+    assert reception_values[1] == pytest.approx(638.978e-6, abs=0.01e-6)
+
+
+def test_one_emission_event_aligns_at_its_microphone_arrival_times():
+    positions = comparison_arrays()["tetrahedral"]
+    trajectory = ConstantVelocityTrajectory([50.0, 4.0, 8.0], [20.0, -3.0, 1.0])
+    emission = 0.123
+    arrivals = arrival_times_for_emission_event(emission, positions, trajectory)
+    recovered = np.asarray(
+        [
+            solve_emission_time(arrival, microphone, trajectory)
+            for arrival, microphone in zip(arrivals, positions, strict=True)
+        ]
+    )
+    np.testing.assert_allclose(recovered, emission, rtol=0.0, atol=2e-15)
+
+
+def test_piecewise_solver_does_not_query_beyond_trajectory_support():
+    trajectory = PiecewiseLinearTrajectory(
+        [0.0, 1.0], [[343.0, 0.1, 0.0], [343.0, 0.1, 0.0]]
+    )
+    result = solve_emission_time(1.005, [0.0, 0.0, 0.0], trajectory)
+    assert 0.0 <= result <= 1.0
+    assert emission_time_residual(
+        result, 1.005, [0.0, 0.0, 0.0], trajectory
+    ) == pytest.approx(0.0, abs=2e-15)
+
+
+def test_doppler_bandlimit_gate_is_explicit_when_source_band_is_known():
+    validate_doppler_bandlimit(10_000.0, FS, 1.1)
+    with pytest.raises(ValueError, match="Doppler-shifted"):
+        validate_doppler_bandlimit(23_000.0, FS, 1.1)

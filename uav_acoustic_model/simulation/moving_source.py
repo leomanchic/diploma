@@ -42,7 +42,9 @@ class MovingSourceResult:
     propagation_delays_s: NDArray[np.float64]
     distances_m: NDArray[np.float64]
     pairs: tuple[Pair, ...]
-    tdoa_seconds: NDArray[np.float64]
+    reception_synchronous_delay_difference_seconds: NDArray[np.float64]
+    same_emission_times_s: NDArray[np.float64]
+    same_emission_tdoa_seconds: NDArray[np.float64]
     amplitude_factors: NDArray[np.float64]
     valid_region: tuple[int, int]
     per_channel_valid: NDArray[np.bool_]
@@ -55,6 +57,9 @@ class MovingSourceResult:
     synthesis_mode: str
     chunk_size_samples: int | None
     maximum_interpolation_working_set_elements: int
+    maximum_emitted_frequency_hz: float | None
+    maximum_doppler_factor: float
+    doppler_bandlimit_checked: bool
 
 
 def _positive(value: float, name: str) -> float:
@@ -76,6 +81,52 @@ def _speed_check(trajectory: Trajectory, times: ArrayLike, sound_speed: float) -
     speeds = np.linalg.norm(velocities, axis=-1)
     if np.any(~np.isfinite(speeds)) or np.any(speeds >= sound_speed):
         raise ValueError("trajectory speed must satisfy |v| < sound_speed")
+
+
+def _finite_trajectory_support(trajectory: Trajectory) -> tuple[float, float] | None:
+    """Return a declared closed support without enabling extrapolation."""
+
+    knots = getattr(trajectory, "knot_times_s", None)
+    if knots is None or bool(getattr(trajectory, "extrapolate", True)):
+        return None
+    values = np.asarray(knots, dtype=float)
+    return float(values[0]), float(values[-1])
+
+
+def arrival_times_for_emission_event(
+    emission_time_s: float,
+    positions: ArrayLike,
+    trajectory: Trajectory,
+    sound_speed: float = DEFAULT_SOUND_SPEED,
+) -> NDArray[np.float64]:
+    """Return microphone arrival times of one common emitted event."""
+
+    emission = float(emission_time_s)
+    if not np.isfinite(emission):
+        raise ValueError("emission_time_s must be finite")
+    speed = _positive(sound_speed, "sound_speed")
+    coordinates = microphone_positions(positions)
+    source_position = np.asarray(trajectory.q(emission), dtype=float)
+    distances = np.linalg.norm(source_position - coordinates, axis=1)
+    if np.any(distances <= 0.0):
+        raise ValueError("source trajectory intersects a microphone")
+    return emission + distances / speed
+
+
+def validate_doppler_bandlimit(
+    maximum_emitted_frequency_hz: float,
+    sampling_rate_hz: float,
+    maximum_dt_emit_dt_receive: float,
+) -> None:
+    """Enforce ``f_emit,max * max(dt_e/dt_r) < fs/2`` when known."""
+
+    emitted = _positive(maximum_emitted_frequency_hz, "maximum_emitted_frequency_hz")
+    sampling_rate = _positive(sampling_rate_hz, "sampling_rate_hz")
+    factor = _positive(maximum_dt_emit_dt_receive, "maximum_dt_emit_dt_receive")
+    if emitted * factor >= sampling_rate / 2.0:
+        raise ValueError(
+            "Doppler-shifted received band must remain strictly below Nyquist"
+        )
 
 
 def emission_time_residual(
@@ -120,11 +171,18 @@ def solve_emission_time(
     if np.any(~np.isfinite(reception)):
         raise ValueError("reception_time_s must be finite")
     microphone = _microphone(microphone_position)
-    _speed_check(trajectory, reception, speed)
-    position_at_reception = trajectory.q(reception)
+    support = _finite_trajectory_support(trajectory)
+    initialization_times = reception
+    if support is not None:
+        initialization_times = np.clip(reception, support[0], support[1])
+    _speed_check(trajectory, initialization_times, speed)
+    position_at_reception = trajectory.q(initialization_times)
     estimate = reception - np.linalg.norm(
         position_at_reception - microphone, axis=-1
     ) / speed
+    if support is not None:
+        upper_supported = np.minimum(support[1], reception - np.finfo(float).eps)
+        estimate = np.clip(estimate, support[0], upper_supported)
     converged = np.zeros(reception.shape, dtype=bool)
     for _ in range(iterations):
         position = trajectory.q(estimate)
@@ -140,6 +198,8 @@ def solve_emission_time(
         residual = estimate + distance / speed - reception
         step = residual / derivative
         estimate = np.minimum(estimate - step, reception - np.finfo(float).eps)
+        if support is not None:
+            estimate = np.clip(estimate, support[0], upper_supported)
         converged |= np.abs(step) <= tolerance
         if np.all(converged):
             break
@@ -159,15 +219,24 @@ def solve_emission_time(
                 )
 
             upper = target
+            if support is not None:
+                upper = min(upper, support[1])
             span = max(abs(target - float(flat_estimate[index])), 1.0 / speed)
-            lower = target - span
-            for _ in range(80):
-                if residual_scalar(lower) < 0.0:
-                    break
-                span *= 2.0
-                lower = target - span
+            if support is not None:
+                lower = support[0]
+                if residual_scalar(lower) > 0.0 or residual_scalar(upper) < 0.0:
+                    raise ValueError(
+                        "reception time has no emission root inside trajectory support"
+                    )
             else:
-                raise RuntimeError("could not bracket emission time")
+                lower = target - span
+                for _ in range(80):
+                    if residual_scalar(lower) < 0.0:
+                        break
+                    span *= 2.0
+                    lower = target - span
+                else:
+                    raise RuntimeError("could not bracket emission time")
             flat_estimate[index] = brentq(
                 residual_scalar, lower, upper, xtol=tolerance, rtol=4 * np.finfo(float).eps
             )
@@ -299,6 +368,7 @@ def simulate_moving_source(
     fir_length: int = DEFAULT_FIR_LENGTH,
     kaiser_beta: float = DEFAULT_KAISER_BETA,
     chunk_size_samples: int | None = None,
+    maximum_emitted_frequency_hz: float | None = None,
 ) -> MovingSourceResult:
     """Generate synchronized channels from exact or frozen retarded time.
 
@@ -310,7 +380,9 @@ def simulate_moving_source(
     at each interpolation boundary.  ``chunk_size_samples`` bounds the
     interpolation working set to at most ``chunk_size_samples * fir_length``
     floating-point weights.  It does not alter timestamps, delays, fractional
-    interpolation, or the returned valid region.
+    interpolation, or the returned valid region. If the source band edge is
+    supplied, ``f_max * max(dt_e/dt_r) < fs/2`` is enforced explicitly.
+    The band edge of arbitrary audio is otherwise unknown, not guessed.
     """
 
     source = np.asarray(signal, dtype=float)
@@ -431,10 +503,54 @@ def simulate_moving_source(
             channels[microphone_index, start:stop] = block_channels
             interpolation_valid[microphone_index, start:stop] = block_valid
             amplitude[microphone_index, start:stop] = block_amplitude
-    tdoa = np.asarray(
+    reception_synchronous_difference = np.asarray(
         [delays[first] - delays[second] for first, second in checked_pairs]
     )
-    if np.any(~np.isfinite(channels)) or np.any(~np.isfinite(tdoa)):
+    centroid = array_centroid(coordinates)
+    if method == "numeric":
+        same_emission_times = np.asarray(
+            solve_emission_time(reception, centroid, trajectory, speed), dtype=float
+        )
+    elif method == "constant_velocity_analytic":
+        same_emission_times = np.asarray(
+            constant_velocity_emission_time(reception, centroid, trajectory, speed),
+            dtype=float,
+        )
+    else:
+        centroid_frozen_distance = float(
+            np.linalg.norm(trajectory.q(frozen_time) - centroid)
+        )
+        same_emission_times = reception - centroid_frozen_distance / speed
+    common_source_positions = np.asarray(trajectory.q(same_emission_times), dtype=float)
+    common_distances = np.linalg.norm(
+        common_source_positions[None, :, :] - coordinates[:, None, :], axis=2
+    )
+    same_emission_tdoa = np.asarray(
+        [
+            (common_distances[first] - common_distances[second]) / speed
+            for first, second in checked_pairs
+        ]
+    )
+    doppler_factors = np.asarray(
+        [
+            retarded_time_doppler_factor(
+                emission[index], microphone, trajectory, speed
+            )
+            for index, microphone in enumerate(coordinates)
+        ]
+    )
+    maximum_doppler_factor = float(np.max(doppler_factors))
+    checked_maximum_frequency = None
+    if maximum_emitted_frequency_hz is not None:
+        validate_doppler_bandlimit(
+            maximum_emitted_frequency_hz, sampling_rate, maximum_doppler_factor
+        )
+        checked_maximum_frequency = float(maximum_emitted_frequency_hz)
+    if (
+        np.any(~np.isfinite(channels))
+        or np.any(~np.isfinite(reception_synchronous_difference))
+        or np.any(~np.isfinite(same_emission_tdoa))
+    ):
         raise RuntimeError("moving-source synthesis produced non-finite values")
     half = (int(fir_length) - 1) // 2
     return MovingSourceResult(
@@ -446,7 +562,9 @@ def simulate_moving_source(
         propagation_delays_s=delays,
         distances_m=distances,
         pairs=checked_pairs,
-        tdoa_seconds=tdoa,
+        reception_synchronous_delay_difference_seconds=reception_synchronous_difference,
+        same_emission_times_s=same_emission_times,
+        same_emission_tdoa_seconds=same_emission_tdoa,
         amplitude_factors=amplitude,
         valid_region=_common_valid_region(interpolation_valid),
         per_channel_valid=interpolation_valid,
@@ -459,6 +577,9 @@ def simulate_moving_source(
         synthesis_mode=synthesis_mode,
         chunk_size_samples=reported_chunk_size,
         maximum_interpolation_working_set_elements=block_size * int(fir_length),
+        maximum_emitted_frequency_hz=checked_maximum_frequency,
+        maximum_doppler_factor=maximum_doppler_factor,
+        doppler_bandlimit_checked=maximum_emitted_frequency_hz is not None,
     )
 
 
@@ -477,10 +598,12 @@ def centroid_emission_time(
 
 __all__ = [
     "MovingSourceResult",
+    "arrival_times_for_emission_event",
     "centroid_emission_time",
     "constant_velocity_emission_time",
     "emission_time_residual",
     "retarded_time_doppler_factor",
     "simulate_moving_source",
     "solve_emission_time",
+    "validate_doppler_bandlimit",
 ]
