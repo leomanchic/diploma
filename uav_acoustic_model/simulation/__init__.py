@@ -21,11 +21,13 @@ from .trajectory import (
 )
 from .moving_source import (
     MovingSourceResult,
+    arrival_times_for_emission_event,
     centroid_emission_time,
     constant_velocity_emission_time,
     retarded_time_doppler_factor,
     simulate_moving_source,
     solve_emission_time,
+    validate_doppler_bandlimit,
 )
 from .continuous_stream import (
     ContinuousStreamResult,
@@ -51,11 +53,13 @@ __all__ = [
     "StationaryTrajectory",
     "Trajectory",
     "MovingSourceResult",
+    "arrival_times_for_emission_event",
     "centroid_emission_time",
     "constant_velocity_emission_time",
     "retarded_time_doppler_factor",
     "simulate_moving_source",
     "solve_emission_time",
+    "validate_doppler_bandlimit",
     "ContinuousStreamResult",
     "OverlappingFrameBatch",
     "extract_overlapping_frames",

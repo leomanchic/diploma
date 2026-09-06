@@ -1,6 +1,6 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-03
+Последнее обновление: 2026-09-06
 
 ## Текущий этап
 
@@ -18,6 +18,130 @@ constant-velocity состояния, не recursive tracking; EKF/UKF, process 
 S7C-C не начаты.
 
 ### Журнал S7C-B
+
+- 2026-09-06 — открыт corrective audit package на исходном commit
+  `697350ddc32010964eb8ce2d174680d32d4fa6f3`; S7C-B остаётся **In review**,
+  S7C-C не начат. Regression-тестами воспроизведены: локальный TDOA-WLS
+  cost `480.3817488` против `109.2645712`, игнорирование zero-variance TDOA
+  на `100 мкс`, NIS `0` вне поддержки rank-0/rank-1 Gaussian, отказ
+  физически наблюдаемой zenith-сцены, выход GCC за дробную границу `2.4`
+  отсчёта и FFT/direct расхождение Nyquist при oversampling.
+- 2026-09-06 — завершена первая математическая часть аудита. Far-field WLS
+  переведён на единичный 3D-вектор и алгебраическое перечисление stationary,
+  hard-case и elevation-boundary кандидатов квадратичной задачи с точными
+  линейными constraints covariance nullspace. Результат помечен
+  `algebraic_quadratic_candidate_enumeration`: это численный контракт, не
+  символическое доказательство глобального оптимума. Exact spherical WLS
+  использует тот же PSD support contract, но сохраняет явно приблизительный
+  `deterministic_multistart_approximation`. NIS возвращает `inf` вне поддержки вырожденной
+  Gaussian и использует только положительный спектр внутри поддержки.
+  Bearing fusion/retarded model используют pole-safe residual
+  `-B_y Log_y(u)` в фиксированном tangent frame измерения; антипод остаётся
+  явной неоднозначностью. Профильный gate WLS/NIS/zenith/Jacobian:
+  **28 passed in 4.45s**. GCC regressions пока намеренно красные до следующей
+  части исправления; полный pytest/notebook gate ещё не выполнялся.
+
+- 2026-09-06 — завершена вторая техническая часть corrective audit. GCC-PHAT
+  формирует регулярную сетку только внутри `[-tau_max,+tau_max]` и отдельно
+  вычисляет допустимые дробные endpoints; при oversampled `irfft` исходный
+  Nyquist-bin делится на два, а корреляция масштабируется к нормировке
+  исходного DFT. Moving-source metadata теперь явно разделяет
+  `reception_synchronous_delay_difference_seconds = d_i(t_r)-d_j(t_r)` и
+  `same_emission_tdoa_seconds=(R_i(t_e)-R_j(t_e))/c` на сохранённой сетке
+  `same_emission_times_s`; синтез каналов не изменён. Добавлены event-arrival
+  alignment и условие известной полосы
+  `f_max,emit max(dt_e/dt_r) < fs/2`; при неизвестной полосе автоматическая
+  гарантия не заявляется. Emission solver ограничивает Newton/Brent support
+  `PiecewiseLinearTrajectory` без молчаливой экстраполяции.
+- 2026-09-06 — S7C-B RNG переведён с арифметического сложения seed на
+  `SeedSequence([base_seed, configuration_index, sequence_index, stream_id])`
+  с отдельными noise/delivery streams и run-aware sequence/event provenance.
+  Large-count regression проверяет два соседних base seed, два configuration
+  index и `1001` sequence index без пересечений identifiers/generated seeds.
+  Совместный профильный gate затронутых WLS/NIS/bearing/GCC/moving/RNG
+  модулей: **146 passed in 44.37s**; дополнительные spherical-nullspace,
+  rotated-zenith и rank-aware chi-square regressions: **21 passed in 7.69s**.
+  Полный pytest, regeneration и notebook audit ещё не выполнены.
+
+- 2026-09-06 — завершён полный пересчёт затронутых статистических артефактов.
+  Получены: bearing covariance/quality `216/1368`, GCC pair/DOA/covariance
+  `840/574/70`, legacy GCC Monte Carlo `36`, SRP DOA/runtime `792/594`, moving
+  source `6480`, sequential frame/summary `903/21`, S7C-B sequence/summary
+  `576/144` строк. Полный SRP grid выполнен для прежних 198 конфигураций;
+  сумма unique exact-reference contributions равна `594` sampled trials, а
+  maximum sampled exact/fast disagreement `0.0313428471°` относится только к
+  первым трём evaluation trials/config. После итоговой версии algebraic WLS
+  полный pytest: **337 passed in 53.66s**. Notebook/pip/diff gates ещё не
+  завершены, поэтому S7C-B остаётся **In review**, S7C-C не начат.
+
+- 2026-09-06 — воспроизводящие численные примеры после исправления:
+  far-field WLS возвращает одинаковую стоимость `109.26457116698435` для
+  default и независимой `initial_angles=(0,1)` вместо прежнего локального
+  `480.3817488`; zero-variance TDOA constraint выполнен с residual
+  `1.0842e-19 s` вместо нарушения `1e-4 s`; несовместимые rank-0/rank-1 NIS
+  дают `inf`. Zenith-сцена восстанавливает позицию с ошибкой `1.9281e-14 m`,
+  analytic/central-FD Jacobian расходятся максимум на `1.1102e-16`.
+  Fractional GCC bounds дают ровно `-2.4/+2.4` samples; FFT/direct correlation
+  maximum error по interpolation `1/2/5` и included/excluded Nyquist равен
+  `1.6653e-16`. Для `v=+30/-30 m/s` equal-reception diagnostics равны
+  `536.193029/638.977636 us`, а same-emission event TDOA в обоих случаях
+  `583.090379 us`. Ограниченный piecewise пример имеет корень
+  `t_e=0.004999957500702035 s` внутри `[0,1]` с нулевым residual.
+  RNG regression проверил `12012/12012` уникальных provenance IDs и generated
+  seeds на двух соседних base seeds, двух configurations и 1001 sequences.
+
+- 2026-09-06 — численные выводы пересчитанных studies сохранены честно, без
+  требования побитового совпадения после исправления алгоритма/RNG. Published
+  bearing covariance остаются full tangent rank `2` во всех `216/216` строках,
+  support violations `0`; low-noise WLS/CRLB gates остались PASS `6/6`.
+  Static multi-station metrics не изменились, кроме runtime. Средний paired SRP
+  RMSE сохранился практически (`2.2638334° -> 2.2638205°`); GCC variants в том
+  же CSV изменились из-за admissible-lag/global-WLS fixes. Moving mean RMSE:
+  reference-3 `3.6054168° -> 3.6052929°`, all-6 `2.7701216° -> 2.7682161°`,
+  SRP `0.60641773° -> 0.60641773°`; отдельные шумовые tail rows могут заметно
+  меняться, потому что теперь выбирается минимальная WLS cost, а не ближайший
+  локальный basin. Sequential mean coverage неизменна `0.9833887043`.
+  Новый S7C-B RNG дал offline coverage `96/96`, causal prefixes
+  `77/96,96/96,96/96,96/96,96/96` вместо прежних `70/96,...`; invalid reasons
+  `18 insufficient_measurements + 1 insufficient_local_observability` вместо
+  `24+2`. Offline position/speed RMSE равны `0.326550535 m` и
+  `0.108023901 m/s`; все accepted rows имеют rank `6`, maximum scaled KKT
+  `6.18716e-7 < 1e-6`. Это новый случайный набор, не улучшение метода.
+
+- 2026-09-06 — notebook gate обнаружил и исправил stale отчётный assertion в
+  `retarded_batch_validation.ipynb`, который жёстко ожидал старые `70/96` после
+  намеренной смены RNG. Новый notebook проверяет `77/96`, точные failure counts,
+  base seed и `SeedSequence` scheme. Все **14/14 committed notebooks** выполнены
+  fresh kernels; в исполненных объектах **90 code cells**, invalid nbformat
+  `0`, error-output `0`, unexecuted nonempty `0`, missing IDs `0`. Два
+  существовавших до аудита пользовательских diff — `array_comparison.ipynb` и
+  `moving_source_3d.ipynb` — выполнены в памяти и намеренно не перезаписаны.
+  Единственные console warnings — прежние Windows ZMQ/IPython permissions/TCP
+  transport сообщения, не notebook error outputs. `pip check`: `No broken
+  requirements found`; `git diff --check`: PASS. Финальный post-notebook pytest:
+  **337 passed in 53.42s**. S7C-B остаётся **In review** до независимой
+  приёмки; S7C-C не начат. Последний gate на точном финальном working tree:
+  **337 passed in 50.85s**, `pip check` PASS, `git diff --check` PASS; окружение
+  `Python 3.11.7`, `numpy 2.4.6`, `scipy 1.17.1`.
+
+- 2026-09-06 — изменённые CSV и причины: `bearing_covariance_summary.csv` и
+  `bearing_quality_summary.csv` пересчитаны для pole-safe residual/rank-aware
+  NIS; `gcc_pair_error_summary.csv`, `gcc_doa_summary.csv`,
+  `gcc_covariance_summary.csv`, `gcc_phat_monte_carlo.csv` — для точной
+  fractional lag boundary, Nyquist normalization и algebraic WLS;
+  `monte_carlo_crlb_summary.csv` — для нового far-field WLS;
+  `moving_source_summary.csv` — для WLS/GCC и явной TDOA semantics;
+  `sequential_doa_frame_results.csv`, `sequential_doa_summary.csv` и
+  `srp_doa_summary.csv` — для тех же downstream estimators;
+  `retarded_batch_sequence_results.csv`, `retarded_batch_summary.csv` — для
+  collision-free structured RNG и provenance. `srp_runtime_summary.csv`,
+  `fractional_delay_benchmark.csv`, `multistation_static_summary.csv` меняют
+  главным образом измеренные runtime-поля после свежего полного запуска.
+  Детерминированные `far_field_boundary.csv`,
+  `fractional_delay_accuracy.csv`, `gcc_phat_validation.csv` численно не
+  изменились. Из пользовательских локальных изменений в итоговый коммит не
+  включаются `notebooks/array_comparison.ipynb` и
+  `notebooks/moving_source_3d.ipynb`.
 
 - 2026-09-03 — открыт corrective gate по независимому аудиту commit
   `e5a90fd66afe7fd19a02cc55fdc504e6056503e9`; статус остаётся **In

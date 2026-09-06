@@ -261,7 +261,19 @@ def _covariance_fields(calibration: BearingCovarianceCalibration | None) -> dict
 def _nis_fields(
     residuals: NDArray[np.float64], calibration: BearingCovarianceCalibration | None
 ) -> dict[str, object]:
-    benchmark = {quantile: float(chi2.ppf(quantile / 100.0, df=2)) for quantile in (50, 95, 99)}
+    positive_rank = calibration.rank if calibration is not None else None
+    benchmark = {
+        quantile: (
+            float(chi2.ppf(quantile / 100.0, df=positive_rank))
+            if positive_rank is not None and positive_rank > 0
+            else None
+        )
+        for quantile in (50, 95, 99)
+    }
+    benchmark_2 = {
+        quantile: float(chi2.ppf(quantile / 100.0, df=2))
+        for quantile in (50, 95, 99)
+    }
     if calibration is None or residuals.size == 0:
         return {
             "centered_nis_sample_count": 0,
@@ -269,19 +281,26 @@ def _nis_fields(
             "centered_nis_p95": None,
             "centered_nis_p99": None,
             "centered_nis_fraction_gt_chi_square_2_p95": None,
+            "centered_nis_fraction_gt_chi_square_rank_p95": None,
             "raw_normalized_squared_error_sample_count": 0,
             "raw_normalized_squared_error_p50": None,
             "raw_normalized_squared_error_p95": None,
             "raw_normalized_squared_error_p99": None,
-            "chi_square_2_p50": benchmark[50],
-            "chi_square_2_p95": benchmark[95],
-            "chi_square_2_p99": benchmark[99],
+            "chi_square_2_p50": benchmark_2[50],
+            "chi_square_2_p95": benchmark_2[95],
+            "chi_square_2_p99": benchmark_2[99],
+            "chi_square_rank_p50": benchmark[50],
+            "chi_square_rank_p95": benchmark[95],
+            "chi_square_rank_p99": benchmark[99],
             "nis_centering_mean_az_arc_rad": None,
             "nis_centering_mean_el_arc_rad": None,
             "bias_correction_applied_to_centered_nis": False,
             "nis_centering_mean_source_split": None,
             "evaluation_mean_used_for_nis_centering": False,
             "chi_square_comparison_statistic": "centered_nis",
+            "nis_positive_covariance_rank": positive_rank,
+            "chi_square_degrees_of_freedom": positive_rank,
+            "centered_nis_support_violation_fraction": None,
         }
     calibration_mean = calibration.mean_residual_rad
     centered_nis = np.asarray(
@@ -298,22 +317,37 @@ def _nis_fields(
         "centered_nis_p50": float(np.percentile(centered_nis, 50.0)),
         "centered_nis_p95": float(np.percentile(centered_nis, 95.0)),
         "centered_nis_p99": float(np.percentile(centered_nis, 99.0)),
-        "centered_nis_fraction_gt_chi_square_2_p95": float(
-            np.mean(centered_nis > benchmark[95])
+        "centered_nis_fraction_gt_chi_square_2_p95": (
+            float(np.mean(centered_nis > benchmark_2[95]))
+            if positive_rank == 2
+            else None
+        ),
+        "centered_nis_fraction_gt_chi_square_rank_p95": (
+            float(np.mean(centered_nis > benchmark[95]))
+            if benchmark[95] is not None
+            else None
         ),
         "raw_normalized_squared_error_sample_count": int(raw_error.size),
         "raw_normalized_squared_error_p50": float(np.percentile(raw_error, 50.0)),
         "raw_normalized_squared_error_p95": float(np.percentile(raw_error, 95.0)),
         "raw_normalized_squared_error_p99": float(np.percentile(raw_error, 99.0)),
-        "chi_square_2_p50": benchmark[50],
-        "chi_square_2_p95": benchmark[95],
-        "chi_square_2_p99": benchmark[99],
+        "chi_square_2_p50": benchmark_2[50],
+        "chi_square_2_p95": benchmark_2[95],
+        "chi_square_2_p99": benchmark_2[99],
+        "chi_square_rank_p50": benchmark[50],
+        "chi_square_rank_p95": benchmark[95],
+        "chi_square_rank_p99": benchmark[99],
         "nis_centering_mean_az_arc_rad": float(calibration_mean[0]),
         "nis_centering_mean_el_arc_rad": float(calibration_mean[1]),
         "bias_correction_applied_to_centered_nis": True,
         "nis_centering_mean_source_split": "calibration",
         "evaluation_mean_used_for_nis_centering": False,
         "chi_square_comparison_statistic": "centered_nis",
+        "nis_positive_covariance_rank": positive_rank,
+        "chi_square_degrees_of_freedom": positive_rank,
+        "centered_nis_support_violation_fraction": float(
+            np.mean(~np.isfinite(centered_nis))
+        ),
     }
 
 

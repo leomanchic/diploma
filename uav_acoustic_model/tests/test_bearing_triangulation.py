@@ -207,6 +207,60 @@ def test_wrap_safe_residual_and_analytic_numeric_jacobian_agreement():
     np.testing.assert_allclose(analytic, numerical, rtol=2e-6, atol=2e-10)
 
 
+@pytest.mark.parametrize(
+    "covariance",
+    [np.eye(2) * 1e-4, np.diag([4e-5, 2e-4])],
+)
+def test_zenith_bearing_scene_is_coordinate_robust(covariance):
+    stations, measurements, target = _scene(
+        positions=[np.zeros(3), np.asarray([100.0, 0.0, 0.0]), np.asarray([0.0, 100.0, 0.0])],
+        target=np.asarray([0.0, 0.0, 30.0]),
+        covariance=covariance,
+    )
+    result = triangulate_bearings_spherical_wls(stations, measurements)
+    assert result.valid
+    np.testing.assert_allclose(result.position_world_m, target, rtol=0.0, atol=2e-10)
+    analytic = bearing_residual_jacobian(target, stations[0], measurements[0])
+    numerical = numerical_bearing_residual_jacobian(
+        target, stations[0], measurements[0], step_m=1e-5
+    )
+    np.testing.assert_allclose(analytic, numerical, rtol=2e-6, atol=2e-9)
+
+
+def test_zenith_scene_is_invariant_to_local_coordinate_rotations():
+    positions = [
+        np.zeros(3),
+        np.asarray([100.0, 0.0, 0.0]),
+        np.asarray([0.0, 100.0, 0.0]),
+    ]
+    target = np.asarray([0.0, 0.0, 30.0])
+    covariance = np.diag([4e-5, 2e-4])
+    baseline_stations, baseline_measurements, _ = _scene(
+        positions=positions, target=target, covariance=covariance
+    )
+    rotations = [
+        Rotation.from_euler("xyz", [0.3, -0.4, 0.2]).as_matrix(),
+        Rotation.from_euler("xyz", [-0.2, 0.1, -0.5]).as_matrix(),
+        Rotation.from_euler("xyz", [0.4, 0.2, 0.7]).as_matrix(),
+    ]
+    rotated_stations, rotated_measurements, _ = _scene(
+        positions=positions,
+        target=target,
+        rotations=rotations,
+        covariance=covariance,
+    )
+    baseline = triangulate_bearings_spherical_wls(
+        baseline_stations, baseline_measurements
+    )
+    rotated = triangulate_bearings_spherical_wls(
+        rotated_stations, rotated_measurements
+    )
+    assert baseline.valid and rotated.valid
+    np.testing.assert_allclose(
+        rotated.position_world_m, baseline.position_world_m, rtol=0.0, atol=2e-10
+    )
+
+
 def test_calibration_bias_is_used_in_spherical_model_not_evaluation_mean():
     bias = np.deg2rad([0.4, -0.25])
     stations, corrected_measurements, target = _scene(

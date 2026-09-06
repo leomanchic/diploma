@@ -64,7 +64,14 @@ transforms и масштабу сцены. S7C имеет статус `In progr
 после corrective gate radial/nonradial/instantaneous observability. S7C-B —
 `In review`: локальные deterministic/statistical/notebook gates причинного
 event stream и offline/causal-prefix batch reference пройдены, но отдельная
-приёмка ещё не дана. S7C-C остаётся `Planned` и не начинается до этой приёмки;
+приёмка ещё не дана. Внутри существующих S2/S4/S6/S7A/S7C-B выполнен
+corrective audit без нового номера этапа: глобальный far-field WLS search,
+support singular covariance/NIS, pole-safe bearing coordinates, GCC fractional
+bound/Nyquist, moving-source TDOA semantics, finite trajectory support,
+Doppler band gate и collision-free RNG provenance закреплены regressions и
+пересчитанными артефактами. Этот пакет не меняет статусы завершённых этапов и
+не является началом фильтра. S7C-C остаётся `Planned` и не начинается до
+отдельной приёмки S7C-B;
 он будет отдельным EKF baseline, а S7C-D — отдельным robustness benchmark.
 
 Одно мгновенное bearing-измерение одной станции не определяет дальность.

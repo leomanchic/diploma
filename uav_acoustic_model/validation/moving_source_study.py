@@ -417,7 +417,13 @@ def _frame_diagnostics(moving, positions, trajectory) -> dict[str, float]:
     return {
         "doa_change_within_frame_deg": float(doa_change),
         "max_tdoa_change_within_frame_us": float(
-            np.max(np.ptp(moving.tdoa_seconds, axis=1)) * 1e6
+            np.max(
+                np.ptp(
+                    moving.reception_synchronous_delay_difference_seconds,
+                    axis=1,
+                )
+            )
+            * 1e6
         ),
         "doppler_factor": float(
             retarded_time_doppler_factor(

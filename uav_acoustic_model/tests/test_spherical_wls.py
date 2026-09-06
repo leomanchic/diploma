@@ -8,6 +8,7 @@ from model.geometry import (
     all_pairs,
     comparison_arrays,
     geodesic_angle_between_directions,
+    reference_pairs,
 )
 from model.tdoa import directional_spherical_tdoa
 
@@ -52,3 +53,23 @@ def test_plane_estimator_retains_nonzero_near_field_model_bias():
     )
     assert plane_error > 1e-3
     assert exact_error < 1e-6
+
+
+def test_spherical_wls_enforces_zero_variance_component():
+    positions = comparison_arrays()["tetrahedral"]
+    pairs = reference_pairs(4)
+    distance = 5.0
+    observations = directional_spherical_tdoa(0.7, 0.4, distance, positions, pairs)
+    observations[0] += 1e-5
+    estimate = estimate_doa_spherical_wls(
+        observations,
+        positions,
+        distance,
+        pairs,
+        tdoa_covariance=np.diag([0.0, 1e-10, 1e-10]),
+    )
+    assert estimate.success
+    predicted = directional_spherical_tdoa(
+        estimate.phi, estimate.elevation, distance, positions, pairs
+    )
+    assert predicted[0] == pytest.approx(observations[0], abs=1e-10)

@@ -17,6 +17,8 @@ from scipy.optimize import NonlinearConstraint, SR1, least_squares, minimize
 
 from model.bearing_statistics import (
     AntipodalDirectionError,
+    measurement_anchored_tangent_residual,
+    measurement_anchored_tangent_residual_jacobian,
     tangent_residual,
     tangent_residual_jacobian_wrt_true_direction,
 )
@@ -342,7 +344,16 @@ def bearing_residual(
     if not measurement.valid:
         raise ValueError("invalid bearing has no spherical residual")
     predicted = predicted_local_direction(position_world_m, station)
-    return tangent_residual(predicted, measurement.direction_local) - measurement.calibration_bias_tangent_rad
+    if min(
+        np.hypot(predicted[0], predicted[1]),
+        np.hypot(*measurement.direction_local[:2]),
+    ) <= 1e-7:
+        residual = measurement_anchored_tangent_residual(
+            predicted, measurement.direction_local
+        )
+    else:
+        residual = tangent_residual(predicted, measurement.direction_local)
+    return residual - measurement.calibration_bias_tangent_rad
 
 
 def bearing_residual_jacobian(
@@ -377,9 +388,17 @@ def bearing_residual_jacobian(
         station.world_to_local_direction(world_direction),
         name="predicted direction",
     )
-    residual_wrt_local_direction = tangent_residual_jacobian_wrt_true_direction(
-        local_direction, measurement.direction_local
-    )
+    if min(
+        np.hypot(local_direction[0], local_direction[1]),
+        np.hypot(*measurement.direction_local[:2]),
+    ) <= 1e-7:
+        residual_wrt_local_direction = measurement_anchored_tangent_residual_jacobian(
+            local_direction, measurement.direction_local
+        )
+    else:
+        residual_wrt_local_direction = tangent_residual_jacobian_wrt_true_direction(
+            local_direction, measurement.direction_local
+        )
     direction_wrt_position = (
         station.rotation_local_to_world.T
         @ (np.eye(3) - world_direction[:, None] * world_direction[None, :])

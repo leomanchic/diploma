@@ -19,6 +19,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from model.bearing_statistics import (
+    measurement_anchored_tangent_residual,
+    measurement_anchored_tangent_residual_jacobian,
     tangent_residual,
     tangent_residual_jacobian_wrt_true_direction,
 )
@@ -254,10 +256,18 @@ def retarded_bearing_residual(
     predicted = predict_retarded_bearing_measurement(
         state, station, measurement, sound_speed
     )
-    return (
-        tangent_residual(predicted.direction_local, measurement.direction_local)
-        - measurement.calibration_bias_tangent_rad
-    )
+    if min(
+        np.hypot(predicted.direction_local[0], predicted.direction_local[1]),
+        np.hypot(*measurement.direction_local[:2]),
+    ) <= 1e-7:
+        residual = measurement_anchored_tangent_residual(
+            predicted.direction_local, measurement.direction_local
+        )
+    else:
+        residual = tangent_residual(
+            predicted.direction_local, measurement.direction_local
+        )
+    return residual - measurement.calibration_bias_tangent_rad
 
 
 def retarded_bearing_residual_jacobian(
@@ -273,10 +283,17 @@ def retarded_bearing_residual_jacobian(
     predicted = predict_retarded_bearing_measurement(
         state, station, measurement, sound_speed
     )
-    residual_wrt_direction = tangent_residual_jacobian_wrt_true_direction(
-        predicted.direction_local,
-        measurement.direction_local,
-    )
+    if min(
+        np.hypot(predicted.direction_local[0], predicted.direction_local[1]),
+        np.hypot(*measurement.direction_local[:2]),
+    ) <= 1e-7:
+        residual_wrt_direction = measurement_anchored_tangent_residual_jacobian(
+            predicted.direction_local, measurement.direction_local
+        )
+    else:
+        residual_wrt_direction = tangent_residual_jacobian_wrt_true_direction(
+            predicted.direction_local, measurement.direction_local
+        )
     direction_wrt_state = predicted_local_direction_jacobian(
         state,
         station,
@@ -339,12 +356,19 @@ def stack_retarded_bearing_observability(
         )
         emissions.append(prediction.emission_time_s)
         residuals.append(
-            tangent_residual(prediction.direction_local, measurement.direction_local)
-            - measurement.calibration_bias_tangent_rad
+            retarded_bearing_residual(state, station, measurement, sound_speed)
         )
-        residual_wrt_direction = tangent_residual_jacobian_wrt_true_direction(
-            prediction.direction_local, measurement.direction_local
-        )
+        if min(
+            np.hypot(prediction.direction_local[0], prediction.direction_local[1]),
+            np.hypot(*measurement.direction_local[:2]),
+        ) <= 1e-7:
+            residual_wrt_direction = measurement_anchored_tangent_residual_jacobian(
+                prediction.direction_local, measurement.direction_local
+            )
+        else:
+            residual_wrt_direction = tangent_residual_jacobian_wrt_true_direction(
+                prediction.direction_local, measurement.direction_local
+            )
         jacobians.append(
             residual_wrt_direction
             @ predicted_local_direction_jacobian(

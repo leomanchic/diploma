@@ -202,12 +202,35 @@ def _search_lags(
     interpolation: int,
     transform_length: int,
 ) -> tuple[int, NDArray[np.float64]]:
-    maximum_shift = int(np.ceil(maximum_delay * sampling_rate * interpolation))
+    bound_samples = maximum_delay * sampling_rate
+    maximum_shift = int(np.floor(bound_samples * interpolation + 32 * np.finfo(float).eps))
     maximum_supported = transform_length * interpolation // 2 - 1
     if maximum_shift > maximum_supported:
         raise ValueError("maximum_delay_seconds exceeds the supported non-aliased lag interval")
     lags = np.arange(-maximum_shift, maximum_shift + 1, dtype=float) / interpolation
+    tolerance = 32 * np.finfo(float).eps * max(1.0, bound_samples)
+    if lags[0] > -bound_samples + tolerance:
+        lags = np.concatenate(([-bound_samples], lags))
+    if lags[-1] < bound_samples - tolerance:
+        lags = np.concatenate((lags, [bound_samples]))
     return maximum_shift, lags
+
+
+def _direct_correlation_from_spectrum(
+    spectrum: _SpectrumData, tau_seconds: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Evaluate the one-sided spectrum with the base-DFT normalization."""
+
+    weights = np.full(spectrum.frequencies_hz.size, 2.0)
+    weights[0] = 1.0
+    if spectrum.transform_length % 2 == 0:
+        weights[-1] = 1.0
+    exponent = np.exp(
+        2j * np.pi * spectrum.frequencies_hz[:, None] * tau_seconds[None, :]
+    )
+    return np.real(
+        np.sum(weights[:, None] * spectrum.phat_spectrum[:, None] * exponent, axis=0)
+    ) / spectrum.transform_length
 
 
 def _invalid_result(
@@ -309,12 +332,39 @@ def gcc_phat(
         )
 
     oversampled_length = spectrum.transform_length * interpolation
-    circular_correlation = np.fft.irfft(
-        spectrum.phat_spectrum, n=oversampled_length
+    interpolated_spectrum = spectrum.phat_spectrum.copy()
+    # The base transform's Nyquist coefficient represents a single real bin.
+    # Once the inverse FFT is lengthened it becomes an ordinary positive-
+    # frequency bin with an implicit conjugate, so halve it exactly once.
+    if interpolation > 1 and spectrum.transform_length % 2 == 0:
+        interpolated_spectrum[-1] *= 0.5
+    circular_correlation = interpolation * np.fft.irfft(
+        interpolated_spectrum, n=oversampled_length
     )
-    correlation = np.concatenate(
-        (circular_correlation[-maximum_shift:], circular_correlation[: maximum_shift + 1])
+    negative_lags = (
+        circular_correlation[-maximum_shift:]
+        if maximum_shift > 0
+        else np.empty(0, dtype=float)
     )
+    regular_correlation = np.concatenate(
+        (negative_lags, circular_correlation[: maximum_shift + 1])
+    )
+    regular_lags = np.arange(-maximum_shift, maximum_shift + 1, dtype=float) / interpolation
+    pieces = []
+    if lags_samples[0] < regular_lags[0]:
+        pieces.append(
+            _direct_correlation_from_spectrum(
+                spectrum, np.asarray([lags_samples[0] / sampling_rate])
+            )
+        )
+    pieces.append(regular_correlation)
+    if lags_samples[-1] > regular_lags[-1]:
+        pieces.append(
+            _direct_correlation_from_spectrum(
+                spectrum, np.asarray([lags_samples[-1] / sampling_rate])
+            )
+        )
+    correlation = np.concatenate(pieces)
     if not np.all(np.isfinite(correlation)):
         return _invalid_result(
             "nonfinite_correlation",
@@ -329,7 +379,16 @@ def gcc_phat(
     boundary_hit = integer_peak in {0, correlation.size - 1}
     fractional_peak = 0.0
     curvature = float("nan")
-    if not boundary_hit:
+    uniform_neighbours = (
+        not boundary_hit
+        and np.isclose(
+            lags_samples[integer_peak] - lags_samples[integer_peak - 1],
+            lags_samples[integer_peak + 1] - lags_samples[integer_peak],
+            rtol=0.0,
+            atol=32 * np.finfo(float).eps,
+        )
+    )
+    if uniform_neighbours:
         left, centre, right = correlation[integer_peak - 1 : integer_peak + 2]
         curvature = float(centre - 0.5 * (left + right))
         denominator = left - 2.0 * centre + right
@@ -337,7 +396,7 @@ def gcc_phat(
             fractional_peak = float(
                 np.clip(0.5 * (left - right) / denominator, -0.5, 0.5)
             )
-    delay_samples = (integer_peak - maximum_shift + fractional_peak) / interpolation
+    delay_samples = lags_samples[integer_peak] + fractional_peak / interpolation
     ratio = _second_peak_ratio(correlation, integer_peak, interpolation)
     return GCCPHATResult(
         delay_seconds=float(delay_samples / sampling_rate),
@@ -404,19 +463,7 @@ def direct_gcc_phat_correlation(
             spectral_energy_fraction=spectrum.spectral_energy_fraction,
             used_bin_count=spectrum.used_bin_count,
         )
-    weights = np.full(spectrum.frequencies_hz.size, 2.0)
-    weights[0] = 1.0
-    if spectrum.transform_length % 2 == 0:
-        weights[-1] = 1.0
-    exponent = np.exp(
-        2j * np.pi * spectrum.frequencies_hz[:, None] * grid[None, :]
-    )
-    correlation = np.real(
-        np.sum(
-            weights[:, None] * spectrum.phat_spectrum[:, None] * exponent,
-            axis=0,
-        )
-    ) / spectrum.transform_length
+    correlation = _direct_correlation_from_spectrum(spectrum, grid)
     return DirectGCCPHATResult(
         tau_seconds=grid.copy(),
         correlation=np.asarray(correlation, dtype=float),
