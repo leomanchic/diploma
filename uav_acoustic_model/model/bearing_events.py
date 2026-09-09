@@ -220,6 +220,20 @@ class CausalBearingEventStream:
     def estimator_variant(self) -> str:
         return self._estimator_variant
 
+    @property
+    def next_available_timestamp_s(self) -> float | None:
+        """Return the next unprocessed delivery epoch without advancing.
+
+        This read-only cursor view lets a causal consumer replay every
+        availability group internally even when its external publication call
+        jumps over several groups.  It exposes schedule metadata only; no
+        future measurement payload is returned.
+        """
+
+        if self._cursor >= len(self._events):
+            return None
+        return float(self._events[self._cursor].measurement.available_timestamp_s)
+
     def _log(
         self,
         measurement: BearingMeasurement,
