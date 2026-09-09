@@ -16,6 +16,8 @@ from validation.retarded_batch_study import (
     run_retarded_batch_configuration,
     run_retarded_batch_study,
 )
+from estimators.retarded_state_batch import estimate_retarded_constant_velocity_batch
+from model.bearing_events import CausalBearingEventStream
 
 
 def test_fixed_configuration_matrix_has_multiple_physical_axes():
@@ -174,3 +176,20 @@ def test_smoke_study_writes_sequence_and_aggregate_csv(tmp_path):
     assert (tmp_path / "retarded_batch_summary.csv").is_file()
     assert {row["independent_sequence_count"] for row in summaries} == {1}
     assert {row["dependent_prefix_count_per_sequence"] for row in summaries} == {5}
+
+
+def test_full_rank_xtol_exit_is_polished_to_the_existing_scaled_kkt_gate():
+    """Regression for base seed 20260903, configuration 4, sequence 3."""
+
+    config = default_retarded_batch_configurations()[4]
+    scenario = generate_retarded_batch_scenario(config, 3)
+    prefix = CausalBearingEventStream(
+        scenario.events, estimator_variant="direct_bearing"
+    ).advance_to(4.5)
+    result = estimate_retarded_constant_velocity_batch(
+        scenario.stations, prefix.measurements, reference_time_s=0.0
+    )
+    assert result.valid, result.failure_reason
+    assert result.local_observability_rank == 6
+    assert result.scaled_projected_kkt_residual <= 1e-6
+    assert result.objective <= 16.8232696416251

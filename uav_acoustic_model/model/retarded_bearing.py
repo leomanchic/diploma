@@ -256,14 +256,13 @@ def retarded_bearing_residual(
     predicted = predict_retarded_bearing_measurement(
         state, station, measurement, sound_speed
     )
-    if min(
-        np.hypot(predicted.direction_local[0], predicted.direction_local[1]),
-        np.hypot(*measurement.direction_local[:2]),
-    ) <= 1e-7:
+    if measurement.tangent_frame == "measurement":
         residual = measurement_anchored_tangent_residual(
             predicted.direction_local, measurement.direction_local
         )
     else:
+        if np.hypot(*predicted.direction_local[:2]) <= 1e-10:
+            raise ValueError("prediction tangent frame is undefined at a local pole; use a measurement-frame calibration")
         residual = tangent_residual(
             predicted.direction_local, measurement.direction_local
         )
@@ -283,10 +282,7 @@ def retarded_bearing_residual_jacobian(
     predicted = predict_retarded_bearing_measurement(
         state, station, measurement, sound_speed
     )
-    if min(
-        np.hypot(predicted.direction_local[0], predicted.direction_local[1]),
-        np.hypot(*measurement.direction_local[:2]),
-    ) <= 1e-7:
+    if measurement.tangent_frame == "measurement":
         residual_wrt_direction = measurement_anchored_tangent_residual_jacobian(
             predicted.direction_local, measurement.direction_local
         )

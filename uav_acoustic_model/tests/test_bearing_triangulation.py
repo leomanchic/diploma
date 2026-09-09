@@ -39,6 +39,7 @@ def _scene(
     rotations: list[np.ndarray] | None = None,
     biases: list[np.ndarray] | None = None,
     covariance: np.ndarray = COVARIANCE,
+    tangent_frame: str = "prediction",
 ):
     if positions is None:
         positions = [
@@ -73,6 +74,7 @@ def _scene(
             covariance_tangent_rad2=covariance,
             calibration_bias_tangent_rad=bias,
             estimator_variant="direct_bearing",
+            tangent_frame=tangent_frame,
         )
         stations.append(station)
         measurements.append(measurement)
@@ -216,6 +218,7 @@ def test_zenith_bearing_scene_is_coordinate_robust(covariance):
         positions=[np.zeros(3), np.asarray([100.0, 0.0, 0.0]), np.asarray([0.0, 100.0, 0.0])],
         target=np.asarray([0.0, 0.0, 30.0]),
         covariance=covariance,
+        tangent_frame="measurement",
     )
     result = triangulate_bearings_spherical_wls(stations, measurements)
     assert result.valid
@@ -236,7 +239,8 @@ def test_zenith_scene_is_invariant_to_local_coordinate_rotations():
     target = np.asarray([0.0, 0.0, 30.0])
     covariance = np.diag([4e-5, 2e-4])
     baseline_stations, baseline_measurements, _ = _scene(
-        positions=positions, target=target, covariance=covariance
+        positions=positions, target=target, covariance=covariance,
+        tangent_frame="measurement",
     )
     rotations = [
         Rotation.from_euler("xyz", [0.3, -0.4, 0.2]).as_matrix(),
@@ -248,6 +252,7 @@ def test_zenith_scene_is_invariant_to_local_coordinate_rotations():
         target=target,
         rotations=rotations,
         covariance=covariance,
+        tangent_frame="measurement",
     )
     baseline = triangulate_bearings_spherical_wls(
         baseline_stations, baseline_measurements

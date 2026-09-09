@@ -344,14 +344,13 @@ def bearing_residual(
     if not measurement.valid:
         raise ValueError("invalid bearing has no spherical residual")
     predicted = predicted_local_direction(position_world_m, station)
-    if min(
-        np.hypot(predicted[0], predicted[1]),
-        np.hypot(*measurement.direction_local[:2]),
-    ) <= 1e-7:
+    if measurement.tangent_frame == "measurement":
         residual = measurement_anchored_tangent_residual(
             predicted, measurement.direction_local
         )
     else:
+        if np.hypot(*predicted[:2]) <= 1e-10:
+            raise ValueError("prediction tangent frame is undefined at a local pole; use a measurement-frame calibration")
         residual = tangent_residual(predicted, measurement.direction_local)
     return residual - measurement.calibration_bias_tangent_rad
 
@@ -368,10 +367,11 @@ def bearing_residual_jacobian(
 
     ``dL/du = -k(u y.T + a I) + (-1/s^2 + theta*a/s^3) v v.T``.
 
-    The two additional connection terms differentiate the moving
-    azimuth/elevation tangent basis.  Calibration bias is constant and has
-    zero derivative.  The azimuth basis is undefined at a local pole, which
-    is rejected explicitly instead of choosing a hidden coordinate axis.
+    For tangent_frame='prediction', connection terms differentiate the
+    moving azimuth/elevation basis and the local pole is excluded. For
+    tangent_frame='measurement', differentiate -B_y Log_y(u) in the fixed
+    measured frame, including at a predicted pole. Calibration bias is
+    constant in the declared frame and has zero derivative.
     """
 
     if station.station_id != measurement.station_id or not measurement.valid:
@@ -388,10 +388,7 @@ def bearing_residual_jacobian(
         station.world_to_local_direction(world_direction),
         name="predicted direction",
     )
-    if min(
-        np.hypot(local_direction[0], local_direction[1]),
-        np.hypot(*measurement.direction_local[:2]),
-    ) <= 1e-7:
+    if measurement.tangent_frame == "measurement":
         residual_wrt_local_direction = measurement_anchored_tangent_residual_jacobian(
             local_direction, measurement.direction_local
         )

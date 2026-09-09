@@ -1,21 +1,89 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-06
+Последнее обновление: 2026-09-09
 
 ## Текущий этап
 
-Текущий этап: **S7C-B — Causal Asynchronous Bearing Events and Retarded-time
-Batch State Estimation** в составе S7C. Цель подэтапа — воспроизводимо
-проигрывать асинхронные bearing-события трёх станций и оценивать одно
-constant-velocity 6D-состояние общей пакетной exact retarded-time моделью.
+Текущий этап: **S7C-C1 — causal retarded-time EKF baseline under strict
+constant velocity** в составе S7C-C.
 
-Статус: **In review**. Базовый принятый S7C-A commit —
-`31c68e9f398211d6935081d1e03fa3b18d77f615`; его полный gate дал **286
-passed in 43.51s**, `pip check` PASS и 13/13 свежих notebooks. S7C-B разделяет
-непричинный offline batch reference и causal-prefix batch, которому доступны
-только события с `available_timestamp_s <= T`. Это пакетная оценка
-constant-velocity состояния, не recursive tracking; EKF/UKF, process noise и
-S7C-C не начаты.
+Статус S7C-C1: **Done**. Первый рекурсивный центральный оцениватель по
+асинхронным bearing-событиям трёх станций принят при `Q=0`, известном
+постоянном `c` и прямых bearing-level наблюдениях. Общий S7C-C остаётся
+**In progress**: process noise, манёвры, outlier/dropout robustness и
+signal-level multi-station frontend не входят в C1 и не заявлены. S7C-B
+сохраняет статус **Done** после повторного входного gate на ветке
+`feature/s7c-c1-retarded-ekf`.
+
+### Журнал S7C-C1
+
+- 2026-09-08 — входной gate S7C-B закрыт на фактической базе. Патч добавил
+  `MODEL_REVIEW.md`, явный `BearingMeasurement.tangent_frame`, согласованные
+  static/dynamic residual/Jacobian ветви и устойчивую рационализированную
+  constant-velocity emission-time формулу. SHA-256 пользовательских
+  `array_comparison.ipynb` и `moving_source_3d.ipynb` до/после применения
+  совпал; эти локальные изменения не перезаписываются и не войдут в commit.
+- 2026-09-08 — deterministic/smoke gate первого EKF: **22 passed**. Зафиксирован
+  до полного запуска протокол из 24 конфигураций и 4 независимых whole
+  sequences/config: **96 независимых последовательностей**, 15 асинхронных
+  bearings/sequence. Временные публикации и NIS/NEES внутри sequence зависимы.
+  Математический контракт и заранее выбранные gates записаны в
+  `RETARDED_EKF_MODEL.md`. Полный study создал 4416 publication rows, 384
+  sequence-method rows и 96 aggregate rows; численный аудит и финальные gates
+  ещё выполняются.
+- 2026-09-09 — полный S7C-C1 benchmark завершён на заранее зафиксированном
+  `base_seed=20260908`: 24 конфигурации, 4 независимые whole sequences на
+  конфигурацию, **96 независимых последовательностей**, 15 асинхронных
+  bearings/sequence. Все `96/96` EKF-последовательностей инициализированы и
+  дали valid final state; Wilson 95% CI доли успешной инициализации
+  `[0.961524, 1]`. Временные publication/NIS/NEES внутри sequence по-прежнему
+  считаются зависимыми, а не отдельными trials.
+- 2026-09-09 — итоговые independent-sequence метрики: EKF final position
+  RMSE/P95 `0.424889226/0.898071921 m`, velocity RMSE/P95
+  `0.186864851/0.379273586 m/s`; causal-prefix batch
+  `0.424831873/0.900702064 m` и `0.186713039/0.382271152 m/s`; общий initial
+  batch без дальнейших updates `2.741750935/6.513211445 m` и
+  `0.803557065/1.950452186 m/s`. Offline full-record batch приведён только как
+  непричинный reference и совпал с финальным causal-prefix batch. Обязательное
+  превосходство EKF над batch не заявляется: итоговые ошибки практически
+  равны, а отдельные конфигурации меняются в обе стороны.
+- 2026-09-09 — final-state 95% coverage EKF равно `93/96 = 0.96875`, Wilson
+  95% CI `[0.912113, 0.989316]`; diagnostic mean measurement NIS
+  `2.030445767` при двух измерительных степенях свободы, средняя временная
+  NIS-coverage `0.946759259`. Последняя величина не получает binomial CI,
+  поскольку updates внутри sequence зависимы. Mean time-to-first-estimate
+  `1.121424673 s`, mean measurement-update runtime `0.000593175 s`, maximum
+  covariance symmetry error `0`, minimum covariance eigenvalue
+  `2.13666178e-5`.
+- 2026-09-09 — во время финального notebook gate найден воспроизводимый
+  входной S7C-B false reject: один noiseless-compatible full-rank batch
+  завершался по `xtol` с scaled KKT `1.410077e-6`. После исходного TRF solve
+  добавлен детерминированный LM polish в той же residual/Jacobian
+  параметризации; результат принимается только при неувеличении cost, без
+  ослабления `1e-6` gate. Регрессия теперь даёт valid solution, scaled KKT
+  `4.89331977e-7`; итоговый S7C-B CSV имеет `557/576` valid rows, причины 19
+  ожидаемых отказов: `18 insufficient_measurements` и
+  `1 insufficient_local_observability`. Offline coverage `96/96`, causal
+  prefixes `77/96, 96/96, 96/96, 96/96, 96/96`; maximum accepted scaled KKT
+  `5.00014318e-7`, maximum exact-constraint residual `0`.
+- 2026-09-09 — сравнение accepted full-rank S7C-B rows с `c281523d`:
+  successful counts/fractions не изменились; максимум изменения objective
+  `1.15108e-12`, position error `2.94025e-7 m`, velocity error
+  `3.52748e-7 m/s`, summary RMSE `5.04796e-8 m` и `6.41989e-8 m/s`.
+  Изменение condition number не превышает `4.47e-9` относительно. Это
+  численно эквивалентные полноранговые результаты, а не новый статистический
+  эффект.
+- 2026-09-09 — финальная приёмка: полный `pytest` **368 passed in 72.45s**;
+  `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  Все **15/15 committed notebooks** выполнены, включая полный GCC study;
+  после последнего solver-polish отдельно повторены затронутые
+  `retarded_batch_validation.ipynb` и `retarded_ekf_validation.ipynb`.
+  Аудит сохранённых объектов: **96 code cells**, invalid nbformat `0`, error
+  outputs `0`, unexecuted nonempty cells `0`, missing cell IDs `0`. Два
+  пользовательских notebook `array_comparison.ipynb` и
+  `moving_source_3d.ipynb` выполнялись без перезаписи и исключены из commit.
+  Console warnings ограничены прежними Windows ZMQ/IPython permission/TCP
+  transport сообщениями; notebook error outputs отсутствуют.
 
 ### Журнал S7C-B
 

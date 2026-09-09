@@ -38,6 +38,16 @@ from .retarded_state_batch import (
     estimate_retarded_constant_velocity_batch,
     geometric_constant_velocity_initial_state,
 )
+from .retarded_ekf import (
+    CausalRetardedTimeEKF,
+    LinearizedResidualUpdate,
+    RetardedEKFInitializationCriteria,
+    RetardedEKFPublication,
+    RetardedEKFUpdateResult,
+    joseph_residual_update,
+    propagate_constant_velocity_estimate,
+    update_retarded_ekf,
+)
 from .wls_doa import (
     DOAEstimate,
     UnobservableGeometryError,
@@ -57,6 +67,11 @@ __all__ = [
     "CausalPrefixBatchResult",
     "RetardedBatchResult",
     "RetardedBatchSystem",
+    "CausalRetardedTimeEKF",
+    "LinearizedResidualUpdate",
+    "RetardedEKFInitializationCriteria",
+    "RetardedEKFPublication",
+    "RetardedEKFUpdateResult",
     "DisconnectedPairGraphError",
     "UnobservableGeometryError",
     "direct_gcc_phat_correlation",
@@ -73,6 +88,9 @@ __all__ = [
     "estimate_offline_retarded_batch",
     "estimate_retarded_constant_velocity_batch",
     "geometric_constant_velocity_initial_state",
+    "joseph_residual_update",
+    "propagate_constant_velocity_estimate",
+    "update_retarded_ekf",
     "project_tdoa_cycles",
     "numerical_bearing_residual_jacobian",
     "srp_phat",

@@ -122,3 +122,15 @@
   and separate child streams for distinct stochastic mechanisms. Include the
   run seed in provenance/IDs and test for collisions across shifted base seeds,
   configurations, and sequence indices beyond 1000.
+- S7C-C1 is an EKF baseline only under strict constant velocity, known constant
+  sound speed, direct bearing-level observations and `Q=0`. The filter state is
+  `[q(T),v(T)]`; physical reception time enters the retarded measurement while
+  availability only gates causal access. Initialize only from an accepted
+  causal batch prefix and never reuse initialization events.
+- In S7C-C1 accept only positive-definite tangent `R` and initialized `P`.
+  Report singular observations as `unsupported_singular_covariance` without
+  epsilon loading or pseudoinverse; retain the batch estimator's separate PSD
+  exact-constraint semantics. Use the residual-Jacobian sign
+  `x_post=x_prior-K*e` and Joseph covariance update. Do not claim manoeuvre
+  support, process noise, smoothing, real-audio tracking, or completion of all
+  S7C-C work from this limited baseline.

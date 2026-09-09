@@ -68,6 +68,16 @@ from .retarded_batch_study import (
     run_retarded_batch_configuration,
     run_retarded_batch_study,
 )
+from .retarded_ekf_study import (
+    RetardedEKFScenario,
+    RetardedEKFStudyConfig,
+    default_retarded_ekf_configurations,
+    generate_retarded_ekf_scenario,
+    retarded_ekf_seed_provenance,
+    run_retarded_ekf_configuration,
+    run_retarded_ekf_study,
+    summarize_retarded_ekf_sequences,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -120,4 +130,12 @@ __all__ = [
     "generate_retarded_batch_scenario",
     "run_retarded_batch_configuration",
     "run_retarded_batch_study",
+    "RetardedEKFScenario",
+    "RetardedEKFStudyConfig",
+    "default_retarded_ekf_configurations",
+    "generate_retarded_ekf_scenario",
+    "retarded_ekf_seed_provenance",
+    "run_retarded_ekf_configuration",
+    "run_retarded_ekf_study",
+    "summarize_retarded_ekf_sequences",
 ]
