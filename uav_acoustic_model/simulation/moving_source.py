@@ -278,9 +278,17 @@ def constant_velocity_emission_time(
     projection = np.sum(displacement * velocity, axis=-1)
     norm_squared = np.sum(displacement**2, axis=-1)
     denominator = speed**2 - velocity_squared
-    delay = (
-        -projection + np.sqrt(projection**2 + denominator * norm_squared)
-    ) / denominator
+    root = np.sqrt(projection**2 + denominator * norm_squared)
+    # For a receding source the direct numerator subtracts nearly equal
+    # numbers as |v| approaches c. Rationalize only that branch; the direct
+    # branch is stable for negative projection. np.divide(where=...) avoids
+    # evaluating an unused singular expression for a coincident source.
+    delay = np.empty_like(projection)
+    receding = projection >= 0.0
+    np.divide(norm_squared, root + projection, out=delay,
+              where=receding & (norm_squared > 0.0))
+    np.divide(root - projection, denominator, out=delay, where=~receding)
+    delay = np.where(norm_squared > 0.0, delay, 0.0)
     result = reception - delay
     if np.any(delay <= 0.0):
         raise ValueError("source trajectory intersects a microphone")

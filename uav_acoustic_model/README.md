@@ -194,10 +194,16 @@ Exact spherical WLS остаётся явно помеченным
 положительно-дисперсионном подпространстве; нарушение zero-variance component
 даёт `inf`. Gaussian chi-square benchmark использует число степеней свободы,
 равное положительному рангу covariance; rank zero обрабатывается отдельно.
-Около локального zenith/nadir bearing fusion переключается на остаток
-`-B_y Log_y(u)` в фиксированном tangent frame измерения и согласованный
-аналитический Jacobian. Это устраняет координатный полюс, но не скрывает
-физическое вырождение или неединственность log-map в антиподе.
+Система калибровки теперь фиксируется в `BearingMeasurement.tangent_frame`.
+`prediction` (совместимое значение по умолчанию) использует исторический
+остаток в азимутально-угломестном базисе кандидата и явно исключает его
+локальный полюс. `measurement` использует `-B_y Log_y(u)` в фиксированном
+базисе измерения и согласованный Jacobian, в том числе при прохождении
+кандидата через зенит. Ковариация и bias должны быть откалиброваны в выбранной
+системе. Переключение системы во время оптимизации запрещено: при
+анизотропной ковариации оно создавало разрыв критерия. Изменение одной метки
+у старого измерения не является пересчётом калибровки. Подробности и
+воспроизводимый контрпример: [MODEL_REVIEW.md](MODEL_REVIEW.md).
 
 ## Соглашения
 
@@ -393,6 +399,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   weighted static 3D triangulation, Jacobian и position observability;
 - `estimators/retarded_state_batch.py` — exact retarded-time offline и
   causal-prefix batch constant-velocity state estimate с constrained WLS;
+- `estimators/retarded_ekf.py` — причинный EKF baseline при строгой
+  constant-velocity модели, `Q=0`, batch-инициализации по доступному префиксу,
+  residual-sign update и Joseph covariance form;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -424,6 +433,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   emission-time/Jacobian audit и 6D rank/conditioning examples без tracking;
 - `validation/retarded_batch_study.py` — independent-sequence direct-bearing
   Monte Carlo, asynchronous delivery journal и matched offline/causal prefixes;
+- `validation/retarded_ekf_study.py` — 96-sequence matched benchmark EKF,
+  causal-prefix batch и common-initial-batch/no-update baseline с NIS/NEES,
+  coverage intervals и runtime diagnostics;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `visualization/multistation_scene.py` — ENU station axes, bearing rays,
@@ -451,6 +463,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   reception/emission timing, 6D singular values и static/infinite-`c` limits;
 - `notebooks/retarded_batch_validation.ipynb` — S7C-B position/speed errors,
   causal coverage, failure modes, conditioning, KKT и runtime diagnostics;
+- `notebooks/retarded_ekf_validation.ipynb` — S7C-C1 position/velocity errors,
+  NIS/NEES, sequence-level coverage, trajectory and marginal intervals;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -487,6 +501,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.multistation_static_study import run_multistation_static_study; run_multistation_static_study()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_ekf_study import run_retarded_ekf_study; run_retarded_ekf_study()"
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -501,6 +516,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\multistation_static_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_ekf_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -510,13 +526,25 @@ Notebook выполняется из корня проекта и сохраня
 
 CRLB здесь условна относительно уже полученных гауссовских TDOA. Она не является границей по исходным микрофонным отсчётам и пока не включает неизвестный акустический сигнал, зависимость ошибок TDOA от SNR/спектра, калибровочные ошибки, ветер/температурный профиль, отражения, коррелированный акустический шум или дополнительные источники. Реализована **exact retarded-time kinematic model in a homogeneous stationary medium**; это точная кинематическая модель запаздывающего времени при её допущениях, а не полная модель акустической среды, и её paired AWGN study не является signal-level CRLB. Дальнепольность количественно вычисляется для заданных `fs`, `f_max`, временного/фазового допуска и угловой сетки; диагностические значения 48 кГц, 2–12 кГц, 0.1 sample и 0.1 rad не являются измеренными характеристиками реального БПЛА.
 
-Целочисленные сдвиги отсчётов в проекте не используются. Реализованы только
-независимые покадровые far-field equal-weight SRP-PHAT/GCC bearings.
-SRP-Harmonics, отражения, ветер, коррелированный фон и EKF/UKF tracking пока
-не реализованы.
+Целочисленные сдвиги отсчётов в проекте не используются. S7C-C1 добавляет
+первый причинный retarded-time EKF baseline только для строгой
+constant-velocity модели, `Q=0` и direct bearing-level наблюдений. Это не
+поддержка манёвров, не signal-level трёхстанционный frontend и не завершённый
+общий tracking pipeline. UKF, SRP-Harmonics, отражения, ветер и
+коррелированный фон не реализованы.
 
 Статическая 3D-триангуляция S7B проверена сначала на непосредственных
 bearing-измерениях, поэтому её ошибки не смешаны с GCC/SRP. S7C-A реализует
 retarded-time prediction/Jacobian для уже синхронизированных timestamps, но
-не оценивает clock offset/drift. Причинный asynchronous event fusion, state
-update и central dynamic 3D tracker ещё не реализованы.
+не оценивает clock offset/drift. S7C-B задаёт причинный asynchronous event
+stream и независимый batch reference; ограниченный S7C-C1 выполняет
+recursive update при тех же строгих CV-допущениях. Математический вывод и
+границы применимости: [RETARDED_EKF_MODEL.md](RETARDED_EKF_MODEL.md).
+
+Зафиксированный S7C-C1 benchmark использует 96 независимых whole sequences
+(24 конфигурации × 4 sequence, `base_seed=20260908`). EKF успешно
+инициализирован и valid в `96/96` sequences; final position/velocity RMSE
+равны `0.424889 m` и `0.186865 m/s`, final-state 95% coverage — `93/96`.
+Эти результаты относятся только к синтетическим direct bearing-level
+наблюдениям строгой constant-velocity модели и не доказывают качество на
+манёврах или реальном многоканальном аудио.

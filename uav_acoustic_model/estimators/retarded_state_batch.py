@@ -740,6 +740,25 @@ def estimate_retarded_constant_velocity_batch(
                 gtol=1e-12,
                 max_nfev=int(max_nfev),
             )
+            # TRF can terminate by xtol just above the independent projected-
+            # KKT gate.  A Levenberg-Marquardt polish in the same unconstrained
+            # parameterization is deterministic and changes neither residual
+            # definition nor the pre-declared acceptance tolerance.  Keep the
+            # lower-cost result only.
+            if positive_dimension >= estimated_dimension:
+                polished = least_squares(
+                    stochastic_residual,
+                    np.asarray(optimized.x),
+                    jac=stochastic_jacobian,
+                    x_scale=optimizer_scale,
+                    method="lm",
+                    xtol=1e-14,
+                    ftol=1e-14,
+                    gtol=1e-14,
+                    max_nfev=int(max_nfev),
+                )
+                if float(polished.cost) <= float(optimized.cost):
+                    optimized = polished
             parameter = np.asarray(optimized.x)
             iterations = int(optimized.nfev)
             optimizer_success = bool(optimized.success)

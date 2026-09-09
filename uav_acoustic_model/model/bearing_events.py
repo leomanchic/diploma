@@ -76,6 +76,7 @@ def _payload_signature(measurement: BearingMeasurement) -> tuple[object, ...]:
         quality,
         measurement.valid,
         measurement.invalid_reason,
+        measurement.tangent_frame,
     )
 
 
@@ -99,6 +100,7 @@ def measurements_are_exact_duplicates(
         and dict(first.quality_metadata) == dict(second.quality_metadata)
         and first.valid == second.valid
         and first.invalid_reason == second.invalid_reason
+        and first.tangent_frame == second.tangent_frame
     )
     return bool(
         scalar_equal

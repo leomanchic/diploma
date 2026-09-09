@@ -30,7 +30,8 @@ def _station(
     return StationPose("S0", position, rotation, tetrahedral_array(0.2), **clock)
 
 
-def _measurement(station, direction, reception=2.0, available=2.01, bias=None):
+def _measurement(station, direction, reception=2.0, available=2.01, bias=None,
+                 tangent_frame="prediction"):
     return BearingMeasurement(
         station.station_id,
         "dynamic",
@@ -41,6 +42,7 @@ def _measurement(station, direction, reception=2.0, available=2.01, bias=None):
         np.diag(np.deg2rad([0.2, 0.3]) ** 2),
         np.zeros(2) if bias is None else bias,
         "direct_bearing",
+        tangent_frame=tangent_frame,
     )
 
 
@@ -164,7 +166,8 @@ def test_subsonic_coincidence_pole_and_antipode_cases_are_explicit():
 
     pole_state = ConstantVelocityState([0.0, 0.0, 30.0], np.zeros(3))
     pole_prediction = predict_retarded_bearing(pole_state, station, 1.0)
-    pole_measurement = _measurement(station, pole_prediction.direction_local)
+    pole_measurement = _measurement(station, pole_prediction.direction_local,
+                                    tangent_frame="measurement")
     pole_jacobian = retarded_bearing_residual_jacobian(
         pole_state, station, pole_measurement
     )

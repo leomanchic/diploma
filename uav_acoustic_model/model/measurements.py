@@ -50,6 +50,12 @@ class BearingMeasurement:
     error, future estimate, or true emission time.  Tangent quantities use
     angular-arc radians.  Bias is applied through the spherical residual
     model, never through coordinate-wise angle subtraction.
+
+    ``tangent_frame`` names the calibration convention for both covariance
+    and bias. ``prediction`` preserves historical azimuth/elevation-frame
+    calibrations and excludes the predicted local pole. ``measurement``
+    uses the fixed measured-bearing frame and is smooth through a predicted
+    pole. Changing this label is not a covariance conversion.
     """
 
     station_id: str
@@ -64,8 +70,13 @@ class BearingMeasurement:
     quality_metadata: Mapping[str, QualityValue] = field(default_factory=dict)
     valid: bool = True
     invalid_reason: str | None = None
+    # Keep the historical calibration convention explicit. New pole-safe
+    # calibrations may use "measurement"; never switch this with a candidate.
+    tangent_frame: str = "prediction"
 
     def __post_init__(self) -> None:
+        if self.tangent_frame not in {"prediction", "measurement"}:
+            raise ValueError("tangent_frame must be prediction or measurement")
         station_id = str(self.station_id)
         sequence_id = str(self.sequence_id)
         estimator_variant = str(self.estimator_variant)
