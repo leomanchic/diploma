@@ -7,7 +7,7 @@
 Текущий этап: **S7C-C1 — causal retarded-time EKF baseline under strict
 constant velocity** в составе S7C-C.
 
-Статус S7C-C1: **Done**. Первый рекурсивный центральный оцениватель по
+Статус S7C-C1: **Done** после corrective review gate. Первый рекурсивный центральный оцениватель по
 асинхронным bearing-событиям трёх станций принят при `Q=0`, известном
 постоянном `c` и прямых bearing-level наблюдениях. Общий S7C-C остаётся
 **In progress**: process noise, манёвры, outlier/dropout robustness и
@@ -16,6 +16,22 @@ signal-level multi-station frontend не входят в C1 и не заявле
 `feature/s7c-c1-retarded-ekf`.
 
 ### Журнал S7C-C1
+
+- 2026-09-09 — открыт corrective gate на ветке `fix/s7c-c1-review` от
+  опубликованного потомка `7004372`. На исходной реализации воспроизведены:
+  `KeyError('unknown_station')`; вечная блокировка инициализации первой
+  сингулярной `R` при `rejected_event_ids=()`; различие частого и одноразового
+  `advance_to` `0.000792674741 m` с `6+9` против `15+0`
+  initialization/update events. До финальных Monte Carlo/notebook gates C1
+  временно имеет статус **In review**.
+- 2026-09-09 — зафиксирован новый event contract. `advance_to(T)` внутренне
+  проигрывает все полные availability groups до `T`; внешний график публикаций
+  больше не выбирает initialization prefix. Raw journal отделён от C1-eligible
+  набора. `unknown_station_id` и `unsupported_singular_covariance` получают
+  persistent per-event diagnostics, не блокируют пригодные данные и не
+  инвалидируют корректное состояние. Conflict/recovery сохраняются в
+  lifecycle history. Первичный regression gate: **37 passed**; полная
+  статистическая приёмка ещё не выполнена.
 
 - 2026-09-08 — входной gate S7C-B закрыт на фактической базе. Патч добавил
   `MODEL_REVIEW.md`, явный `BearingMeasurement.tangent_frame`, согласованные
@@ -39,11 +55,16 @@ signal-level multi-station frontend не входят в C1 и не заявле
   `[0.961524, 1]`. Временные publication/NIS/NEES внутри sequence по-прежнему
   считаются зависимыми, а не отдельными trials.
 - 2026-09-09 — итоговые independent-sequence метрики: EKF final position
-  RMSE/P95 `0.424889226/0.898071921 m`, velocity RMSE/P95
-  `0.186864851/0.379273586 m/s`; causal-prefix batch
-  `0.424831873/0.900702064 m` и `0.186713039/0.382271152 m/s`; общий initial
-  batch без дальнейших updates `2.741750935/6.513211445 m` и
-  `0.803557065/1.950452186 m/s`. Offline full-record batch приведён только как
+  RMSE/P95 `0.424889226/0.856009559 m`, velocity RMSE/P95
+  `0.186864851/0.359536159 m/s`; causal-prefix batch
+  `0.424831873/0.853387347 m` и `0.186713039/0.360116149 m/s`; общий initial
+  batch без дальнейших updates `2.741750935/6.008923959 m` и
+  `0.803557065/1.827238321 m/s`. Здесь P95 явно вычислен NumPy с
+  `method="linear"` по одной final error на каждую из 96 независимых whole
+  sequences. Ранее записанные `0.898071921/0.379273586`,
+  `0.900702064/0.382271152` и `6.513211445/1.950452186` использовали
+  дискретный метод `higher`; изменение чисел P95 не является изменением
+  состояния или ошибок оценивателя. Offline full-record batch приведён только как
   непричинный reference и совпал с финальным causal-prefix batch. Обязательное
   превосходство EKF над batch не заявляется: итоговые ошибки практически
   равны, а отдельные конфигурации меняются в обе стороны.
@@ -52,7 +73,7 @@ signal-level multi-station frontend не входят в C1 и не заявле
   `2.030445767` при двух измерительных степенях свободы, средняя временная
   NIS-coverage `0.946759259`. Последняя величина не получает binomial CI,
   поскольку updates внутри sequence зависимы. Mean time-to-first-estimate
-  `1.121424673 s`, mean measurement-update runtime `0.000593175 s`, maximum
+  `1.121424673 s`, mean measurement-update runtime `0.000522868 s`, maximum
   covariance symmetry error `0`, minimum covariance eigenvalue
   `2.13666178e-5`.
 - 2026-09-09 — во время финального notebook gate найден воспроизводимый
@@ -73,7 +94,15 @@ signal-level multi-station frontend не входят в C1 и не заявле
   Изменение condition number не превышает `4.47e-9` относительно. Это
   численно эквивалентные полноранговые результаты, а не новый статистический
   эффект.
-- 2026-09-09 — финальная приёмка: полный `pytest` **368 passed in 72.45s**;
+- 2026-09-09 — corrective review завершён. Неизвестные станции и singular
+  tangent covariance теперь отклоняются индивидуально как
+  `unknown_station_id` и `unsupported_singular_covariance`; raw journal и
+  положительно-определённый C1-eligible набор разделены. Полные availability
+  groups внутренне проигрываются независимо от частоты внешних публикаций,
+  а lifecycle history сохраняет invalidation/recovery даже внутри одного
+  `advance_to`. Targeted gate: **37 passed**; расширенный retarded gate:
+  **74 passed, 304 deselected**.
+- 2026-09-09 — финальная приёмка: полный `pytest` **378 passed in 98.76s**;
   `pip check`: `No broken requirements found`; `git diff --check`: PASS.
   Все **15/15 committed notebooks** выполнены, включая полный GCC study;
   после последнего solver-polish отдельно повторены затронутые
@@ -81,7 +110,8 @@ signal-level multi-station frontend не входят в C1 и не заявле
   Аудит сохранённых объектов: **96 code cells**, invalid nbformat `0`, error
   outputs `0`, unexecuted nonempty cells `0`, missing cell IDs `0`. Два
   пользовательских notebook `array_comparison.ipynb` и
-  `moving_source_3d.ipynb` выполнялись без перезаписи и исключены из commit.
+  `moving_source_3d.ipynb` выполнялись в памяти без перезаписи; их уже
+  существующие пользовательские commits сохранены и не переписаны.
   Console warnings ограничены прежними Windows ZMQ/IPython permission/TCP
   transport сообщениями; notebook error outputs отсутствуют.
 

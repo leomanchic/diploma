@@ -84,23 +84,43 @@ linearization covariance at the current processing epoch. No truth, future
 full batch, or artificial small covariance is used.
 
 Events are replayed by `CausalBearingEventStream`. Processing time never moves
-backward. Exact duplicates do not update twice. Initialization events are
-marked processed and are not reused. A late event is evaluated against the
-current state but retains its own physical reception time; this is justified
-only because the trajectory is strictly constant velocity. If a previously
-used identity is later quarantined by a conflicting payload, the current
-publication is invalidated and the next call attempts batch reinitialization
-from the cleaned available prefix. Earlier immutable publications are not
-rewritten.
+backward. `advance_to(T)` internally consumes every complete equal-availability
+group up to `T`, in chronological order, before propagating the result to the
+requested publication epoch. The external publication schedule therefore does
+not choose the initialization prefix or change the sequence of EKF updates.
+The internal event posterior is kept at the latest processed delivery epoch;
+an event-free publication uses a temporary CV prediction and does not repartition
+future state transitions.
+
+Within one equal-availability group the event journal first applies all
+duplicate/conflict/quarantine rules, then the EKF considers the resulting
+active prefix in deterministic identity order. Exact duplicates do not update
+twice. Initialization events are marked processed and are not reused. A late
+event is updated at its actual delivery epoch while retaining its own physical
+reception time; this is justified only because the trajectory is strictly
+constant velocity.
+
+If a previously used identity is later quarantined by a conflicting payload,
+the state becomes invalid at that delivery group. Recovery is attempted only
+when the next internal availability group arrives, using the cleaned eligible
+prefix; an extra external call with no new events cannot trigger recovery.
+State invalidation and recovery are retained in cumulative lifecycle
+diagnostics even if both happen inside one outer call. Earlier immutable
+publications are never rewritten.
 
 ## Supported covariance domain and diagnostics
 
 C1 requires positive-definite `R` and positive-definite initialized `P`.
-Singular `R` returns `unsupported_singular_covariance` without changing the
-posterior. No eigenvalue is replaced by epsilon and no nullspace component is
-discarded. Exact constraints from positive-semidefinite observations remain
-available in the independent batch estimator but are intentionally not yet an
-EKF feature.
+The raw causal journal is preserved, while initialization and updates use a
+separate eligible set: active, selected-variant observations from known
+stations with positive-definite `R`. Unknown stations and singular `R` are
+rejected individually as `unknown_station_id` and
+`unsupported_singular_covariance`; their IDs and reasons remain available in
+cumulative and per-publication diagnostics. They do not block other eligible
+data and do not make an already valid state invalid. No eigenvalue is replaced
+by epsilon and no nullspace component is discarded. Exact constraints from
+positive-semidefinite observations remain available in the independent batch
+estimator but are intentionally not yet an EKF feature.
 
 Each attempted update reports pre-update NIS with two degrees of freedom,
 runtime, covariance rank/condition, symmetry error and minimum eigenvalue.
@@ -109,6 +129,19 @@ degrees of freedom. These chi-square comparisons are local Gaussian
 diagnostics, not proof of a globally Gaussian nonlinear posterior. Temporal
 NIS/NEES samples inside one sequence are dependent. Coverage intervals use
 whole-sequence final outcomes.
+
+`RetardedEKFPublication.propagation_dt_s` is the final output-only propagation
+from the latest internal event posterior to the requested publication epoch.
+`event_rejections` and `lifecycle_diagnostics` are cumulative immutable
+snapshots; their `new_*` counterparts contain only records created during the
+current outer call. A publication may therefore be valid while reporting one
+or more rejected observations. `failure_reason` describes absence/invalidity
+of the state, not every individual observation disposition.
+
+C1 P95 values use NumPy's explicit `method="linear"`. Final P95 aggregates one
+final error from each independent whole sequence. P95 over dependent temporal
+publications within one sequence remains a separately labelled diagnostic and
+must not be mixed with the final sequence-level quantity.
 
 ## Validation protocol fixed before the full run
 

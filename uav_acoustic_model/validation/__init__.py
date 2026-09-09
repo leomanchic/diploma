@@ -69,10 +69,12 @@ from .retarded_batch_study import (
     run_retarded_batch_study,
 )
 from .retarded_ekf_study import (
+    P95_METHOD,
     RetardedEKFScenario,
     RetardedEKFStudyConfig,
     default_retarded_ekf_configurations,
     generate_retarded_ekf_scenario,
+    linear_percentile,
     retarded_ekf_seed_provenance,
     run_retarded_ekf_configuration,
     run_retarded_ekf_study,
@@ -132,8 +134,10 @@ __all__ = [
     "run_retarded_batch_study",
     "RetardedEKFScenario",
     "RetardedEKFStudyConfig",
+    "P95_METHOD",
     "default_retarded_ekf_configurations",
     "generate_retarded_ekf_scenario",
+    "linear_percentile",
     "retarded_ekf_seed_provenance",
     "run_retarded_ekf_configuration",
     "run_retarded_ekf_study",

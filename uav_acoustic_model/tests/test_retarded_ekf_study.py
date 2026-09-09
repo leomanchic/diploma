@@ -11,6 +11,7 @@ from validation.retarded_ekf_study import (
     RetardedEKFStudyConfig,
     default_retarded_ekf_configurations,
     generate_retarded_ekf_scenario,
+    linear_percentile,
     retarded_ekf_seed_provenance,
     run_retarded_ekf_configuration,
     summarize_retarded_ekf_sequences,
@@ -133,3 +134,32 @@ def test_poorly_conditioned_smoke_is_reported_without_deleting_failures():
     assert len(sequences) == 4
     assert all("failure_reason_counts" in row for row in sequences)
     assert all(row["dependent_publication_count"] > 0 for row in sequences)
+
+
+def test_c1_p95_is_explicitly_linear_and_has_declared_independent_grain():
+    values = np.asarray([0.0, 1.0, 2.0, 100.0])
+    assert linear_percentile(values, 95) == np.percentile(
+        values, 95, method="linear"
+    )
+    assert linear_percentile(values, 95) != np.percentile(
+        values, 95, method="higher"
+    )
+    config = RetardedEKFStudyConfig(
+        "informative", "stationary", 0.1, 0.18, "ordered", 4
+    )
+    _, sequences = run_retarded_ekf_configuration(config)
+    summaries = summarize_retarded_ekf_sequences(sequences)
+    for summary in summaries:
+        rows = [
+            row
+            for row in sequences
+            if row["method"] == summary["method"] and row["final_valid"]
+        ]
+        expected = linear_percentile(
+            [row["final_position_error_m"] for row in rows], 95
+        )
+        assert summary["final_position_p95_m"] == expected
+        assert summary["final_p95_method"] == "linear"
+        assert summary["final_p95_grain"] == (
+            "one_final_error_per_independent_sequence"
+        )

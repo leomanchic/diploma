@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.stats import chi2
 
 from estimators.retarded_ekf import CausalRetardedTimeEKF
@@ -33,6 +34,20 @@ from model.station import StationPose
 
 DEFAULT_STUDY_SEED = 20260908
 DEFAULT_SEQUENCE_COUNT = 4
+P95_METHOD = "linear"
+
+
+def linear_percentile(values: ArrayLike, percentile: float) -> float:
+    """Return an explicitly linearly interpolated percentile.
+
+    C1 reports P95 at the grain stated by the caller.  The explicit method
+    prevents accidental mixing with the discontinuous ``higher`` convention.
+    """
+
+    array = np.asarray(values, dtype=float)
+    if array.size == 0:
+        return float("nan")
+    return float(np.percentile(array, percentile, method=P95_METHOD))
 STATE_COVERAGE_PROBABILITY = 0.95
 _STATE_COVERAGE_THRESHOLD = float(chi2.ppf(STATE_COVERAGE_PROBABILITY, 6))
 _NIS_COVERAGE_THRESHOLD = float(chi2.ppf(STATE_COVERAGE_PROBABILITY, 2))
@@ -546,14 +561,16 @@ def run_retarded_ekf_configuration(
                         float(np.sqrt(np.mean(position**2))) if position.size else float("nan")
                     ),
                     "dependent_time_position_p95_m": (
-                        float(np.percentile(position, 95)) if position.size else float("nan")
+                        linear_percentile(position, 95)
                     ),
                     "dependent_time_velocity_rmse_mps": (
                         float(np.sqrt(np.mean(velocity**2))) if velocity.size else float("nan")
                     ),
                     "dependent_time_velocity_p95_mps": (
-                        float(np.percentile(velocity, 95)) if velocity.size else float("nan")
+                        linear_percentile(velocity, 95)
                     ),
+                    "dependent_time_p95_method": P95_METHOD,
+                    "dependent_time_p95_grain": "dependent_publication_within_sequence",
                     "final_position_error_m": final["position_error_m"],
                     "final_velocity_error_mps": final["velocity_error_mps"],
                     "final_state_nees": final["state_nees"],
@@ -648,9 +665,11 @@ def summarize_retarded_ekf_sequences(
                     np.mean([row["time_to_first_estimate_s"] for row in initialized])
                 ) if initialized else float("nan"),
                 "final_position_rmse_m": float(np.sqrt(np.mean(position**2))) if position.size else float("nan"),
-                "final_position_p95_m": float(np.percentile(position, 95)) if position.size else float("nan"),
+                "final_position_p95_m": linear_percentile(position, 95),
                 "final_velocity_rmse_mps": float(np.sqrt(np.mean(velocity**2))) if velocity.size else float("nan"),
-                "final_velocity_p95_mps": float(np.percentile(velocity, 95)) if velocity.size else float("nan"),
+                "final_velocity_p95_mps": linear_percentile(velocity, 95),
+                "final_p95_method": P95_METHOD,
+                "final_p95_grain": "one_final_error_per_independent_sequence",
                 "final_state_95_coverage_fraction": coverage_count / len(final_valid) if final_valid else float("nan"),
                 "final_state_95_coverage_ci95_low": coverage_low,
                 "final_state_95_coverage_ci95_high": coverage_high,
@@ -715,8 +734,10 @@ __all__ = [
     "DEFAULT_STUDY_SEED",
     "RetardedEKFScenario",
     "RetardedEKFStudyConfig",
+    "P95_METHOD",
     "default_retarded_ekf_configurations",
     "generate_retarded_ekf_scenario",
+    "linear_percentile",
     "retarded_ekf_seed_provenance",
     "run_retarded_ekf_configuration",
     "run_retarded_ekf_study",

@@ -38,13 +38,16 @@ def test_only_available_events_enter_prefix_and_time_cannot_move_backwards():
     early = _measurement("A", 0, 1.0, 1.1)
     late = _measurement("B", 0, 1.0, 2.0)
     stream = CausalBearingEventStream([late, early], estimator_variant="direct")
+    assert stream.next_available_timestamp_s == early.available_timestamp_s
     first = stream.advance_to(1.5)
     assert first.accepted_event_ids == (bearing_event_id(early),)
+    assert stream.next_available_timestamp_s == late.available_timestamp_s
     second = stream.advance_to(2.0)
     assert set(second.accepted_event_ids) == {
         bearing_event_id(early),
         bearing_event_id(late),
     }
+    assert stream.next_available_timestamp_s is None
     with np.testing.assert_raises_regex(ValueError, "backwards"):
         stream.advance_to(1.9)
 

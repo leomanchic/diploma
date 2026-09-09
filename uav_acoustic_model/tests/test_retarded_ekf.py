@@ -164,7 +164,7 @@ def test_singular_observation_covariance_is_explicitly_unsupported_without_updat
     np.testing.assert_array_equal(result.posterior_covariance, covariance)
 
 
-def test_singular_covariance_cannot_enter_c1_batch_initialization():
+def test_only_singular_covariances_remain_uninitialized_with_audited_rejections():
     stations = _stations()
     truth = ConstantVelocityState([50.0, 40.0, 30.0], [5.0, -2.0, 1.0])
     measurements = _measurements(
@@ -175,7 +175,11 @@ def test_singular_covariance_cannot_enter_c1_batch_initialization():
     ).advance_to(max(item.available_timestamp_s for item in measurements))
     assert not result.valid
     assert not result.initialized
-    assert result.failure_reason == "unsupported_singular_covariance"
+    assert result.failure_reason == "not_initialized"
+    assert len(result.rejected_event_ids) == len(measurements)
+    assert {
+        diagnostic.reason for diagnostic in result.event_rejections
+    } == {"unsupported_singular_covariance"}
 
 
 def test_nonlinear_update_uses_residual_sign_that_reduces_local_bearing_error():
@@ -218,8 +222,11 @@ def test_causal_initialization_uses_only_prefix_and_never_reuses_its_events():
     assert first.valid and second.valid
     np.testing.assert_array_equal(first.state.vector, second.state.vector)
     np.testing.assert_array_equal(first.covariance_state, second.covariance_state)
-    assert set(first.initialization_event_ids) == set(first.prefix.accepted_event_ids)
-    assert first.applied_event_ids == ()
+    assert len(first.initialization_event_ids) == 6
+    assert len(first.applied_event_ids) == 2
+    assert set(first.initialization_event_ids) | set(first.applied_event_ids) == set(
+        first.prefix.accepted_event_ids
+    )
     processor = CausalRetardedTimeEKF(
         stations, measurements, estimator_variant="direct"
     )
@@ -245,7 +252,13 @@ def test_late_delivery_updates_current_state_without_reversing_filter_time():
     updated = processor.advance_to(cutoff + 2.0)
     assert updated.state.reference_time_s == cutoff + 2.0
     assert any(item.event_id == bearing_event_id(late) for item in updated.update_diagnostics)
-    assert all(item.prior_state.reference_time_s == cutoff + 2.0 for item in updated.update_diagnostics)
+    available_by_id = {
+        bearing_event_id(item): item.available_timestamp_s for item in events
+    }
+    assert all(
+        item.prior_state.reference_time_s == available_by_id[item.event_id]
+        for item in updated.update_diagnostics
+    )
 
 
 def test_exact_duplicate_is_not_double_counted_and_publications_are_immutable():
@@ -287,10 +300,22 @@ def test_late_conflict_of_used_event_invalidates_future_publication_not_past_one
     assert conflicted.failure_reason == "conflicted_used_event_requires_reinitialization"
     assert conflicted.state is None
     np.testing.assert_array_equal(published.state.vector, saved)
-    recovered = processor.advance_to(cutoff + 1.0)
+    repeated = processor.advance_to(cutoff + 1.0)
+    assert not repeated.valid
+    assert repeated.update_diagnostics == ()
+    recovery_time = min(
+        item.available_timestamp_s
+        for item in measurements
+        if item.available_timestamp_s > cutoff + 1.0
+    )
+    recovered = processor.advance_to(recovery_time)
     assert recovered.valid
     assert recovered.initialized
     assert bearing_event_id(used) not in recovered.initialization_event_ids
+    assert any(
+        item.action == "reinitialized_after_conflict"
+        for item in recovered.lifecycle_diagnostics
+    )
 
 
 def test_non_positive_definite_prior_covariance_is_rejected_without_regularization():
@@ -324,24 +349,37 @@ def test_rank_deficient_scene_remains_not_initialized():
     assert result.state is None
 
 
-def test_filter_initialization_matches_independent_batch_and_does_not_change_batch():
+def test_first_internal_initialization_prefix_matches_batch_and_does_not_change_batch():
     stations = _stations()
     truth = ConstantVelocityState([50.0, 40.0, 30.0], [5.0, -2.0, 1.0])
     measurements = _measurements(truth, stations)
-    processing_time = max(item.available_timestamp_s for item in measurements)
+    processing_time = sorted(
+        item.available_timestamp_s for item in measurements
+    )[5]
+    prefix_measurements = tuple(
+        item for item in measurements if item.available_timestamp_s <= processing_time
+    )
     before = estimate_retarded_constant_velocity_batch(
-        stations, measurements, reference_time_s=processing_time
+        stations, prefix_measurements, reference_time_s=processing_time
     )
     publication = CausalRetardedTimeEKF(
         stations, measurements, estimator_variant="direct"
     ).advance_to(processing_time)
     after = estimate_retarded_constant_velocity_batch(
-        stations, measurements, reference_time_s=processing_time
+        stations, prefix_measurements, reference_time_s=processing_time
     )
     assert before.valid and publication.valid and after.valid
     np.testing.assert_array_equal(before.state.vector, after.state.vector)
     np.testing.assert_array_equal(before.covariance_state_linearization, after.covariance_state_linearization)
-    np.testing.assert_array_equal(publication.state.vector, before.state.vector)
+    np.testing.assert_allclose(
+        publication.state.vector, before.state.vector, atol=2e-14, rtol=0.0
+    )
+    np.testing.assert_allclose(
+        publication.covariance_state,
+        before.covariance_state_linearization,
+        atol=2e-13,
+        rtol=0.0,
+    )
 
 
 def test_dropped_and_invalid_events_never_enter_initialization_or_updates():

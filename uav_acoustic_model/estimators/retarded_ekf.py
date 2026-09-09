@@ -377,6 +377,27 @@ class RetardedEKFInitializationCriteria:
 
 
 @dataclass(frozen=True, slots=True)
+class RetardedEKFEventRejection:
+    """Persistent diagnostic for one observation rejected by the C1 domain."""
+
+    processing_time_s: float
+    event_id: str
+    station_id: str
+    available_timestamp_s: float
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class RetardedEKFLifecycleDiagnostic:
+    """Persistent state invalidation/recovery record."""
+
+    processing_time_s: float
+    action: str
+    reason: str
+    event_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RetardedEKFPublication:
     """Immutable causal publication at one processor timestamp."""
 
@@ -390,6 +411,10 @@ class RetardedEKFPublication:
     initialization_event_ids: tuple[str, ...]
     applied_event_ids: tuple[str, ...]
     rejected_event_ids: tuple[str, ...]
+    event_rejections: tuple[RetardedEKFEventRejection, ...]
+    new_event_rejections: tuple[RetardedEKFEventRejection, ...]
+    lifecycle_diagnostics: tuple[RetardedEKFLifecycleDiagnostic, ...]
+    new_lifecycle_diagnostics: tuple[RetardedEKFLifecycleDiagnostic, ...]
     update_diagnostics: tuple[RetardedEKFUpdateResult, ...]
     propagation_dt_s: float
     initialization_runtime_s: float
@@ -399,7 +424,20 @@ class RetardedEKFPublication:
 
 
 class CausalRetardedTimeEKF:
-    """Causal event processor for the strict-CV retarded-time EKF baseline."""
+    """Causal strict-CV EKF with publication-schedule-independent replay.
+
+    ``advance_to(T)`` consumes every not-yet-processed availability group up
+    to ``T`` in chronological order.  The filter initializes at the first
+    eligible internal prefix that passes the fixed gates and applies later
+    groups as EKF updates.  Only after that replay is the estimate propagated
+    to the requested publication epoch.  Consequently, frequent, sparse and
+    one-shot publication schedules produce the same state and covariance at a
+    common epoch (up to floating-point roundoff).
+
+    Unknown stations and observations outside the positive-definite C1
+    covariance domain are rejected individually and retained in
+    ``event_rejections``.  They do not poison an otherwise usable prefix.
+    """
 
     def __init__(
         self,
@@ -427,8 +465,11 @@ class CausalRetardedTimeEKF:
         self._processed_ids: set[str] = set()
         self._initialization_ids: set[str] = set()
         self._applied_ids: set[str] = set()
-        self._rejected_ids: set[str] = set()
+        self._event_rejections_by_id: dict[str, RetardedEKFEventRejection] = {}
+        self._event_rejection_history: list[RetardedEKFEventRejection] = []
+        self._lifecycle_history: list[RetardedEKFLifecycleDiagnostic] = []
         self._recovery_pending = False
+        self._state_failure_reason = "not_initialized"
         self._last_processing_time = float("-inf")
         self._publications: list[RetardedEKFPublication] = []
 
@@ -442,28 +483,36 @@ class CausalRetardedTimeEKF:
         started: float,
         processing_time: float,
         prefix: BearingEventPrefix,
+        publication_state: ConstantVelocityState | None,
+        publication_covariance: NDArray[np.float64] | None,
         valid: bool,
         failure_reason: str | None,
         updates: Sequence[RetardedEKFUpdateResult] = (),
+        new_event_rejections: Sequence[RetardedEKFEventRejection] = (),
+        new_lifecycle_diagnostics: Sequence[RetardedEKFLifecycleDiagnostic] = (),
         propagation_dt_s: float = 0.0,
         initialization_runtime_s: float = 0.0,
         initialization_batch: RetardedBatchResult | None = None,
     ) -> RetardedEKFPublication:
         publication = RetardedEKFPublication(
             processing_time_s=processing_time,
-            initialized=self._state is not None,
+            initialized=publication_state is not None,
             valid=valid,
             failure_reason=failure_reason,
-            state=self._state,
+            state=publication_state,
             covariance_state=(
-                _readonly(self._covariance)
-                if self._covariance is not None
+                _readonly(publication_covariance)
+                if publication_covariance is not None
                 else _readonly(np.full((6, 6), np.nan))
             ),
             prefix=prefix,
             initialization_event_ids=tuple(sorted(self._initialization_ids)),
             applied_event_ids=tuple(sorted(self._applied_ids)),
-            rejected_event_ids=tuple(sorted(self._rejected_ids)),
+            rejected_event_ids=tuple(sorted(self._event_rejections_by_id)),
+            event_rejections=tuple(self._event_rejection_history),
+            new_event_rejections=tuple(new_event_rejections),
+            lifecycle_diagnostics=tuple(self._lifecycle_history),
+            new_lifecycle_diagnostics=tuple(new_lifecycle_diagnostics),
             update_diagnostics=tuple(updates),
             propagation_dt_s=float(propagation_dt_s),
             initialization_runtime_s=float(initialization_runtime_s),
@@ -475,16 +524,95 @@ class CausalRetardedTimeEKF:
         self._last_processing_time = processing_time
         return publication
 
-    def advance_to(self, processing_time_s: float) -> RetardedEKFPublication:
-        """Advance causally and publish a new immutable filter result."""
+    def _reject_measurement(
+        self,
+        measurement: BearingMeasurement,
+        processing_time_s: float,
+        reason: str,
+    ) -> RetardedEKFEventRejection | None:
+        identity = bearing_event_id(measurement)
+        if identity in self._event_rejections_by_id:
+            return None
+        diagnostic = RetardedEKFEventRejection(
+            processing_time_s=float(processing_time_s),
+            event_id=identity,
+            station_id=measurement.station_id,
+            available_timestamp_s=measurement.available_timestamp_s,
+            reason=str(reason),
+        )
+        self._event_rejections_by_id[identity] = diagnostic
+        self._event_rejection_history.append(diagnostic)
+        return diagnostic
 
-        started = time.perf_counter()
-        processing_time = float(processing_time_s)
-        if not np.isfinite(processing_time):
-            raise ValueError("processing_time_s must be finite")
-        if processing_time < self._last_processing_time:
-            raise ValueError("processing time cannot move backwards")
-        prefix = self._stream.advance_to(processing_time)
+    def _eligible_measurements(
+        self,
+        prefix: BearingEventPrefix,
+        processing_time_s: float,
+    ) -> tuple[tuple[BearingMeasurement, ...], tuple[RetardedEKFEventRejection, ...]]:
+        eligible: list[BearingMeasurement] = []
+        new_rejections: list[RetardedEKFEventRejection] = []
+        for measurement in prefix.measurements:
+            identity = bearing_event_id(measurement)
+            if identity in self._event_rejections_by_id:
+                continue
+            if measurement.station_id not in self._station_map:
+                diagnostic = self._reject_measurement(
+                    measurement, processing_time_s, "unknown_station_id"
+                )
+                if diagnostic is not None:
+                    new_rejections.append(diagnostic)
+                continue
+            try:
+                _positive_definite(
+                    measurement.covariance_tangent_rad2,
+                    (2, 2),
+                    name="observation_covariance",
+                )
+            except ValueError:
+                diagnostic = self._reject_measurement(
+                    measurement,
+                    processing_time_s,
+                    "unsupported_singular_covariance",
+                )
+                if diagnostic is not None:
+                    new_rejections.append(diagnostic)
+                continue
+            eligible.append(measurement)
+        return tuple(eligible), tuple(new_rejections)
+
+    def _record_lifecycle(
+        self,
+        processing_time_s: float,
+        action: str,
+        reason: str,
+        event_ids: Sequence[str] = (),
+    ) -> RetardedEKFLifecycleDiagnostic:
+        diagnostic = RetardedEKFLifecycleDiagnostic(
+            processing_time_s=float(processing_time_s),
+            action=str(action),
+            reason=str(reason),
+            event_ids=tuple(sorted(event_ids)),
+        )
+        self._lifecycle_history.append(diagnostic)
+        return diagnostic
+
+    def _process_availability_group(
+        self,
+        processing_time_s: float,
+        prefix: BearingEventPrefix,
+    ) -> tuple[
+        tuple[RetardedEKFUpdateResult, ...],
+        tuple[RetardedEKFEventRejection, ...],
+        tuple[RetardedEKFLifecycleDiagnostic, ...],
+        float,
+        RetardedBatchResult | None,
+    ]:
+        """Consume one complete equal-availability group."""
+
+        new_lifecycle: list[RetardedEKFLifecycleDiagnostic] = []
+        eligible, new_rejections = self._eligible_measurements(
+            prefix, processing_time_s
+        )
         active_ids = set(prefix.accepted_event_ids)
         invalidated_used = (
             self._initialization_ids | self._applied_ids
@@ -495,50 +623,35 @@ class CausalRetardedTimeEKF:
             self._processed_ids.clear()
             self._initialization_ids.clear()
             self._applied_ids.clear()
-            self._rejected_ids.clear()
             self._recovery_pending = True
-            return self._publish(
-                started=started,
-                processing_time=processing_time,
-                prefix=prefix,
-                valid=False,
-                failure_reason="conflicted_used_event_requires_reinitialization",
+            self._state_failure_reason = (
+                "conflicted_used_event_requires_reinitialization"
             )
-
-        if self._state is None:
-            if self._recovery_pending:
-                self._recovery_pending = False
-            for measurement in prefix.measurements:
-                try:
-                    _positive_definite(
-                        measurement.covariance_tangent_rad2,
-                        (2, 2),
-                        name="observation_covariance",
-                    )
-                except ValueError:
-                    return self._publish(
-                        started=started,
-                        processing_time=processing_time,
-                        prefix=prefix,
-                        valid=False,
-                        failure_reason="unsupported_singular_covariance",
-                    )
-            if len(prefix.measurements) < self._criteria.minimum_measurement_count:
-                return self._publish(
-                    started=started,
-                    processing_time=processing_time,
-                    prefix=prefix,
-                    valid=False,
-                    failure_reason="not_initialized",
+            new_lifecycle.append(
+                self._record_lifecycle(
+                    processing_time_s,
+                    "state_invalidated",
+                    self._state_failure_reason,
+                    invalidated_used,
                 )
+            )
+            return (), new_rejections, tuple(new_lifecycle), 0.0, None
+
+        initialization_runtime = 0.0
+        initialization_batch: RetardedBatchResult | None = None
+        if self._state is None:
+            if len(eligible) < self._criteria.minimum_measurement_count:
+                self._state_failure_reason = "not_initialized"
+                return (), new_rejections, (), 0.0, None
             initialization_started = time.perf_counter()
-            batch = estimate_retarded_constant_velocity_batch(
+            initialization_batch = estimate_retarded_constant_velocity_batch(
                 self._stations,
-                prefix.measurements,
-                reference_time_s=processing_time,
+                eligible,
+                reference_time_s=processing_time_s,
                 sound_speed=self._sound_speed,
             )
             initialization_runtime = time.perf_counter() - initialization_started
+            batch = initialization_batch
             acceptable = (
                 batch.valid
                 and batch.local_observability_rank
@@ -552,14 +665,13 @@ class CausalRetardedTimeEKF:
             )
             if not acceptable or batch.state is None:
                 reason = batch.failure_reason or "initialization_quality_gate_failed"
-                return self._publish(
-                    started=started,
-                    processing_time=processing_time,
-                    prefix=prefix,
-                    valid=False,
-                    failure_reason=f"initialization_failed:{reason}",
-                    initialization_runtime_s=initialization_runtime,
-                    initialization_batch=batch,
+                self._state_failure_reason = f"initialization_failed:{reason}"
+                return (
+                    (),
+                    new_rejections,
+                    (),
+                    initialization_runtime,
+                    initialization_batch,
                 )
             try:
                 covariance = _positive_definite(
@@ -568,47 +680,61 @@ class CausalRetardedTimeEKF:
                     name="initialization_covariance",
                 )
             except ValueError:
-                return self._publish(
-                    started=started,
-                    processing_time=processing_time,
-                    prefix=prefix,
-                    valid=False,
-                    failure_reason="initialization_failed:non_positive_definite_covariance",
-                    initialization_runtime_s=initialization_runtime,
-                    initialization_batch=batch,
+                self._state_failure_reason = (
+                    "initialization_failed:non_positive_definite_covariance"
                 )
+                return (
+                    (),
+                    new_rejections,
+                    (),
+                    initialization_runtime,
+                    initialization_batch,
+                )
+            was_recovery = self._recovery_pending
             self._state = batch.state
             self._covariance = _readonly(covariance)
-            self._initialization_ids = set(prefix.accepted_event_ids)
-            self._processed_ids = set(prefix.accepted_event_ids)
-            return self._publish(
-                started=started,
-                processing_time=processing_time,
-                prefix=prefix,
-                valid=True,
-                failure_reason=None,
-                initialization_runtime_s=initialization_runtime,
-                initialization_batch=batch,
+            self._initialization_ids = {
+                bearing_event_id(measurement) for measurement in eligible
+            }
+            self._processed_ids = set(self._initialization_ids)
+            self._recovery_pending = False
+            self._state_failure_reason = None
+            action = "reinitialized_after_conflict" if was_recovery else "initialized"
+            new_lifecycle.append(
+                self._record_lifecycle(
+                    processing_time_s,
+                    action,
+                    "eligible_prefix_passed_fixed_initialization_gates",
+                    self._initialization_ids,
+                )
+            )
+            return (
+                (),
+                new_rejections,
+                tuple(new_lifecycle),
+                initialization_runtime,
+                initialization_batch,
             )
 
         assert self._covariance is not None
-        previous_time = self._state.reference_time_s
-        self._state, self._covariance, _ = propagate_constant_velocity_estimate(
-            self._state, self._covariance, processing_time
-        )
+        if processing_time_s > self._state.reference_time_s:
+            self._state, self._covariance, _ = propagate_constant_velocity_estimate(
+                self._state, self._covariance, processing_time_s
+            )
         pending = sorted(
             (
-                item
-                for item in prefix.measurements
-                if bearing_event_id(item) not in self._processed_ids
+                measurement
+                for measurement in eligible
+                if bearing_event_id(measurement) not in self._processed_ids
             ),
-            key=lambda item: (
-                item.available_timestamp_s,
-                bearing_event_id(item),
-                item.reception_center_timestamp_s,
+            key=lambda measurement: (
+                measurement.available_timestamp_s,
+                bearing_event_id(measurement),
+                measurement.reception_center_timestamp_s,
             ),
         )
-        diagnostics: list[RetardedEKFUpdateResult] = []
+        updates: list[RetardedEKFUpdateResult] = []
+        mutable_rejections = list(new_rejections)
         for measurement in pending:
             identity = bearing_event_id(measurement)
             station = self._station_map[measurement.station_id]
@@ -619,30 +745,107 @@ class CausalRetardedTimeEKF:
                 measurement,
                 sound_speed=self._sound_speed,
             )
-            diagnostics.append(update)
+            updates.append(update)
             self._processed_ids.add(identity)
             if update.update_applied:
                 self._state = update.posterior_state
                 self._covariance = update.posterior_covariance
                 self._applied_ids.add(identity)
             else:
-                self._rejected_ids.add(identity)
-        rejected = [item.failure_reason for item in diagnostics if not item.valid]
+                diagnostic = self._reject_measurement(
+                    measurement,
+                    processing_time_s,
+                    update.failure_reason or "measurement_update_rejected",
+                )
+                if diagnostic is not None:
+                    mutable_rejections.append(diagnostic)
+        self._state_failure_reason = None
+        return (
+            tuple(updates),
+            tuple(mutable_rejections),
+            (),
+            0.0,
+            None,
+        )
+
+    def advance_to(self, processing_time_s: float) -> RetardedEKFPublication:
+        """Replay all internal delivery groups through ``T`` and publish.
+
+        External call frequency affects only how many immutable publications
+        are returned and runtime grouping.  It does not change the first
+        eligible initialization prefix or the ordered measurement posterior.
+        """
+
+        started = time.perf_counter()
+        processing_time = float(processing_time_s)
+        if not np.isfinite(processing_time):
+            raise ValueError("processing_time_s must be finite")
+        if processing_time < self._last_processing_time:
+            raise ValueError("processing time cannot move backwards")
+        previous_publication_time = self._last_processing_time
+        updates: list[RetardedEKFUpdateResult] = []
+        new_rejections: list[RetardedEKFEventRejection] = []
+        new_lifecycle: list[RetardedEKFLifecycleDiagnostic] = []
+        initialization_runtime = 0.0
+        initialization_batch: RetardedBatchResult | None = None
+        while True:
+            next_time = self._stream.next_available_timestamp_s
+            if next_time is None or next_time > processing_time:
+                break
+            group_prefix = self._stream.advance_to(next_time)
+            (
+                group_updates,
+                group_rejections,
+                group_lifecycle,
+                group_initialization_runtime,
+                group_initialization_batch,
+            ) = self._process_availability_group(next_time, group_prefix)
+            updates.extend(group_updates)
+            new_rejections.extend(group_rejections)
+            new_lifecycle.extend(group_lifecycle)
+            initialization_runtime += group_initialization_runtime
+            if group_initialization_batch is not None:
+                initialization_batch = group_initialization_batch
+
+        prefix = self._stream.advance_to(processing_time)
+        publication_state: ConstantVelocityState | None = None
+        publication_covariance: NDArray[np.float64] | None = None
+        propagation_dt = 0.0
+        if self._state is not None:
+            assert self._covariance is not None
+            publication_state, publication_covariance, _ = (
+                propagate_constant_velocity_estimate(
+                    self._state, self._covariance, processing_time
+                )
+            )
+            propagation_dt = processing_time - self._state.reference_time_s
+        elif np.isfinite(previous_publication_time):
+            propagation_dt = processing_time - previous_publication_time
         return self._publish(
             started=started,
             processing_time=processing_time,
             prefix=prefix,
-            valid=not rejected,
-            failure_reason=rejected[0] if rejected else None,
-            updates=diagnostics,
-            propagation_dt_s=processing_time - previous_time,
+            publication_state=publication_state,
+            publication_covariance=publication_covariance,
+            valid=publication_state is not None,
+            failure_reason=(
+                None if publication_state is not None else self._state_failure_reason
+            ),
+            updates=updates,
+            new_event_rejections=new_rejections,
+            new_lifecycle_diagnostics=new_lifecycle,
+            propagation_dt_s=propagation_dt,
+            initialization_runtime_s=initialization_runtime,
+            initialization_batch=initialization_batch,
         )
 
 
 __all__ = [
     "CausalRetardedTimeEKF",
     "LinearizedResidualUpdate",
+    "RetardedEKFEventRejection",
     "RetardedEKFInitializationCriteria",
+    "RetardedEKFLifecycleDiagnostic",
     "RetardedEKFPublication",
     "RetardedEKFUpdateResult",
     "joseph_residual_update",

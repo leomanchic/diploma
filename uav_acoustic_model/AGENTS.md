@@ -134,3 +134,14 @@
   `x_post=x_prior-K*e` and Joseph covariance update. Do not claim manoeuvre
   support, process noise, smoothing, real-audio tracking, or completion of all
   S7C-C work from this limited baseline.
+- In S7C-C1, `advance_to(T)` must replay every complete availability group up
+  to `T` before publishing. External publication frequency must not select the
+  initialization prefix or repartition measurement updates. Resolve a whole
+  equal-time group before estimation and keep event-free publication
+  propagation separate from the internal event posterior.
+- Preserve the raw event journal but construct the C1 eligible set separately.
+  Reject unknown stations and non-positive-definite tangent covariances per
+  event with persistent IDs/reasons; never let one unsupported observation
+  poison later eligible initialization or invalidate an otherwise valid state.
+  Conflict invalidation/recovery must remain auditable. C1 final P95 uses
+  explicit linear interpolation over one final error per independent sequence.
