@@ -145,3 +145,19 @@
   poison later eligible initialization or invalidate an otherwise valid state.
   Conflict invalidation/recovery must remain auditable. C1 final P95 uses
   explicit linear interpolation over one final error per independent sequence.
+- S7C-D1 is a validation-only stress benchmark of the unchanged strict-CV C1
+  baseline. Keep `Q=0`, the existing update, initialization gates, and nominal
+  positive-definite tangent `R`; do not add outlier rejection, NIS gating,
+  adaptive covariance, smoothing, or manoeuvre dynamics during D1.
+- Generate D1 truth, nominal bearing noise, transport loss, delay, outlier
+  mask, and outlier direction from separate structured seed streams before a
+  profile is selected. The nine profiles within one base block are paired, not
+  independent trials; confidence intervals and bootstrap units are whole base
+  sequences. Missing events must not enter the estimator, and outlier truth
+  must remain evaluator-only metadata.
+- D1 causal results use fixed external epochs and may consume only events whose
+  availability time has passed. The no-update baseline originates from the
+  immutable first accepted EKF initialization batch, not from a state that has
+  already received updates. Label the full-record batch as offline and
+  noncausal. Report conditional error/coverage together with all-sequence
+  denominators and explicit failure reasons; use linear P95.

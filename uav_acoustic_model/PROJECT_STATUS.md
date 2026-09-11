@@ -1,19 +1,122 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-09
+Последнее обновление: 2026-09-11
 
 ## Текущий этап
 
-Текущий этап: **S7C-C1 — causal retarded-time EKF baseline under strict
-constant velocity** в составе S7C-C.
+Текущий этап: **S7C-D1 — stress benchmark принятого strict-CV C1 baseline**.
 
-Статус S7C-C1: **Done** после corrective review gate. Первый рекурсивный центральный оцениватель по
+Статус S7C-D1: **Done**. S7C-C1 остаётся **Done** после corrective
+review gate. Первый рекурсивный центральный оцениватель по
 асинхронным bearing-событиям трёх станций принят при `Q=0`, известном
 постоянном `c` и прямых bearing-level наблюдениях. Общий S7C-C остаётся
 **In progress**: process noise, манёвры, outlier/dropout robustness и
-signal-level multi-station frontend не входят в C1 и не заявлены. S7C-B
+signal-level multi-station frontend не входят в C1 и не заявлены. D1 только
+измеряет поведение неизменённого baseline при нарушениях потока и Gaussian
+observation model; он не добавляет robustness-алгоритм. S7C-B
 сохраняет статус **Done** после повторного входного gate на ветке
 `feature/s7c-c1-retarded-ekf`.
+
+### Журнал S7C-D1
+
+- 2026-09-10 — входная база подтверждена: clean commit
+  `dd927d0b65c6210e7cee1bbe2d2418b44a333cfd`, ветка
+  `feature/s7c-d1-stress-benchmark`. До просмотра финальных результатов
+  зафиксирован [S7C_D1_PROTOCOL.md](S7C_D1_PROTOCOL.md): две геометрии,
+  100 независимых whole sequences/geometry, девять парных stress profiles,
+  200 независимых base blocks и 1800 зависимых profile-runs. Structured RNG
+  раздельно задаёт truth, nominal bearing noise, loss, delay, outlier mask и
+  outlier direction; общий noise внутри блока является намеренным paired
+  design. Full Monte Carlo ещё не запущен, статус остаётся **In progress**.
+- 2026-09-10 — реализован validation-only генератор D1: 45 потенциальных
+  событий строятся из общих до выбора профиля truth/noise/uniform-компонент,
+  пропуски физически отсутствуют во входе оценивателя, а выброс применяется
+  одним spherical exp-map и не раскрывается через `BearingMeasurement`.
+  Первый deterministic gate после structural-audit regression: **11 passed in
+  2.53s**. Проверены loss 0/1,
+  включительные gap-границы, delay bounds, seed collision/reproducibility,
+  причинность, schedule invariance state/P, аналитический `F P F^T`,
+  one-station stationary/radial rank deficiency, происхождение no-update
+  baseline и conditional/unconditional denominators с linear P95. Full
+  Monte Carlo ещё не запускался.
+- 2026-09-10 — smoke gate на двух независимых whole sequences для каждой
+  геометрии прошёл: 4 base blocks, 36 парных profile-runs и четыре метода на
+  профиль. Structural audit подтвердил ожидаемые 1476 epoch-summary, 144
+  sequence-result, 126 profile-summary и 4 seed-provenance строки, 24/24
+  уникальных mechanism seeds, причинный предел timestamps и полное разбиение
+  доставленных EKF-событий. Во время smoke исправлена только отчётность:
+  исторические initialization IDs теперь берутся из неизменяемой первой
+  принятой batch-инициализации, поскольку поздняя invalid publication может
+  не хранить active-state initialization IDs. Математика EKF не менялась.
+  Full Monte Carlo ещё не запускался.
+- 2026-09-10 — полный замороженный D1 benchmark выполнен: **200 независимых
+  base blocks** (100/geometry), **1800 парных profile-runs**, 7200
+  sequence-method результатов, 1476 epoch aggregates, 126 profile aggregates
+  и 200 provenance-строк. Все 1200 mechanism seeds уникальны; нарушений
+  разбиения `potential=delivered+lost`, causal timestamp или provenance нет.
+  Causal-prefix batch и отдельно маркированный offline full-record batch на
+  14.5 s совпали точно по position/velocity error (`max difference = 0`).
+- 2026-09-10 — nominal final EKF при 14.5 s имеет valid `1.00/1.00`, position
+  RMSE/P95 `0.755710/1.277699 m` (informative) и `0.536089/0.849089 m`
+  (poorly-conditioned), velocity RMSE `0.072936/0.057025 m/s`; unconditional
+  valid-and-covered `0.96/0.94`. Dropout 50% сохраняет valid `1.00/1.00`, но
+  position RMSE возрастает до `1.175664/0.826065 m`. All-station gap даёт
+  среднюю position error в конце паузы `3.035035/3.488783 m`, а на первой
+  заранее заданной эпохе после следующего использованного observation —
+  `1.447162/1.504769 m`; среднее время до него `0.344596/0.350774 s`. Это
+  диагностическое сравнение, не заранее определённая гарантия recovery.
+- 2026-09-10 — контролируемое нарушение Gaussian-модели обнаруживает предел
+  baseline. Mild 5° outliers сохраняют valid `1.00`, но unconditional coverage
+  падает до `0.25/0.27`, а mean pre-update NIS возрастает до `11.507/10.891`.
+  Strong 20° outliers дают valid `0.57/0.53`, position RMSE среди valid
+  `7.791918/5.094362 m`, unconditional coverage `0.00/0.02` и mean NIS
+  `303.225/260.564`. Mixed даёт valid `0.75/0.77`, position RMSE
+  `5.873203/4.226248 m`, coverage `0.19/0.15`. Парные bootstrap 95% CI для
+  потери valid относительно nominal: strong `[-0.53,-0.34]`/`[-0.57,-0.37]`,
+  mixed `[-0.34,-0.17]`/`[-0.32,-0.15]`. Это зафиксированный failure mode,
+  а не основание для post-hoc настройки C1.
+- 2026-09-10 — covariance audit валидных final EKF результатов: symmetry
+  error `0`, minimum eigenvalue `4.78563e-5`, maximum finite condition number
+  `1.14826e4`; NIS определён для 52858 update attempts и не был скрыто
+  отфильтрован (`undefined=0`). Среднее полное processing time на одну
+  sequence/profile равнялось `0.731939 s`, P95 `7.163695 s`, maximum
+  `11.226545 s`; этот первый timing заменён финальным изолированным
+  прогоном ниже. Эти offline Python timings не доказывают real-time
+  readiness.
+- 2026-09-10 — отдельный data-quality gate обнаружил и исправил только
+  endpoint-roundoff Wilson interval: при `0/100` нижняя граница была
+  `3.46945e-18`, а при `100/100` одна upper boundary округлялась ниже 1.
+  Формула теперь явно возвращает 0/1 на соответствующих endpoints; численные
+  исходы Monte Carlo, оценки и covariance не менялись. Regression suite D1:
+  **12 passed in 2.49s**; во всех epoch/profile строках CI теперь содержат
+  оценку и лежат в вероятностном support.
+- 2026-09-10 — перед финальной приёмкой закрыт reporting gap: epoch CSV ранее
+  сохранял только `available_measurement_count`, тогда как протокол требует
+  раздельные event counters на общих эпохах. Добавлены min/mean/max для
+  potential, full-profile delivered/lost, causally available и method-specific
+  used/initialization/update/rejected/quarantined/unprocessed counts. Smoke
+  4/4 blocks прошёл усиленный partition audit.
+- 2026-09-11 — corrected full reporting rerun завершён с теми же truth/noise
+  seeds, профилями и неизменной математикой EKF: 200/200 base blocks,
+  1800 paired profile-runs. Итоговые CSV имеют размеры
+  epoch/sequence/profile/provenance `1476/7200/126/200`; все 1200
+  mechanism seeds уникальны. Нарушений event partitions, causal timestamps,
+  Wilson bounds или CI ordering нет. Максимум различия финальных
+  causal-prefix/offline batch error/NEES равен `0`. Новые epoch event
+  counters — только reporting-поля; все основные state/error/coverage/NIS
+  результаты совпали с первым полным прогоном. В изолированном
+  запуске mean/P95/max total processing runtime равны
+  `0.808915/8.598511/11.858379 s`, mean measurement-update runtime
+  `0.023722 s`.
+- 2026-09-11 — финальный gate S7C-D1 закрыт. Полный `pytest`: **390 passed
+  in 96.18s**. Все **16/16 committed notebooks** выполнены в текущей
+  логической цепочке; для D1 notebook после финального CSV rerun
+  повторён `nbconvert` и проверены 16/16 cell IDs, nbformat, нуль error
+  outputs и нуль невыполненных code cells. Полный GCC notebook с 210000
+  trials завершился за `2583.961 s`; его артефакты и все прежние tracked
+  CSV не изменены. S7C-D1 = **Done**; S7C-C и S7C-D остаются **In
+  progress**. Ни robust outlier handling, ни `Q>0`, ни manoeuvre model на этом
+  этапе не добавлены.
 
 ### Журнал S7C-C1
 
