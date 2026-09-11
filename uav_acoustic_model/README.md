@@ -5,10 +5,11 @@
 
 Конечная цель — воспроизводимая система из трёх пространственно разнесённых
 микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
-фундамент S7B и retarded-time measurement model S7C-A завершены. Текущий
-S7C-B проверяет причинный асинхронный event stream и пакетную оценку одного
-строго constant-velocity 6D-состояния. Это **batch constant-velocity state
-estimate**, не recursive tracking. EKF/UKF, process noise и S7C-C не начаты.
+фундамент S7B, retarded-time measurement model S7C-A, причинный event stream
+S7C-B и ограниченный strict-CV EKF baseline S7C-C1 завершены. S7C-D1
+завершён как количественная проверка неизменённого C1 при потерях, паузах станций, задержках
+и выбросах. Это stress benchmark при `Q=0`, а не добавление робастного фильтра
+или манёвренной модели; весь S7C-C и S7C-D не объявлены завершёнными.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -562,3 +563,48 @@ review: [S7C_C1_REVIEW_FIXES.md](S7C_C1_REVIEW_FIXES.md).
 Эти результаты относятся только к синтетическим direct bearing-level
 наблюдениям строгой constant-velocity модели и не доказывают качество на
 манёврах или реальном многоканальном аудио.
+
+## Strict-CV EKF stress benchmark S7C-D1
+
+Протокол до просмотра финальных результатов зафиксирован в
+[S7C_D1_PROTOCOL.md](S7C_D1_PROTOCOL.md). Он использует informative и
+poorly-conditioned геометрии, 100 независимых whole sequences на геометрию и
+девять парных профилей: nominal, dropout 20/50%, пауза одной/всех станций,
+long delay, mild/strong outliers и mixed. Итого независимы 200 base blocks;
+1800 profile-runs внутри них являются зависимыми парными сравнениями.
+
+Сравниваются неизменённый retarded-time EKF, causal-prefix batch и прогноз от
+той же первой принятой batch-инициализации без updates. Full-record batch
+сохраняется отдельно как непричинный reference. Пропущенные события не
+передаются оценивателю, а outlier mask/direction остаются только у evaluator.
+Truth, nominal noise, loss, delay, outlier mask и outlier direction имеют
+раздельные `SeedSequence`-потоки. Выброс нарушает номинальную Gaussian-модель,
+но переданная фильтру `R` намеренно не увеличивается.
+
+Полный воспроизводимый запуск:
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.retarded_ekf_stress_study --sequence-count 100 --workers 8 --output-directory results
+```
+
+Результаты разделены на epoch-, whole-sequence-, profile- и seed-provenance
+CSV. P95 использует `method="linear"`; доли и Wilson intervals считают whole
+sequences, а paired bootstrap сохраняет общий base block. Acceptance D1
+означает корректность эксперимента, а не требование хорошего поведения
+неизменённого фильтра при выбросах.
+
+Epoch CSV различает full-profile `delivered/lost` и доступный к данной эпохе
+causal prefix. Для каждого метода он хранит min/mean/max event counts по whole
+sequences: used, initialization, update, rejected, quarantined и remaining
+unprocessed. Это позволяет проверить отсутствие future access и не смешивать
+исторические lifecycle counters с разбиением текущего доступного prefix.
+
+В зафиксированном запуске nominal/dropout/gap/long-delay профили сохранили
+final EKF valid fraction 1.0 в обеих геометриях. Однако mild 5° outliers уже
+снизили unconditional 95% coverage до 0.25/0.27. Strong 20° outliers снизили
+valid fraction до 0.57/0.53, coverage до 0.00/0.02 и дали conditional position
+RMSE 7.79/5.09 m; mixed дал valid 0.75/0.77 и RMSE 5.87/4.23 m. Это прямой
+предел применимости C1 без outlier handling, а не отрицательный acceptance
+result D1. Имена геометрий описывают заранее заданные station layouts; более
+низкая ошибка одной layout в этой конкретной truth/noise сетке не является
+универсальным утверждением о превосходстве геометрии.
