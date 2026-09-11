@@ -109,7 +109,8 @@ observation model; он не добавляет robustness-алгоритм. S7C
   `0.808915/8.598511/11.858379 s`, mean measurement-update runtime
   `0.023722 s`.
 - 2026-09-11 — финальный gate S7C-D1 закрыт. Полный `pytest`: **390 passed
-  in 96.18s**. Все **16/16 committed notebooks** выполнены в текущей
+  in 96.18s**; `pip check`: `No broken requirements found`; working-tree и
+  staged `git diff --check`: PASS. Все **16/16 committed notebooks** выполнены в текущей
   логической цепочке; для D1 notebook после финального CSV rerun
   повторён `nbconvert` и проверены 16/16 cell IDs, nbformat, нуль error
   outputs и нуль невыполненных code cells. Полный GCC notebook с 210000
