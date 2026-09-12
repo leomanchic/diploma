@@ -36,7 +36,7 @@ bearing-измерениям определяет и затем причинно
 | S7C-B | Done | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, constrained retarded-time batch baseline | available-time causality, отсутствие future access, offline/final-prefix agreement и independent-sequence benchmark | S7C-A |
 | S7C-C | In progress | Реализовать центральную рекурсивную оценку по проверенным подэтапам | S7C-C1 strict-CV baseline и последующие явно отделённые расширения | отдельная приёмка constant-velocity baseline до process-noise/manoeuvre моделей | S7C-B |
 | S7C-C1 | Done | Реализовать причинный retarded-time EKF baseline при строгой constant velocity | `retarded_ekf.py`, deterministic tests, 96-sequence matched study и notebook | `Q=0`, causal batch initialization, Joseph update, PD covariance contract, sequence-level NIS/NEES/coverage | S7C-B |
-| S7C-D | In progress | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark и failure reporting | reproducible stress gates и явные ограничения | S7C-C |
+| S7C-D | In progress | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark, opt-in robust variants, confirmation/recovery и failure reporting | reproducible stress gates, causal event accounting, availability/error trade-off и явные ограничения | S7C-C |
 | S7C-D1 | Done | Измерить пределы принятого strict-CV C1 при потерях, паузах станций, задержках и выбросах без изменения фильтра | фиксированный протокол, paired 200-block/1800-run study, epoch/sequence/profile CSV и notebook | deterministic/smoke gates, честные denominators/coverage, полный reproducibility audit | S7C-C1 |
 | S7C-D2 | Done | Добавить явно включаемые robust initialization и pre-update NIS gate без изменения C1 default | consensus diagnostics, four-way ablation, paired held-out benchmark, CSV и notebook | baseline reproducibility, separate/combined mechanism tests, held-out whole-sequence comparison, full gates | S7C-D1 |
 | S8 | Planned | Добавить измеренные сигналы БПЛА и held-out datasets | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
@@ -80,7 +80,11 @@ sequences, `96/96` successful initialization/final-valid, полный pytest и
 15/15 notebooks PASS. Это не завершает весь S7C-C и не добавляет `Q>0` или
 поддержку манёвров. S7C-D1 завершён как отдельный стресс-бенчмарк уже принятого
 C1: 200 независимых base blocks, 1800 paired profile-runs и полный
-reproducibility/event-partition audit. S7C-D остаётся `In progress`;
+reproducibility/event-partition audit. Опубликованный D2 сохраняется отдельным
+вариантом; текущая corrective-реализация внутри S7C-D добавила подтверждение
+initial hypothesis независимыми последующими bearings и bounded causal
+recovery после наблюдаемой потери согласованности. Held-out benchmark использует
+новый seed, но не объявляет поддержку манёвров. S7C-D остаётся `In progress`;
 дальнейшие D-проверки манёвренных моделей зависят от соответствующего
 расширения S7C-C.
 

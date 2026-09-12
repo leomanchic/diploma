@@ -90,6 +90,17 @@ from .retarded_ekf_robust_study import (
     run_robust_scenario,
     summarize_robust_profiles,
 )
+from .initialization_recovery_study import (
+    DEVELOPMENT_SEED,
+    EVALUATION_SEED,
+    SMOKE_SEED,
+    VARIANTS as INITIALIZATION_RECOVERY_VARIANTS,
+    audit_recovery_results,
+    generate_known_failure_journal,
+    run_initialization_recovery_study,
+    run_recovery_scenario,
+    summarize_recovery_profiles,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -160,4 +171,13 @@ __all__ = [
     "run_retarded_ekf_robust_study",
     "run_robust_scenario",
     "summarize_robust_profiles",
+    "DEVELOPMENT_SEED",
+    "EVALUATION_SEED",
+    "SMOKE_SEED",
+    "INITIALIZATION_RECOVERY_VARIANTS",
+    "audit_recovery_results",
+    "generate_known_failure_journal",
+    "run_initialization_recovery_study",
+    "run_recovery_scenario",
+    "summarize_recovery_profiles",
 ]

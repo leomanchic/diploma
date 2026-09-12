@@ -53,6 +53,14 @@ from .retarded_ekf import (
     propagate_constant_velocity_estimate,
     update_retarded_ekf,
 )
+from .retarded_ekf_recovery import (
+    CausalConfirmedRetardedTimeEKF,
+    InitializationRecoveryConfig,
+    RecoveryEventUse,
+    RecoveryHypothesisDiagnostic,
+    RecoveryLifecycleDiagnostic,
+    RecoveryPublication,
+)
 from .wls_doa import (
     DOAEstimate,
     UnobservableGeometryError,
@@ -73,6 +81,8 @@ __all__ = [
     "RetardedBatchResult",
     "RetardedBatchSystem",
     "CausalRetardedTimeEKF",
+    "CausalConfirmedRetardedTimeEKF",
+    "InitializationRecoveryConfig",
     "LinearizedResidualUpdate",
     "RetardedEKFEventRejection",
     "RetardedEKFInitializationCriteria",
@@ -81,6 +91,10 @@ __all__ = [
     "RetardedEKFPublication",
     "RetardedEKFRobustnessConfig",
     "RetardedEKFUpdateResult",
+    "RecoveryEventUse",
+    "RecoveryHypothesisDiagnostic",
+    "RecoveryLifecycleDiagnostic",
+    "RecoveryPublication",
     "DisconnectedPairGraphError",
     "UnobservableGeometryError",
     "direct_gcc_phat_correlation",

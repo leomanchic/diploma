@@ -176,3 +176,20 @@
   evaluation. Pair variants on the identical event stream and bootstrap whole
   independent sequences. Report clean-data degradation and empirical coverage;
   observation selection does not by itself calibrate posterior covariance.
+- The S7C-D initialization-recovery correction is a separate opt-in estimator;
+  do not modify the C1 default or published D2 combined behavior. A hypothesis
+  is `tentative` until distinct later available events confirm it; tentative
+  state/covariance are diagnostics, not a valid tracking publication.
+- Select, confirm, invalidate, and recover using observable bearing/event data
+  only. Recompute final residual scores after batch refit and keep them
+  separate from preliminary and predictive-confirmation scores. Construction
+  and confirmation events form one batch and must never be replayed as EKF
+  updates.
+- Missing packets do not indicate inconsistency. A recovery reset requires a
+  frozen multi-station contradiction trigger, discards the old state/P, uses
+  only events strictly newer than the reset, and requires confirmation again.
+  Do not inflate covariance or combine a prior posterior with reused data.
+- Recovery evaluation remains paired by whole sequence. Report confirmed-time
+  availability, first-confirmation time, final validity, censored recovery,
+  false resets, conditional errors/coverage and unconditional denominators.
+  The 10/50 m tails are diagnostic thresholds, not operational requirements.

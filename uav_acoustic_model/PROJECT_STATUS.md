@@ -4,8 +4,8 @@
 
 ## Текущий этап
 
-Последний завершённый подэтап: **S7C-D2 — robust-bearing вариант strict-CV C1**.
-Общая работа S7C-D над устойчивостью остаётся текущим направлением.
+Текущая работа: **S7C-D initialization confirmation and causal recovery**.
+Это корректирующая работа внутри S7C-D, а не новый набор подэтапов.
 
 Статус S7C-D1: **Done**. S7C-D2: **Done**. S7C-C1 остаётся **Done** после corrective
 review gate. Первый рекурсивный центральный оцениватель по
@@ -18,7 +18,109 @@ observation model; он не добавляет robustness-алгоритм. S7C
 сохраняет статус **Done** после повторного входного gate на ветке
 `feature/s7c-c1-retarded-ekf`.
 
-### Журнал S7C-D2
+### Журнал S7C-D robustness и corrective recovery
+
+- 2026-09-12 — начат corrective gate от принятого commit
+  `979520a80aea5a2820ccdf61554a6f7c0c474fbe` в отдельной ветке
+  `feature/s7c-initialization-recovery`. C1 и опубликованный D2 остаются
+  воспроизводимыми вариантами; новый recovery-вариант будет только opt-in.
+  До фиксации протокола и нового held-out evaluation работа имеет статус
+  **In progress**. Не добавляются `Q>0`, манёвры, adaptive `Q/R` или
+  signal-level frontend.
+- 2026-09-12 — исходные D2 failures воспроизведены без изменения алгоритма.
+  Для `outlier_mild/informative/sequence=57` начальный six-event fit включил
+  два evaluator-only outliers, после чего было применено лишь 2 updates,
+  отклонено 37 и финальная ошибка позиции достигла `114.5200646 m`.
+  Для `poorly_conditioned/sequence=37` в initialization попал один outlier,
+  затем применено 0 updates, отклонено 39, финальная ошибка
+  `221.4304915 m`. Truth использовалась только после оценивания для пометки
+  журнала. Подтверждён failure mode: ошибочный prior вызывает длительный
+  reject-lock чистых bearings через pre-update NIS gate.
+- 2026-09-12 — реализован отдельный opt-in prototype с состояниями
+  `tentative/confirmed/questionable/recovering`, final batch-refit и раздельными
+  preliminary/confirmation/final residual scores. Профильные deterministic
+  gates нового пути и study-контракта: **13 passed in 31.93 s**; отдельный
+  совместный C1/D2 regression gate: **27 passed in 49.07 s**. На известных
+  failures текущая frozen-конфигурация дала final position error
+  `0.114007 m` и `0.797426 m`, без использования truth online.
+- 2026-09-12 — development study на seed `20260913`, `10` независимых
+  sequences/geometry завершён за `60.10 s`: `540` paired sequence rows,
+  `54` summaries и `20` provenance rows, structural audit PASS. Новый вариант
+  имел final valid `1.00` во всех 18 geometry/profile группах и ноль false
+  reset на clean profiles. Стоимость подтверждения не скрыта: nominal mean
+  confirmed-epoch fraction `0.71/0.70` против `0.84/0.84` у C1/D2.
+  После этого зафиксирован
+  [S7C_INITIALIZATION_RECOVERY_PROTOCOL.md](S7C_INITIALIZATION_RECOVERY_PROTOCOL.md):
+  6 construction + 3 independent confirmation bearings, лимит 16 candidates,
+  trigger recovery по 4 последовательным multi-station NIS rejects и новый
+  held-out seed `20260914`. Параметры после evaluation меняться не будут.
+- 2026-09-12 — добавлены compact evaluator-annotated журналы двух failures и
+  автоматические проверки frozen seeds, common streams, полного event
+  partition и численной неизменности C1/D2 путей. В журнале truth/outlier
+  label добавляется только после вызова estimator. Confirmation/recovery и
+  study gates: **13 passed**; held-out evaluation ещё не запускался, статус
+  остаётся **In progress**.
+- 2026-09-12 — frozen smoke gate на отдельном seed `20260915` прошёл за
+  `24.85 s`: 4 независимых base blocks, 36 paired profile-runs, 108
+  sequence-variant строк, 54 summaries и 4 provenance rows. Recovery-вариант
+  подтвердил финальное состояние в `36/36`, truth leakage и event-partition
+  violations — `0`; reset на этой малой smoke-выборке — `0`. C1 имел один
+  ожидаемо видимый invalid, поэтому smoke не подменяет held-out сравнение.
+  После этого protocol остаётся неизменным и разрешён финальный evaluation.
+- 2026-09-12 — frozen held-out evaluation на новом seed `20260914` завершён
+  без post-hoc настройки за `419.44 s`: 200 независимых base blocks, 1800
+  paired profile-runs, 5400 sequence-variant rows, 54 summaries и 200
+  provenance rows. Readback-аудит подтвердил `1200/1200` уникальных mechanism
+  seeds, общий поток трёх variants, полное разбиение delivered events и ноль
+  truth leakage. C1/D2 вызываются неизменёнными code paths.
+- 2026-09-12 — в ключевом `outlier_mild` recovery снизил conditional position
+  RMSE D2 с `16.668/21.840 m` до `0.781/0.593 m`, P95 с `1.533/1.097 m` до
+  `1.404/0.961 m`, maximum с `156.282/207.317 m` до `2.122/1.095 m` и доли
+  ошибок `>10 m`/`>50 m` с `0.02/0.02` и `0.03/0.02` до нуля для
+  informative/poorly-conditioned. Paired whole-sequence 95% CI разности RMSE
+  recovery−D2: `[-27.538, 0.001] m` и `[-36.709, 0.003] m`; редкие tails
+  делают interval широким и включающим около-ноль, поэтому dominance не
+  заявляется как универсальное.
+- 2026-09-12 — цена подтверждения видима в availability: для mild mean
+  confirmed-epoch fraction D2 `0.830/0.827`, recovery `0.707/0.684`; mean
+  first confirmation `2.087/2.084 s` против `3.672/3.972 s`. Final valid
+  recovery `0.99/1.00`; один informative mild run после единственного reset
+  остался censored recovery. Ещё один reset в poorly-conditioned strong был
+  успешно восстановлен. Всего по 1800 recovery profile-runs: 2 resets, 0
+  evaluator-classified false resets, 1 completed и 1 censored recovery.
+- 2026-09-12 — на clean nominal recovery сохранил final valid `1.00/1.00`,
+  position RMSE `0.755/0.565 m` против D2 `0.760/0.567 m`, conditional state
+  coverage `0.96/0.93` против `0.96/0.90`, но mean confirmed-epoch fraction
+  снизился `0.842/0.839 -> 0.716/0.705`. Это availability trade-off, а не
+  бесплатное улучшение. Во всех девяти профилях recovery maximum final error
+  не превысил `3.150/2.178 m`, final valid `0.998/0.999` в среднем по
+  informative/poorly-conditioned.
+- 2026-09-12 — новый affected notebook
+  `notebooks/initialization_recovery_validation.ipynb` выполнен: 10 cells,
+  6 code cells, nbformat valid, 0 error-output, 0 unexecuted code cells,
+  уникальные cell IDs; три сохранённых графика визуально проверены. Первый
+  запуск корректно остановился на незаявленном `pandas`; notebook переписан
+  на standard-library `csv` без изменения dependencies или численных CSV.
+  Полный pytest/pip/diff gate ещё не выполнен, S7C-D остаётся **In progress**.
+- 2026-09-12 — финальный corrective gate завершён: **415 passed in
+  143.28 s**; `pip check` — **No broken requirements found**;
+  `git diff --check` — PASS. Новый recovery notebook повторно выполнен
+  in-place, а неизменённый лёгкий D2 report — на временной копии; оба PASS.
+  On-disk audit всех **18/18** notebooks подтвердил валидный nbformat,
+  `0` error-output, `0` невыполненных непустых code cells и уникальные cell
+  IDs. Неизменённые тяжёлые GCC/SRP исследования по требованию не
+  пересчитывались. D1/D2/C1 CSV имеют нулевой diff от `979520a`.
+- 2026-09-12 — созданные артефакты: opt-in
+  `estimators/retarded_ekf_recovery.py`, paired study
+  `validation/initialization_recovery_study.py`, 13 новых deterministic/study
+  tests, frozen protocol, выполненный 10-cell notebook и четыре CSV:
+  5400 sequence rows, 54 summaries, 200 seed rows, 240 compact journal rows.
+  Средний runtime/sequence C1/D2/recovery равен
+  `0.755/0.290/0.674 s` для informative и `0.699/0.266/0.740 s` для
+  poorly-conditioned на данном Windows run; это implementation diagnostic, не
+  real-time guarantee. Corrective implementation завершена, но общий S7C-D
+  остаётся **In progress**: strict CV и `Q=0` не поддерживают манёвры;
+  adaptive `Q/R`, signal-level frontend и field calibration отсутствуют.
 
 - 2026-09-12 — входная база подтверждена: clean
   `2d499b61a458ccd43d46321f97dc20d1e76747e5`, новая ветка
