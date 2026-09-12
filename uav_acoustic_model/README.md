@@ -7,9 +7,12 @@
 микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
 фундамент S7B, retarded-time measurement model S7C-A, причинный event stream
 S7C-B и ограниченный strict-CV EKF baseline S7C-C1 завершены. S7C-D1
-завершён как количественная проверка неизменённого C1 при потерях, паузах станций, задержках
-и выбросах. Это stress benchmark при `Q=0`, а не добавление робастного фильтра
-или манёвренной модели; весь S7C-C и S7C-D не объявлены завершёнными.
+завершён как количественная проверка неизменённого C1 при потерях, паузах
+станций, задержках и выбросах; опубликованный D2 добавляет opt-in consensus и
+NIS gate. Текущая corrective-реализация внутри S7C-D добавляет tentative
+initialization confirmation и bounded causal recovery, сохраняя C1/D2 как
+отдельные воспроизводимые варианты. Это всё ещё `Q=0` и strict CV; весь S7C-C
+и S7C-D не объявлены завершёнными.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -405,6 +408,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   residual-sign update и Joseph covariance form; явно включаемый S7C-D2
   добавляет deterministic consensus initialization и pre-update NIS gate,
   не изменяя default C1;
+- `estimators/retarded_ekf_recovery.py` — отдельный opt-in lifecycle
+  `tentative/confirmed/questionable/recovering`, независимое подтверждение
+  initial hypothesis и bounded causal reinitialization без covariance inflation;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -442,6 +448,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `validation/retarded_ekf_robust_study.py` — frozen held-out four-way
   ablation C1/consensus/NIS/combined на одних потоках событий с whole-sequence
   paired bootstrap и evaluator-only outlier labels;
+- `validation/initialization_recovery_study.py` — frozen three-way
+  C1/published-D2/recovery evaluation, whole-sequence bootstrap, availability,
+  reset/recovery и compact failure-journal diagnostics;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `visualization/multistation_scene.py` — ENU station axes, bearing rays,
@@ -473,6 +482,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   NIS/NEES, sequence-level coverage, trajectory and marginal intervals;
 - `notebooks/retarded_ekf_robust_validation.ipynb` — S7C-D2 initialization,
   validity, conditional errors, coverage и outlier/false-rejection trade-off;
+- `notebooks/initialization_recovery_validation.ipynb` — held-out accuracy,
+  tails, availability/coverage и воспроизведение двух D2 reject-lock failures;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -511,6 +522,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_ekf_study import run_retarded_ekf_study; run_retarded_ekf_study()"
 .\.venv\Scripts\python.exe -m validation.retarded_ekf_robust_study --sequence-count 100 --base-seed 20260912 --workers 8 --output-directory results
+.\.venv\Scripts\python.exe validation\initialization_recovery_study.py --sequence-count 100 --base-seed 20260914 --workers 8 --output-directory results --progress
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -527,6 +539,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_ekf_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\retarded_ekf_robust_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\initialization_recovery_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -617,3 +630,34 @@ RMSE 7.79/5.09 m; mixed дал valid 0.75/0.77 и RMSE 5.87/4.23 m. Это пр�
 result D1. Имена геометрий описывают заранее заданные station layouts; более
 низкая ошибка одной layout в этой конкретной truth/noise сетке не является
 универсальным утверждением о превосходстве геометрии.
+
+## Подтверждение и восстановление инициализации S7C-D
+
+Frozen-протокол находится в
+[S7C_INITIALIZATION_RECOVERY_PROTOCOL.md](S7C_INITIALIZATION_RECOVERY_PROTOCOL.md).
+Новый вариант строит six-event hypothesis, публикует её только как
+`tentative`, требует три позже поступивших согласованных bearing от минимум
+двух станций и после подтверждения выполняет final batch-refit с повторным
+расчётом residual scores. Четыре последовательных multi-station NIS-отказа
+переводят состояние в `questionable`, удаляют старые state/P и запускают
+ограниченную реинициализацию только по свежим событиям. Пауза без пакетов не
+является противоречием. Ни одно событие не используется статистически дважды.
+
+Held-out evaluation использует seed `20260914`, 100 независимых whole
+sequences на каждую из двух геометрий, девять D1-профилей и общий поток для
+трёх вариантов. В `outlier_mild` recovery снизил conditional position RMSE с
+D2 `16.668/21.840 m` до `0.781/0.593 m`, а maximum — с
+`156.282/207.317 m` до `2.122/1.095 m` для informative/poorly-conditioned.
+Цена: mean confirmed-epoch fraction снизилась с D2 `0.830/0.827` до
+`0.707/0.684`, а mean first-confirmation time выросло с `2.087/2.084 s` до
+`3.672/3.972 s`. Recovery дал final-valid `0.99/1.00`; один informative mild
+run закончил censored recovery. Поэтому conditional error всегда читается
+вместе с availability и unconditional valid-and-covered fraction.
+
+Результаты хранятся в
+`results/initialization_recovery_sequence_results.csv`,
+`results/initialization_recovery_summary.csv`,
+`results/initialization_recovery_seed_provenance.csv` и
+`results/initialization_recovery_failure_journal.csv`. Truth/outlier labels в
+журнале являются только внешней evaluator-аннотацией. Это не поддержка
+манёвров, не adaptive `Q/R` и не signal-level acoustic frontend.
