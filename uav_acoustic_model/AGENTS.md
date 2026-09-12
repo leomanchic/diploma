@@ -161,3 +161,18 @@
   already received updates. Label the full-record batch as offline and
   noncausal. Report conditional error/coverage together with all-sequence
   denominators and explicit failure reasons; use linear P95.
+- S7C-D2 robustness is explicit opt-in behavior. The empty robustness
+  configuration must reproduce C1 numerically. Consensus initialization may
+  use only currently available measurements and observable event metadata;
+  record every used/excluded event and never reuse any successful
+  initialization-prefix event as an EKF update.
+- Compute the S7C-D2 NIS gate from the prior innovation before changing state.
+  A rejected event must retain the prior state/covariance exactly and keep a
+  persistent reason and finite NIS diagnostic. Preserve all attempted NIS,
+  including rejected measurements; do not compare the accepted-only
+  distribution directly with an untruncated chi-square law.
+- Outlier labels and truth remain evaluator-only in S7C-D2. Freeze thresholds,
+  candidate-search bounds, seeds and comparison criteria before held-out
+  evaluation. Pair variants on the identical event stream and bootstrap whole
+  independent sequences. Report clean-data degradation and empirical coverage;
+  observation selection does not by itself calibrate posterior covariance.

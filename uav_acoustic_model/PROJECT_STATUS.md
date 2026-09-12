@@ -1,12 +1,13 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-11
+Последнее обновление: 2026-09-12
 
 ## Текущий этап
 
-Текущий этап: **S7C-D1 — stress benchmark принятого strict-CV C1 baseline**.
+Последний завершённый подэтап: **S7C-D2 — robust-bearing вариант strict-CV C1**.
+Общая работа S7C-D над устойчивостью остаётся текущим направлением.
 
-Статус S7C-D1: **Done**. S7C-C1 остаётся **Done** после corrective
+Статус S7C-D1: **Done**. S7C-D2: **Done**. S7C-C1 остаётся **Done** после corrective
 review gate. Первый рекурсивный центральный оцениватель по
 асинхронным bearing-событиям трёх станций принят при `Q=0`, известном
 постоянном `c` и прямых bearing-level наблюдениях. Общий S7C-C остаётся
@@ -16,6 +17,92 @@ signal-level multi-station frontend не входят в C1 и не заявле
 observation model; он не добавляет robustness-алгоритм. S7C-B
 сохраняет статус **Done** после повторного входного gate на ветке
 `feature/s7c-c1-retarded-ekf`.
+
+### Журнал S7C-D2
+
+- 2026-09-12 — входная база подтверждена: clean
+  `2d499b61a458ccd43d46321f97dc20d1e76747e5`, новая ветка
+  `feature/s7c-robust-bearing`. До evaluation зафиксирован
+  [S7C_D2_PROTOCOL.md](S7C_D2_PROTOCOL.md): четыре ablation-варианта,
+  deterministic leave-up-to-two consensus с `chi2_2(0.995)`, pre-update
+  gate `chi2_2(0.99)`, smoke/evaluation seeds `20260911/20260912`, две
+  геометрии, девять D1-профилей и 100 независимых sequences/geometry.
+  C1 default и D1 CSV не изменялись. Статус остаётся **In progress**
+  до deterministic/smoke/full gates.
+- 2026-09-12 — реализован opt-in `RetardedEKFRobustnessConfig`:
+  deterministic consensus и pre-update NIS gate могут включаться
+  независимо, а default сохраняет путь C1. Consensus записывает
+  used/excluded IDs и причины; все события успешного начального
+  prefix помечаются processed. NIS-отказ хранит конечный pre-update
+  NIS, постоянный event ID/reason и точно сохраняет prior state/P.
+  Новый deterministic/statistical-contract gate: **11 passed in 17.60s**;
+  старый C1 test file отдельно прошёл **15/15**. Реализован held-out
+  study с whole-sequence bootstrap и evaluator-only confusion labels; full evaluation
+  ещё не запущен.
+- 2026-09-12 — frozen smoke gate на seed `20260911` прошёл: 4
+  независимых base blocks, 36 paired profile-runs, 144 sequence-variant
+  строки, 72 summary и 4 provenance. Аудит подтвердил полное
+  разбиение delivered events, одинаковый поток для четырёх
+  variants и отсутствие truth leakage. В nominal smoke все четыре
+  variants совпали по final errors и не дали false rejections; combined
+  в этой малой выборке обнаружил все delivered strong/mixed outliers.
+  Эти `n=2/geometry` значения — только smoke, не статистический вывод.
+- 2026-09-12 — первый full evaluation остановлен на 21/200
+  блоках до записи CSV: повторный exhaustive leave-up-to-two search
+  на каждом растущем prefix давал неограниченно тяжёлые
+  повторные batch fits. До завершённого evaluation протокол уточнён
+  как bounded first-valid consensus: full/leave-one/two для `n<=8`, затем
+  не более 128 six-event hypotheses из локального RNG, детерминированно
+  привязанного к SHA-256 observable event IDs. Пороги, seed evaluation и
+  размер выборки не изменялись; незавершённые частичные исходы не
+  использовались для настройки.
+- 2026-09-12 — held-out evaluation на seed `20260912` завершён за
+  `543.31 s`: 200 независимых base blocks, 1800 paired profile-runs,
+  7200 sequence-variant строк, 72 profile aggregates, 200 provenance и
+  1200/1200 уникальных mechanism seeds. Повторный CSV audit прошёл;
+  D1 CSV не перезаписывались.
+- 2026-09-12 — на clean nominal combined сохранил final valid `1.00/1.00`;
+  position RMSE изменился с baseline `0.75872/0.56115 m` до
+  `0.77048/0.56746 m`, unconditional coverage — с `0.92/0.96` до
+  `0.90/0.96`. Наблюдаемые false clean rejection fractions `0.00822/0.00711`
+  близки к локальному 1%-му порогу, но не являются его доказательством.
+- 2026-09-12 — strong outliers: baseline valid `0.46/0.56`, conditional
+  position RMSE `8.472/5.999 m`, unconditional coverage `0/0`; combined valid
+  `1.00/1.00`, RMSE `0.814/0.599 m`, coverage `0.93/0.97` и detected outlier
+  fraction `1.00/1.00`. Mixed: baseline valid `0.70/0.77`, RMSE
+  `7.333/5.358 m`, coverage `0.12/0.13`; combined valid `1.00/1.00`, RMSE
+  `0.950/0.698 m`, coverage `0.91/0.91`, detected fraction `1.00/1.00`.
+  Whole-sequence paired 95% CI для gain valid strong равны
+  `[0.44,0.64]/[0.35,0.54]`, mixed `[0.21,0.39]/[0.15,0.31]`.
+- 2026-09-12 — вскрыто важное ограничение. Mild 5° outliers
+  иногда попадают в минимальный шестисобытийный initialization prefix;
+  после этого NIS gate может отклонять чистые updates и удерживать
+  плохой prior. Поэтому combined mild position RMSE/P95 равны
+  `13.321/1.747 m` и `40.549/8.666 m`: RMSE вскрывает редкие
+  catastrophic tails, которые P95 скрывает. NIS-gate-only также не
+  улучшает initialization success и имеет ещё более тяжёлые единичные
+  errors. Этот failure mode сохранён без post-hoc изменения порогов.
+- 2026-09-12 — после завершённого held-out run независимый readback-аудит
+  подтвердил `7200` sequence rows, `72` profile summaries, `200` provenance
+  rows, `1200/1200` уникальных mechanism seeds, полное разбиение событий,
+  отсутствие estimator truth leakage и корректный порядок paired CI.
+  Полный regression gate: **402 passed in 105.63 s**. Новый
+  `retarded_ekf_robust_validation.ipynb` выполнен, прошёл nbformat/error/
+  execution-count/cell-ID audit и визуальную проверку трёх графиков. Общий
+  audit всех committed notebooks ещё выполняется, поэтому S7C-D2 остаётся
+  **In progress**.
+- 2026-09-12 — финальный gate S7C-D2 завершён. Все **17/17** notebooks
+  программно выполнены на in-memory копиях: для каждого подтверждены валидный
+  nbformat, `0` error-output, `0` невыполненных непустых code-ячеек и уникальные
+  cell IDs. Сохранённый robust notebook отдельно выполнен in-place и визуально
+  проверен. Самые длительные regression notebooks: GCC statistical
+  `2390.244 s`, C1 EKF `154.049 s`; robust report `4.522 s`. On-disk audit
+  также прошёл для 17 файлов. `pip check`: **No broken requirements found**;
+  `git diff --check`: PASS. Автоматически перезаписанные legacy CSV после
+  notebook gate восстановлены; D1 и C1 CSV имеют нулевой diff относительно
+  `2d499b61`. S7C-D2 отмечен **Done**, но S7C-D в целом остаётся
+  **In progress**: манёвры, `Q>0`, adaptive `Q/R`, signal-level frontend и
+  гарантия устойчивости к mild-outlier contamination не реализованы.
 
 ### Журнал S7C-D1
 

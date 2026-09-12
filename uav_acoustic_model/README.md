@@ -402,7 +402,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   causal-prefix batch constant-velocity state estimate с constrained WLS;
 - `estimators/retarded_ekf.py` — причинный EKF baseline при строгой
   constant-velocity модели, `Q=0`, batch-инициализации по доступному префиксу,
-  residual-sign update и Joseph covariance form;
+  residual-sign update и Joseph covariance form; явно включаемый S7C-D2
+  добавляет deterministic consensus initialization и pre-update NIS gate,
+  не изменяя default C1;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -437,6 +439,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `validation/retarded_ekf_study.py` — 96-sequence matched benchmark EKF,
   causal-prefix batch и common-initial-batch/no-update baseline с NIS/NEES,
   coverage intervals и runtime diagnostics;
+- `validation/retarded_ekf_robust_study.py` — frozen held-out four-way
+  ablation C1/consensus/NIS/combined на одних потоках событий с whole-sequence
+  paired bootstrap и evaluator-only outlier labels;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
 - `visualization/multistation_scene.py` — ENU station axes, bearing rays,
@@ -466,6 +471,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   causal coverage, failure modes, conditioning, KKT и runtime diagnostics;
 - `notebooks/retarded_ekf_validation.ipynb` — S7C-C1 position/velocity errors,
   NIS/NEES, sequence-level coverage, trajectory and marginal intervals;
+- `notebooks/retarded_ekf_robust_validation.ipynb` — S7C-D2 initialization,
+  validity, conditional errors, coverage и outlier/false-rejection trade-off;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -503,6 +510,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
 .\.venv\Scripts\python.exe -c "from validation.retarded_ekf_study import run_retarded_ekf_study; run_retarded_ekf_study()"
+.\.venv\Scripts\python.exe -m validation.retarded_ekf_robust_study --sequence-count 100 --base-seed 20260912 --workers 8 --output-directory results
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -518,6 +526,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_ekf_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\retarded_ekf_robust_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 

@@ -80,6 +80,16 @@ from .retarded_ekf_study import (
     run_retarded_ekf_study,
     summarize_retarded_ekf_sequences,
 )
+from .retarded_ekf_robust_study import (
+    DEFAULT_ROBUST_EVALUATION_SEED,
+    DEFAULT_ROBUST_SMOKE_SEED,
+    ROBUST_VARIANTS,
+    RobustVariant,
+    audit_robust_results,
+    run_retarded_ekf_robust_study,
+    run_robust_scenario,
+    summarize_robust_profiles,
+)
 
 __all__ = [
     "ContinuousFarFieldRefinement",
@@ -142,4 +152,12 @@ __all__ = [
     "run_retarded_ekf_configuration",
     "run_retarded_ekf_study",
     "summarize_retarded_ekf_sequences",
+    "DEFAULT_ROBUST_EVALUATION_SEED",
+    "DEFAULT_ROBUST_SMOKE_SEED",
+    "ROBUST_VARIANTS",
+    "RobustVariant",
+    "audit_robust_results",
+    "run_retarded_ekf_robust_study",
+    "run_robust_scenario",
+    "summarize_robust_profiles",
 ]
