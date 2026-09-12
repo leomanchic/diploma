@@ -14,9 +14,11 @@ pseudoinverse is used.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import combinations
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -24,6 +26,7 @@ from numpy.typing import ArrayLike, NDArray
 from estimators.retarded_state_batch import (
     RetardedBatchResult,
     estimate_retarded_constant_velocity_batch,
+    geometric_constant_velocity_initial_state,
 )
 from model.bearing_events import (
     BearingEventPrefix,
@@ -214,6 +217,49 @@ class RetardedEKFUpdateResult:
     runtime_s: float
 
 
+@dataclass(frozen=True, slots=True)
+class RetardedEKFRobustnessConfig:
+    """Explicit opt-in robustness controls; defaults reproduce C1 exactly."""
+
+    consensus_initialization: bool = False
+    maximum_pre_update_nis: float | None = None
+    consensus_nis_threshold: float = 10.596634733096073
+    consensus_maximum_exclusions: int = 2
+    consensus_maximum_candidate_count: int = 128
+
+    def __post_init__(self) -> None:
+        if self.maximum_pre_update_nis is not None and (
+            not np.isfinite(self.maximum_pre_update_nis)
+            or self.maximum_pre_update_nis <= 0.0
+        ):
+            raise ValueError("maximum_pre_update_nis must be finite and positive")
+        if (
+            not np.isfinite(self.consensus_nis_threshold)
+            or self.consensus_nis_threshold <= 0.0
+        ):
+            raise ValueError("consensus_nis_threshold must be finite and positive")
+        if self.consensus_maximum_exclusions < 0:
+            raise ValueError("consensus_maximum_exclusions must be non-negative")
+        if self.consensus_maximum_candidate_count <= 0:
+            raise ValueError("consensus_maximum_candidate_count must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class RetardedEKFInitializationDiagnostic:
+    """Truth-free diagnostic for one baseline or consensus initialization attempt."""
+
+    method: str
+    succeeded: bool
+    failure_reason: str | None
+    available_event_ids: tuple[str, ...]
+    used_event_ids: tuple[str, ...]
+    excluded_event_ids: tuple[str, ...]
+    excluded_event_reasons: tuple[tuple[str, str], ...]
+    candidate_count: int
+    inlier_nis_threshold: float
+    inlier_nis_values: tuple[tuple[str, float], ...]
+
+
 def _rejected_update(
     *,
     started: float,
@@ -253,6 +299,7 @@ def update_retarded_ekf(
     measurement: BearingMeasurement,
     *,
     sound_speed: float = DEFAULT_SOUND_SPEED,
+    maximum_pre_update_nis: float | None = None,
 ) -> RetardedEKFUpdateResult:
     """Apply one retarded-time bearing update at the state's current epoch."""
 
@@ -260,6 +307,10 @@ def update_retarded_ekf(
     covariance = _positive_definite(
         prior_covariance, (6, 6), name="prior_covariance"
     )
+    if maximum_pre_update_nis is not None and (
+        not np.isfinite(maximum_pre_update_nis) or maximum_pre_update_nis <= 0.0
+    ):
+        raise ValueError("maximum_pre_update_nis must be finite and positive")
     if not measurement.valid:
         return _rejected_update(
             started=started,
@@ -305,6 +356,37 @@ def update_retarded_ekf(
             jacobian,
             observation,
         )
+        if (
+            maximum_pre_update_nis is not None
+            and linear.normalized_innovation_squared > maximum_pre_update_nis
+        ):
+            prior_eigenvalues = np.linalg.eigvalsh(covariance)
+            return RetardedEKFUpdateResult(
+                event_id=bearing_event_id(measurement),
+                update_applied=False,
+                valid=False,
+                failure_reason="pre_update_nis_gate",
+                prior_state=prior_state,
+                posterior_state=prior_state,
+                prior_covariance=_readonly(covariance),
+                posterior_covariance=_readonly(covariance),
+                residual_tangent_rad=_readonly(residual),
+                residual_jacobian_state=_readonly(jacobian),
+                innovation_covariance=linear.innovation_covariance,
+                kalman_gain=linear.kalman_gain,
+                normalized_innovation_squared=(
+                    linear.normalized_innovation_squared
+                ),
+                covariance_rank=int(np.linalg.matrix_rank(covariance)),
+                covariance_condition_number=float(
+                    np.max(prior_eigenvalues) / np.min(prior_eigenvalues)
+                ),
+                covariance_symmetry_error=float(
+                    np.max(np.abs(covariance - covariance.T), initial=0.0)
+                ),
+                covariance_minimum_eigenvalue=float(np.min(prior_eigenvalues)),
+                runtime_s=time.perf_counter() - started,
+            )
         posterior = ConstantVelocityState(
             linear.posterior_vector[:3],
             linear.posterior_vector[3:],
@@ -376,6 +458,210 @@ class RetardedEKFInitializationCriteria:
                 raise ValueError(f"{name} must be finite and positive")
 
 
+def _batch_passes_initialization_gates(
+    batch: RetardedBatchResult,
+    criteria: RetardedEKFInitializationCriteria,
+) -> bool:
+    return bool(
+        batch.valid
+        and batch.state is not None
+        and batch.local_observability_rank == criteria.required_local_rank
+        and batch.scaled_information_condition_number
+        <= criteria.maximum_scaled_condition_number
+        and batch.maximum_angular_residual_rad
+        <= criteria.maximum_angular_residual_rad
+        and batch.scaled_projected_kkt_residual
+        <= criteria.maximum_scaled_kkt_residual
+    )
+
+
+def _candidate_subsets(
+    measurements: Sequence[BearingMeasurement],
+    *,
+    minimum_count: int,
+    maximum_exclusions: int,
+    maximum_candidate_count: int,
+) -> tuple[tuple[BearingMeasurement, ...], ...]:
+    ordered = tuple(sorted(measurements, key=bearing_event_id))
+    candidates: list[tuple[BearingMeasurement, ...]] = [ordered]
+    full_identity = tuple(bearing_event_id(item) for item in ordered)
+    seen = {full_identity}
+
+    # For the earliest prefixes, exhaustive leave-one/two-out hypotheses are
+    # small and preserve the direct interpretation of an excluded event.
+    if len(ordered) <= minimum_count + maximum_exclusions:
+        for exclusion_count in range(1, maximum_exclusions + 1):
+            if len(ordered) - exclusion_count < minimum_count:
+                continue
+            for excluded_indices in combinations(range(len(ordered)), exclusion_count):
+                excluded = set(excluded_indices)
+                subset = tuple(
+                    item for index, item in enumerate(ordered) if index not in excluded
+                )
+                identity = tuple(bearing_event_id(item) for item in subset)
+                if identity not in seen:
+                    candidates.append(subset)
+                    seen.add(identity)
+                if len(candidates) >= maximum_candidate_count:
+                    return tuple(candidates)
+
+    # Once the prefix is larger, use bounded minimal hypotheses.  A local RNG
+    # is seeded solely from sorted observable event IDs: it is deterministic,
+    # does not touch global state and contains neither truth nor outlier labels.
+    if len(ordered) > minimum_count:
+        digest = hashlib.sha256("\n".join(full_identity).encode("utf-8")).digest()
+        rng = np.random.default_rng(int.from_bytes(digest[:8], "little"))
+        attempts = 0
+        maximum_attempts = 20 * maximum_candidate_count
+        while len(candidates) < maximum_candidate_count and attempts < maximum_attempts:
+            indices = tuple(
+                sorted(rng.choice(len(ordered), size=minimum_count, replace=False))
+            )
+            subset = tuple(ordered[index] for index in indices)
+            identity = tuple(bearing_event_id(item) for item in subset)
+            if identity not in seen:
+                candidates.append(subset)
+                seen.add(identity)
+            attempts += 1
+    return tuple(candidates)
+
+
+def _measurement_fit_nis(
+    state: ConstantVelocityState,
+    station_map: dict[str, StationPose],
+    measurement: BearingMeasurement,
+    sound_speed: float,
+) -> float:
+    try:
+        residual = retarded_bearing_residual(
+            state, station_map[measurement.station_id], measurement, sound_speed
+        )
+        covariance = _positive_definite(
+            measurement.covariance_tangent_rad2,
+            (2, 2),
+            name="observation_covariance",
+        )
+        return float(residual @ np.linalg.solve(covariance, residual))
+    except (ValueError, AntipodalDirectionError, np.linalg.LinAlgError):
+        return float("inf")
+
+
+def estimate_consensus_retarded_initialization(
+    stations: Sequence[StationPose],
+    measurements: Sequence[BearingMeasurement],
+    *,
+    reference_time_s: float,
+    sound_speed: float = DEFAULT_SOUND_SPEED,
+    criteria: RetardedEKFInitializationCriteria | None = None,
+    robustness: RetardedEKFRobustnessConfig | None = None,
+) -> tuple[RetardedBatchResult | None, RetardedEKFInitializationDiagnostic]:
+    """Find and refine a deterministic consensus without truth or future data."""
+
+    gate = criteria or RetardedEKFInitializationCriteria()
+    config = robustness or RetardedEKFRobustnessConfig(
+        consensus_initialization=True
+    )
+    station_map = {station.station_id: station for station in stations}
+    ordered = tuple(sorted(measurements, key=bearing_event_id))
+    available_ids = tuple(bearing_event_id(item) for item in ordered)
+    candidates = _candidate_subsets(
+        ordered,
+        minimum_count=gate.minimum_measurement_count,
+        maximum_exclusions=config.consensus_maximum_exclusions,
+        maximum_candidate_count=config.consensus_maximum_candidate_count,
+    )
+    evaluated = 0
+    last_inliers: tuple[BearingMeasurement, ...] = ()
+    last_nis: tuple[tuple[str, float], ...] = ()
+    last_failure = "robust_consensus_not_found"
+    for subset in candidates:
+        _, geometric_rank, _ = geometric_constant_velocity_initial_state(
+            stations, subset, reference_time_s=reference_time_s
+        )
+        if geometric_rank < gate.required_local_rank:
+            evaluated += 1
+            continue
+        batch = estimate_retarded_constant_velocity_batch(
+            stations,
+            subset,
+            reference_time_s=reference_time_s,
+            sound_speed=sound_speed,
+        )
+        evaluated += 1
+        if not _batch_passes_initialization_gates(batch, gate):
+            continue
+        assert batch.state is not None
+        nis_by_id = tuple(
+            (
+                bearing_event_id(item),
+                _measurement_fit_nis(batch.state, station_map, item, sound_speed),
+            )
+            for item in ordered
+        )
+        inlier_ids = {
+            identity
+            for identity, nis in nis_by_id
+            if np.isfinite(nis) and nis <= config.consensus_nis_threshold
+        }
+        inliers = tuple(
+            item for item in ordered if bearing_event_id(item) in inlier_ids
+        )
+        if len(inliers) < gate.minimum_measurement_count:
+            continue
+        last_inliers = inliers
+        last_nis = nis_by_id
+        refined = estimate_retarded_constant_velocity_batch(
+            stations,
+            inliers,
+            reference_time_s=reference_time_s,
+            sound_speed=sound_speed,
+        )
+        if not _batch_passes_initialization_gates(refined, gate):
+            last_failure = (
+                refined.failure_reason or "robust_consensus_refinement_failed"
+            )
+            continue
+        used_ids = tuple(refined.used_event_ids)
+        used_set = set(used_ids)
+        excluded_ids = tuple(
+            identity for identity in available_ids if identity not in used_set
+        )
+        diagnostic = RetardedEKFInitializationDiagnostic(
+            method="deterministic_consensus",
+            succeeded=True,
+            failure_reason=None,
+            available_event_ids=available_ids,
+            used_event_ids=used_ids,
+            excluded_event_ids=excluded_ids,
+            excluded_event_reasons=tuple(
+                (identity, "robust_initialization_consensus_outlier")
+                for identity in excluded_ids
+            ),
+            candidate_count=evaluated,
+            inlier_nis_threshold=float(config.consensus_nis_threshold),
+            inlier_nis_values=nis_by_id,
+        )
+        return refined, diagnostic
+
+    last_used_ids = tuple(bearing_event_id(item) for item in last_inliers)
+    last_used_set = set(last_used_ids)
+    diagnostic = RetardedEKFInitializationDiagnostic(
+        method="deterministic_consensus",
+        succeeded=False,
+        failure_reason=last_failure,
+        available_event_ids=available_ids,
+        used_event_ids=last_used_ids,
+        excluded_event_ids=tuple(
+            identity for identity in available_ids if identity not in last_used_set
+        ),
+        excluded_event_reasons=(),
+        candidate_count=evaluated,
+        inlier_nis_threshold=float(config.consensus_nis_threshold),
+        inlier_nis_values=last_nis,
+    )
+    return None, diagnostic
+
+
 @dataclass(frozen=True, slots=True)
 class RetardedEKFEventRejection:
     """Persistent diagnostic for one observation rejected by the C1 domain."""
@@ -421,6 +707,8 @@ class RetardedEKFPublication:
     measurement_update_runtime_s: float
     total_runtime_s: float
     initialization_batch: RetardedBatchResult | None
+    initialization_diagnostics: tuple[RetardedEKFInitializationDiagnostic, ...]
+    robustness_config: RetardedEKFRobustnessConfig
 
 
 class CausalRetardedTimeEKF:
@@ -447,6 +735,7 @@ class CausalRetardedTimeEKF:
         estimator_variant: str,
         sound_speed: float = DEFAULT_SOUND_SPEED,
         initialization_criteria: RetardedEKFInitializationCriteria | None = None,
+        robustness_config: RetardedEKFRobustnessConfig | None = None,
     ) -> None:
         station_map = {station.station_id: station for station in stations}
         if len(station_map) != len(stations) or not station_map:
@@ -460,6 +749,7 @@ class CausalRetardedTimeEKF:
         if not np.isfinite(self._sound_speed) or self._sound_speed <= 0.0:
             raise ValueError("sound_speed must be finite and positive")
         self._criteria = initialization_criteria or RetardedEKFInitializationCriteria()
+        self._robustness = robustness_config or RetardedEKFRobustnessConfig()
         self._state: ConstantVelocityState | None = None
         self._covariance: NDArray[np.float64] | None = None
         self._processed_ids: set[str] = set()
@@ -493,6 +783,9 @@ class CausalRetardedTimeEKF:
         propagation_dt_s: float = 0.0,
         initialization_runtime_s: float = 0.0,
         initialization_batch: RetardedBatchResult | None = None,
+        initialization_diagnostics: Sequence[
+            RetardedEKFInitializationDiagnostic
+        ] = (),
     ) -> RetardedEKFPublication:
         publication = RetardedEKFPublication(
             processing_time_s=processing_time,
@@ -519,6 +812,8 @@ class CausalRetardedTimeEKF:
             measurement_update_runtime_s=float(sum(item.runtime_s for item in updates)),
             total_runtime_s=time.perf_counter() - started,
             initialization_batch=initialization_batch,
+            initialization_diagnostics=tuple(initialization_diagnostics),
+            robustness_config=self._robustness,
         )
         self._publications.append(publication)
         self._last_processing_time = processing_time
@@ -606,6 +901,7 @@ class CausalRetardedTimeEKF:
         tuple[RetardedEKFLifecycleDiagnostic, ...],
         float,
         RetardedBatchResult | None,
+        RetardedEKFInitializationDiagnostic | None,
     ]:
         """Consume one complete equal-availability group."""
 
@@ -635,36 +931,67 @@ class CausalRetardedTimeEKF:
                     invalidated_used,
                 )
             )
-            return (), new_rejections, tuple(new_lifecycle), 0.0, None
+            return (), new_rejections, tuple(new_lifecycle), 0.0, None, None
 
         initialization_runtime = 0.0
         initialization_batch: RetardedBatchResult | None = None
+        initialization_diagnostic: RetardedEKFInitializationDiagnostic | None = None
         if self._state is None:
             if len(eligible) < self._criteria.minimum_measurement_count:
                 self._state_failure_reason = "not_initialized"
-                return (), new_rejections, (), 0.0, None
+                return (), new_rejections, (), 0.0, None, None
             initialization_started = time.perf_counter()
-            initialization_batch = estimate_retarded_constant_velocity_batch(
-                self._stations,
-                eligible,
-                reference_time_s=processing_time_s,
-                sound_speed=self._sound_speed,
-            )
+            if self._robustness.consensus_initialization:
+                initialization_batch, initialization_diagnostic = (
+                    estimate_consensus_retarded_initialization(
+                        self._stations,
+                        eligible,
+                        reference_time_s=processing_time_s,
+                        sound_speed=self._sound_speed,
+                        criteria=self._criteria,
+                        robustness=self._robustness,
+                    )
+                )
+            else:
+                initialization_batch = estimate_retarded_constant_velocity_batch(
+                    self._stations,
+                    eligible,
+                    reference_time_s=processing_time_s,
+                    sound_speed=self._sound_speed,
+                )
             initialization_runtime = time.perf_counter() - initialization_started
             batch = initialization_batch
-            acceptable = (
-                batch.valid
-                and batch.local_observability_rank
-                == self._criteria.required_local_rank
-                and batch.scaled_information_condition_number
-                <= self._criteria.maximum_scaled_condition_number
-                and batch.maximum_angular_residual_rad
-                <= self._criteria.maximum_angular_residual_rad
-                and batch.scaled_projected_kkt_residual
-                <= self._criteria.maximum_scaled_kkt_residual
+            acceptable = bool(
+                batch is not None
+                and _batch_passes_initialization_gates(batch, self._criteria)
             )
-            if not acceptable or batch.state is None:
-                reason = batch.failure_reason or "initialization_quality_gate_failed"
+            if initialization_diagnostic is None:
+                ids = tuple(bearing_event_id(item) for item in eligible)
+                initialization_diagnostic = RetardedEKFInitializationDiagnostic(
+                    method="c1_full_prefix",
+                    succeeded=acceptable,
+                    failure_reason=(
+                        None
+                        if acceptable
+                        else (
+                            batch.failure_reason
+                            if batch is not None and batch.failure_reason is not None
+                            else "initialization_quality_gate_failed"
+                        )
+                    ),
+                    available_event_ids=ids,
+                    used_event_ids=ids if acceptable else (),
+                    excluded_event_ids=(),
+                    excluded_event_reasons=(),
+                    candidate_count=1,
+                    inlier_nis_threshold=float("nan"),
+                    inlier_nis_values=(),
+                )
+            if not acceptable or batch is None or batch.state is None:
+                reason = (
+                    initialization_diagnostic.failure_reason
+                    or "initialization_quality_gate_failed"
+                )
                 self._state_failure_reason = f"initialization_failed:{reason}"
                 return (
                     (),
@@ -672,6 +999,7 @@ class CausalRetardedTimeEKF:
                     (),
                     initialization_runtime,
                     initialization_batch,
+                    initialization_diagnostic,
                 )
             try:
                 covariance = _positive_definite(
@@ -683,20 +1011,35 @@ class CausalRetardedTimeEKF:
                 self._state_failure_reason = (
                     "initialization_failed:non_positive_definite_covariance"
                 )
+                initialization_diagnostic = replace(
+                    initialization_diagnostic,
+                    succeeded=False,
+                    failure_reason="non_positive_definite_covariance",
+                )
                 return (
                     (),
                     new_rejections,
                     (),
                     initialization_runtime,
                     initialization_batch,
+                    initialization_diagnostic,
                 )
             was_recovery = self._recovery_pending
             self._state = batch.state
             self._covariance = _readonly(covariance)
-            self._initialization_ids = {
-                bearing_event_id(measurement) for measurement in eligible
-            }
-            self._processed_ids = set(self._initialization_ids)
+            self._initialization_ids = set(batch.used_event_ids)
+            eligible_ids = {bearing_event_id(measurement) for measurement in eligible}
+            self._processed_ids = set(eligible_ids)
+            mutable_rejections = list(new_rejections)
+            for identity, reason in initialization_diagnostic.excluded_event_reasons:
+                measurement = next(
+                    item for item in eligible if bearing_event_id(item) == identity
+                )
+                diagnostic = self._reject_measurement(
+                    measurement, processing_time_s, reason
+                )
+                if diagnostic is not None:
+                    mutable_rejections.append(diagnostic)
             self._recovery_pending = False
             self._state_failure_reason = None
             action = "reinitialized_after_conflict" if was_recovery else "initialized"
@@ -704,16 +1047,21 @@ class CausalRetardedTimeEKF:
                 self._record_lifecycle(
                     processing_time_s,
                     action,
-                    "eligible_prefix_passed_fixed_initialization_gates",
+                    (
+                        "consensus_prefix_passed_fixed_initialization_gates"
+                        if self._robustness.consensus_initialization
+                        else "eligible_prefix_passed_fixed_initialization_gates"
+                    ),
                     self._initialization_ids,
                 )
             )
             return (
                 (),
-                new_rejections,
+                tuple(mutable_rejections),
                 tuple(new_lifecycle),
                 initialization_runtime,
                 initialization_batch,
+                initialization_diagnostic,
             )
 
         assert self._covariance is not None
@@ -744,6 +1092,7 @@ class CausalRetardedTimeEKF:
                 station,
                 measurement,
                 sound_speed=self._sound_speed,
+                maximum_pre_update_nis=self._robustness.maximum_pre_update_nis,
             )
             updates.append(update)
             self._processed_ids.add(identity)
@@ -765,6 +1114,7 @@ class CausalRetardedTimeEKF:
             tuple(mutable_rejections),
             (),
             0.0,
+            None,
             None,
         )
 
@@ -788,6 +1138,9 @@ class CausalRetardedTimeEKF:
         new_lifecycle: list[RetardedEKFLifecycleDiagnostic] = []
         initialization_runtime = 0.0
         initialization_batch: RetardedBatchResult | None = None
+        initialization_diagnostics: list[
+            RetardedEKFInitializationDiagnostic
+        ] = []
         while True:
             next_time = self._stream.next_available_timestamp_s
             if next_time is None or next_time > processing_time:
@@ -799,6 +1152,7 @@ class CausalRetardedTimeEKF:
                 group_lifecycle,
                 group_initialization_runtime,
                 group_initialization_batch,
+                group_initialization_diagnostic,
             ) = self._process_availability_group(next_time, group_prefix)
             updates.extend(group_updates)
             new_rejections.extend(group_rejections)
@@ -806,6 +1160,8 @@ class CausalRetardedTimeEKF:
             initialization_runtime += group_initialization_runtime
             if group_initialization_batch is not None:
                 initialization_batch = group_initialization_batch
+            if group_initialization_diagnostic is not None:
+                initialization_diagnostics.append(group_initialization_diagnostic)
 
         prefix = self._stream.advance_to(processing_time)
         publication_state: ConstantVelocityState | None = None
@@ -837,6 +1193,7 @@ class CausalRetardedTimeEKF:
             propagation_dt_s=propagation_dt,
             initialization_runtime_s=initialization_runtime,
             initialization_batch=initialization_batch,
+            initialization_diagnostics=initialization_diagnostics,
         )
 
 
@@ -845,9 +1202,12 @@ __all__ = [
     "LinearizedResidualUpdate",
     "RetardedEKFEventRejection",
     "RetardedEKFInitializationCriteria",
+    "RetardedEKFInitializationDiagnostic",
     "RetardedEKFLifecycleDiagnostic",
     "RetardedEKFPublication",
+    "RetardedEKFRobustnessConfig",
     "RetardedEKFUpdateResult",
+    "estimate_consensus_retarded_initialization",
     "joseph_residual_update",
     "propagate_constant_velocity_estimate",
     "update_retarded_ekf",
