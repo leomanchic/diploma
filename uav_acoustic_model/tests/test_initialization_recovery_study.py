@@ -120,22 +120,30 @@ def test_known_failure_journal_captures_lock_and_recovery_without_truth_leakage(
         for row in rows
         if row["record_kind"] == "final"
     }
+    d2_informative_error = finals[("informative", "d2_combined_published")][
+        "evaluator_only_position_error_m"
+    ]
+    d2_poor_error = finals[("poorly_conditioned", "d2_combined_published")][
+        "evaluator_only_position_error_m"
+    ]
+    # GitHub Actions measured a maximum 1.64242124e-7 m difference for
+    # this optimizer-history diagnostic across pinned Windows/Linux Python
+    # 3.12 jobs.  The 5e-7 m absolute gate is still below five parts per
+    # billion at the 114.5 m scale and does not weaken the failure semantics.
     np.testing.assert_allclose(
-        finals[("informative", "d2_combined_published")][
-            "evaluator_only_position_error_m"
-        ],
+        d2_informative_error,
         114.52006460072242,
         rtol=0.0,
-        atol=2e-10,
+        atol=5e-7,
     )
     np.testing.assert_allclose(
-        finals[("poorly_conditioned", "d2_combined_published")][
-            "evaluator_only_position_error_m"
-        ],
+        d2_poor_error,
         221.43049150295593,
         rtol=0.0,
-        atol=2e-10,
+        atol=5e-7,
     )
+    assert d2_informative_error > 100.0
+    assert d2_poor_error > 200.0
     assert (
         finals[("informative", "confirmed_recovery")][
             "evaluator_only_position_error_m"

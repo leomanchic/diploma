@@ -169,6 +169,11 @@ class RecoveryPublication:
     applied_event_ids: tuple[str, ...]
     rejected_event_ids: tuple[str, ...]
     rejection_reasons: tuple[tuple[str, str], ...]
+    conflicted_event_ids: tuple[str, ...]
+    conflict_reasons: tuple[tuple[str, str], ...]
+    active_state_event_ids: tuple[str, ...]
+    historical_state_event_ids: tuple[str, ...]
+    tentative_construction_event_ids: tuple[str, ...]
     update_diagnostics: tuple[RetardedEKFUpdateResult, ...]
     hypothesis_diagnostics: tuple[RecoveryHypothesisDiagnostic, ...]
     new_hypothesis_diagnostics: tuple[RecoveryHypothesisDiagnostic, ...]
@@ -389,6 +394,9 @@ class CausalConfirmedRetardedTimeEKF:
         self._applied_ids: set[str] = set()
         self._rejected_ids: set[str] = set()
         self._rejection_reasons: dict[str, str] = {}
+        self._conflicted_ids: set[str] = set()
+        self._conflict_reasons: dict[str, str] = {}
+        self._active_generation_ids: set[str] = set()
         self._event_uses: list[RecoveryEventUse] = []
         self._hypothesis_history: list[RecoveryHypothesisDiagnostic] = []
         self._lifecycle_history: list[RecoveryLifecycleDiagnostic] = []
@@ -412,6 +420,14 @@ class CausalConfirmedRetardedTimeEKF:
         return item
 
     def _eligible(self, prefix: BearingEventPrefix) -> tuple[BearingMeasurement, ...]:
+        """Return every new usable event in deterministic delivery order.
+
+        The initialization-buffer bound is deliberately not applied here:
+        once the EKF is confirmed, every admissible event in an availability
+        group must be accounted for.  Hypothesis construction applies its own
+        bounded view in :meth:`_initialization_window`.
+        """
+
         result = []
         for measurement in prefix.measurements:
             identity = bearing_event_id(measurement)
@@ -435,7 +451,14 @@ class CausalConfirmedRetardedTimeEKF:
                 continue
             result.append(measurement)
         result.sort(key=lambda item: (item.available_timestamp_s, bearing_event_id(item)))
-        return tuple(result[-self._config.maximum_initialization_buffer_events :])
+        return tuple(result)
+
+    def _initialization_window(
+        self, measurements: Sequence[BearingMeasurement]
+    ) -> tuple[BearingMeasurement, ...]:
+        """Return the bounded tail used only to construct a hypothesis."""
+
+        return tuple(measurements[-self._config.maximum_initialization_buffer_events :])
 
     def _make_tentative(
         self,
@@ -454,8 +477,9 @@ class CausalConfirmedRetardedTimeEKF:
                 tuple[tuple[str, float], ...],
             ]
         ] = []
+        construction_window = self._initialization_window(measurements)
         for subset in _construction_candidates(
-            measurements,
+            construction_window,
             self._config.construction_measurement_count,
             self._config.maximum_candidate_count,
         ):
@@ -547,6 +571,7 @@ class CausalConfirmedRetardedTimeEKF:
         processing_time_s: float,
         reason: str,
         confirmation_scores: tuple[tuple[str, float], ...],
+        excluded_event_ids: Sequence[str] = (),
     ) -> RecoveryHypothesisDiagnostic:
         assert self._tentative is not None
         tentative = self._tentative
@@ -559,7 +584,7 @@ class CausalConfirmedRetardedTimeEKF:
             reason=reason,
             construction_event_ids=tentative.construction_ids,
             confirmation_event_ids=tuple(identity for identity, _ in confirmation_scores),
-            excluded_event_ids=(),
+            excluded_event_ids=tuple(sorted(excluded_event_ids)),
             preliminary_nis_values=tentative.preliminary_scores,
             confirmation_nis_values=confirmation_scores,
             final_nis_values=(),
@@ -675,6 +700,7 @@ class CausalConfirmedRetardedTimeEKF:
                     self._event_uses.append(
                         RecoveryEventUse(identity, self._generation, "initialization")
                     )
+                self._active_generation_ids = set(used_ids)
                 self._rejected_ids.update(excluded_ids)
                 self._rejection_reasons.update(
                     {
@@ -752,25 +778,141 @@ class CausalConfirmedRetardedTimeEKF:
             and span >= self._config.inconsistency_reception_span_s
         )
 
-    def _reset_for_recovery(self, processing_time_s: float) -> RecoveryLifecycleDiagnostic:
+    def _invalidate_state(
+        self,
+        processing_time_s: float,
+        *,
+        action: str,
+        reason: str,
+        event_ids: Sequence[str],
+        failure_reason: str | None = None,
+    ) -> RecoveryLifecycleDiagnostic:
+        """Invalidate only the current generation and begin fresh recovery."""
+
         trigger_ids = tuple(bearing_event_id(item) for item in self._inconsistency_streak)
         self._state = None
         self._covariance = None
         self._tentative = None
         self._status = "questionable"
-        self._failure_reason = "consistency_lost_reinitialization_required"
+        self._failure_reason = failure_reason or reason
         self._generation_start_time = float(processing_time_s)
         self._hypothesis_attempt_count = 0
         self._failed_signatures.clear()
         self._inconsistency_streak.clear()
+        self._active_generation_ids.clear()
         self._reset_count += 1
         self._recovery_started_time = float(processing_time_s)
         return self._lifecycle(
             processing_time_s,
-            "consistency_lost",
-            "sustained_multi_station_nis_rejections",
-            trigger_ids,
+            action,
+            reason,
+            event_ids or trigger_ids,
         )
+
+    def _reset_for_recovery(self, processing_time_s: float) -> RecoveryLifecycleDiagnostic:
+        trigger_ids = tuple(bearing_event_id(item) for item in self._inconsistency_streak)
+        return self._invalidate_state(
+            processing_time_s,
+            action="consistency_lost",
+            reason="sustained_multi_station_nis_rejections",
+            event_ids=trigger_ids,
+            failure_reason="consistency_lost_reinitialization_required",
+        )
+
+    def _exclude_remainder_after_reset(
+        self,
+        measurements: Sequence[BearingMeasurement],
+    ) -> None:
+        """Classify same-group events that cannot seed the fresh generation.
+
+        Recovery accepts only events arriving strictly after its reset epoch.
+        Consequently, unprocessed events remaining in the triggering
+        availability group are explicitly excluded instead of silently left
+        pending or folded into the new generation.
+        """
+
+        for measurement in measurements:
+            identity = bearing_event_id(measurement)
+            if identity in self._processed_ids or identity in self._conflicted_ids:
+                continue
+            self._processed_ids.add(identity)
+            self._rejected_ids.add(identity)
+            self._rejection_reasons[identity] = "recovery_group_excluded_after_reset"
+
+    def _handle_conflicts(
+        self,
+        processing_time_s: float,
+        prefix: BearingEventPrefix,
+    ) -> tuple[list[RecoveryHypothesisDiagnostic], list[RecoveryLifecycleDiagnostic], bool]:
+        """Apply quarantine changes before using an availability group."""
+
+        new_conflicts = set(prefix.conflicted_event_ids) - self._conflicted_ids
+        if not new_conflicts:
+            return [], [], False
+        self._conflicted_ids.update(new_conflicts)
+        hypotheses: list[RecoveryHypothesisDiagnostic] = []
+        lifecycle: list[RecoveryLifecycleDiagnostic] = []
+
+        tentative_ids = (
+            set(self._tentative.construction_ids) if self._tentative is not None else set()
+        )
+        tentative_conflicts = new_conflicts & tentative_ids
+        if tentative_conflicts:
+            for identity in tentative_conflicts:
+                self._processed_ids.add(identity)
+                self._rejected_ids.add(identity)
+                self._rejection_reasons[identity] = (
+                    "conflicted_tentative_construction_event"
+                )
+                self._conflict_reasons[identity] = (
+                    "tentative construction payload was quarantined"
+                )
+            hypotheses.append(
+                self._reject_tentative(
+                    processing_time_s,
+                    "conflicted_tentative_construction_event",
+                    (),
+                    tuple(tentative_conflicts),
+                )
+            )
+
+        active_conflicts = new_conflicts & self._active_generation_ids
+        if self._state is not None and active_conflicts:
+            same_group = tuple(
+                item
+                for item in self._eligible(prefix)
+                if item.available_timestamp_s == processing_time_s
+            )
+            for identity in active_conflicts:
+                self._conflict_reasons[identity] = (
+                    "active-state payload was quarantined; generation invalidated"
+                )
+            lifecycle.append(
+                self._invalidate_state(
+                    processing_time_s,
+                    action="state_invalidated",
+                    reason="conflicted_active_state_event_requires_recovery",
+                    event_ids=tuple(active_conflicts),
+                )
+            )
+            self._exclude_remainder_after_reset(same_group)
+            return hypotheses, lifecycle, True
+
+        historical = new_conflicts - tentative_conflicts - active_conflicts
+        if historical:
+            for identity in historical:
+                self._conflict_reasons[identity] = (
+                    "historical or unused payload quarantined without changing current state"
+                )
+            lifecycle.append(
+                self._lifecycle(
+                    processing_time_s,
+                    "historical_conflict_quarantined",
+                    "conflict_does_not_belong_to_active_generation",
+                    tuple(historical),
+                )
+            )
+        return hypotheses, lifecycle, False
 
     def _process_group(
         self,
@@ -780,6 +922,13 @@ class CausalConfirmedRetardedTimeEKF:
         updates: list[RetardedEKFUpdateResult] = []
         hypothesis_changes: list[RecoveryHypothesisDiagnostic] = []
         lifecycle_changes: list[RecoveryLifecycleDiagnostic] = []
+        conflict_hypotheses, conflict_lifecycle, state_invalidated = (
+            self._handle_conflicts(processing_time_s, prefix)
+        )
+        hypothesis_changes.extend(conflict_hypotheses)
+        lifecycle_changes.extend(conflict_lifecycle)
+        if state_invalidated:
+            return updates, hypothesis_changes, lifecycle_changes
         if self._state is None:
             measurements = self._eligible(prefix)
             change, lifecycle = self._evaluate_tentative(measurements, processing_time_s)
@@ -800,7 +949,7 @@ class CausalConfirmedRetardedTimeEKF:
                 self._state, self._covariance, processing_time_s
             )
         pending = self._eligible(prefix)
-        for measurement in pending:
+        for index, measurement in enumerate(pending):
             identity = bearing_event_id(measurement)
             update = update_retarded_ekf(
                 self._state,
@@ -816,6 +965,7 @@ class CausalConfirmedRetardedTimeEKF:
                 self._state = update.posterior_state
                 self._covariance = update.posterior_covariance
                 self._applied_ids.add(identity)
+                self._active_generation_ids.add(identity)
                 self._event_uses.append(
                     RecoveryEventUse(identity, self._generation, "update")
                 )
@@ -829,8 +979,10 @@ class CausalConfirmedRetardedTimeEKF:
                     self._inconsistency_streak.append(measurement)
                 else:
                     self._inconsistency_streak.clear()
-        if self._triggered_inconsistency():
-            lifecycle_changes.append(self._reset_for_recovery(processing_time_s))
+            if self._triggered_inconsistency():
+                lifecycle_changes.append(self._reset_for_recovery(processing_time_s))
+                self._exclude_remainder_after_reset(pending[index + 1 :])
+                break
         return updates, hypothesis_changes, lifecycle_changes
 
     def advance_to(self, processing_time_s: float) -> RecoveryPublication:
@@ -872,7 +1024,10 @@ class CausalConfirmedRetardedTimeEKF:
                 self._tentative.batch.covariance_state_linearization,
                 processing_time,
             )
-        immediate_loss = any(item.action == "consistency_lost" for item in lifecycle)
+        immediate_loss = any(
+            item.action in {"consistency_lost", "state_invalidated"}
+            for item in lifecycle
+        )
         published_status = (
             self._status
             if state is not None
@@ -895,6 +1050,18 @@ class CausalConfirmedRetardedTimeEKF:
             applied_event_ids=tuple(sorted(self._applied_ids)),
             rejected_event_ids=tuple(sorted(self._rejected_ids)),
             rejection_reasons=tuple(sorted(self._rejection_reasons.items())),
+            conflicted_event_ids=tuple(sorted(self._conflicted_ids)),
+            conflict_reasons=tuple(sorted(self._conflict_reasons.items())),
+            active_state_event_ids=tuple(sorted(self._active_generation_ids)),
+            historical_state_event_ids=tuple(
+                sorted(
+                    (self._initialization_ids | self._applied_ids)
+                    - self._active_generation_ids
+                )
+            ),
+            tentative_construction_event_ids=(
+                () if self._tentative is None else self._tentative.construction_ids
+            ),
             update_diagnostics=tuple(updates),
             hypothesis_diagnostics=tuple(self._hypothesis_history),
             new_hypothesis_diagnostics=tuple(hypotheses),

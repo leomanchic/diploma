@@ -1,6 +1,6 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-12
+Последнее обновление: 2026-09-13
 
 ## Текущий этап
 
@@ -19,6 +19,42 @@ observation model; он не добавляет robustness-алгоритм. S7C
 `feature/s7c-c1-retarded-ekf`.
 
 ### Журнал S7C-D robustness и corrective recovery
+
+- 2026-09-13 — corrective event-contract gate начат от принятого commit
+  `a53d12958436e81ba344787f66f9caaaf5f24cde` в ветке
+  `fix/s7c-recovery-event-contract`. Recovery processor теперь проверяет
+  stream quarantine перед каждой availability group: конфликт construction
+  event отклоняет tentative hypothesis, конфликт initialization/update event
+  активного поколения немедленно прекращает `confirmed/valid` и начинает
+  fresh causal recovery, а конфликт исторического поколения не переписывает
+  старые публикации и не сбрасывает текущий state. Exact duplicate безопасен.
+  Добавлены отдельные cumulative conflict diagnostics и явные множества
+  active/historical event IDs.
+- 2026-09-13 — `maximum_initialization_buffer_events=18` ограничивает только
+  candidate pool построения hypothesis. Confirmed EKF обрабатывает все новые
+  допустимые события availability group в детерминированном порядке. При
+  reset внутри группы остаток явно получает причину
+  `recovery_group_excluded_after_reset`; он не остаётся необъяснённо pending и
+  не попадает в новое поколение, которое принимает только строго более поздние
+  события. Targeted gate conflict/batch/C1-D2: **43 passed in 64.94 s**;
+  расширенный recovery gate: **17 passed in 19.33 s**.
+- 2026-09-13 — прежний абсолютный `2e-10 m` допуск исторического D2 optimizer
+  diagnostic оказался уже измеренного межплатформенного разброса: pinned
+  GitHub Actions показал `1.64242124e-7 m` на Windows и `1.46424384e-9 m` на
+  Linux при масштабе ошибки `114.5200646 m`. Regression использует `rtol=0`,
+  `atol=5e-7 m` (менее 5 частей на миллиард масштаба) и отдельно требует сам
+  крупный D2-срыв `>100/>200 m`, существенное recovery-уменьшение `<1/<2 m`
+  и отсутствие truth в online estimator. Математические gates не ослаблены.
+- 2026-09-13 — локальный финальный gate после event-contract исправления:
+  **422 passed in 138.32 s**; `pip check` — **No broken requirements found**;
+  `git diff --check` — PASS. Затронутый 10-cell
+  `initialization_recovery_validation.ipynb` выполнен заново. Read-only аудит
+  всех **18** committed notebooks / **117** непустых code cells подтвердил:
+  invalid nbformat `0`, error-output `0`, unexecuted `0`, missing/duplicate
+  cell IDs `0`; неизменённые тяжёлые GCC/SRP notebooks не пересчитывались.
+  Результаты/CSV C1, D1, D2 и held-out recovery benchmark не изменялись.
+  Corrective gate остаётся **In review** до зелёной Linux/Windows CI matrix;
+  весь S7C-D по-прежнему **In progress**.
 
 - 2026-09-12 — начат corrective gate от принятого commit
   `979520a80aea5a2820ccdf61554a6f7c0c474fbe` в отдельной ветке

@@ -411,6 +411,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 - `estimators/retarded_ekf_recovery.py` — отдельный opt-in lifecycle
   `tentative/confirmed/questionable/recovering`, независимое подтверждение
   initial hypothesis и bounded causal reinitialization без covariance inflation;
+  event quarantine различает active/historical generations, а лимит 18 событий
+  применяется только к построению гипотезы, не к confirmed EKF updates;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
