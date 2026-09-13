@@ -35,9 +35,12 @@ availability metadata.  True state and D1 outlier labels are evaluator-only.
    residual scores are recomputed from the returned final state.  Preliminary,
    confirmation and final scores are stored separately.
 
-The causal initialization buffer is limited to the most recent 18 unconsumed
-events.  Construction and confirmation events become one batch initialization
-and are never replayed as EKF updates.
+Only the candidate pool used to construct a tentative hypothesis is limited to
+the most recent 18 unconsumed events.  This bound never truncates confirmed EKF
+updates: every admissible event in an availability group is processed in
+deterministic `(available_timestamp_s, event_id)` order.  Construction and
+confirmation events become one batch initialization and are never replayed as
+EKF updates.
 
 ## Frozen loss-of-consistency and recovery rules
 
@@ -55,6 +58,17 @@ rules.  No old posterior is combined with the recovery batch; no covariance
 inflation or artificial regularization is used.  Earlier publications are
 immutable.  Event IDs, generation, statistical role, exclusions, reset reason
 and recovery duration are retained.
+
+The event-stream quarantine is checked before every availability group.  A
+conflict in a tentative construction event rejects that hypothesis.  A
+conflict in any initialization or accepted-update event of the active
+generation immediately invalidates its state and starts fresh causal recovery
+without the conflicting payload.  A conflict in a historical generation is
+retained as an audit diagnostic but cannot rewrite old publications or reset a
+newer state.  Exact duplicates remain harmless.  If invalidation occurs partway
+through an availability group, every still-unprocessed event in that group is
+explicitly excluded as `recovery_group_excluded_after_reset`; only events with
+strictly later availability may seed the new generation.
 
 ## Development and held-out evaluation
 

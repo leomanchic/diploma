@@ -218,3 +218,204 @@ def test_schedule_invariance_and_no_repeated_statistical_use():
     assert frequent_final.event_uses == one_shot.event_uses
     used = [item.event_id for item in frequent_final.event_uses]
     assert len(used) == len(set(used))
+
+
+def _confirmed_nominal_sequence():
+    block = generate_stress_base_block("informative", 2, base_seed=20260913)
+    scenario = generate_stress_scenario(block, _profile("nominal"))
+    processor = CausalConfirmedRetardedTimeEKF(
+        block.stations, scenario.events, estimator_variant="direct_bearing"
+    )
+    final = processor.advance_to(13.0)
+    assert final.valid and final.confirmed
+    return block, scenario, final
+
+
+def _changed_late_payload(measurement, *, available_timestamp_s: float = 14.0):
+    return replace(
+        measurement,
+        available_timestamp_s=available_timestamp_s,
+        direction_local=_offset_direction(measurement.direction_local, 5.0),
+    )
+
+
+def test_conflicting_tentative_construction_event_rejects_hypothesis():
+    block = generate_stress_base_block("informative", 2, base_seed=20260913)
+    scenario = generate_stress_scenario(block, _profile("nominal"))
+    timestamps = sorted({item.available_timestamp_s for item in scenario.events})
+    probe = CausalConfirmedRetardedTimeEKF(
+        block.stations, scenario.events, estimator_variant="direct_bearing"
+    )
+    tentative = probe.advance_to(timestamps[5])
+    target_id = tentative.tentative_construction_event_ids[0]
+    target = next(item for item in scenario.events if bearing_event_id(item) == target_id)
+    conflict_time = timestamps[6]
+    processor = CausalConfirmedRetardedTimeEKF(
+        block.stations,
+        (*scenario.events, _changed_late_payload(target, available_timestamp_s=conflict_time)),
+        estimator_variant="direct_bearing",
+    )
+    before = processor.advance_to(timestamps[5])
+    after = processor.advance_to(conflict_time)
+    assert before.status == "tentative"
+    rejected = [
+        item
+        for item in after.new_hypothesis_diagnostics
+        if item.action == "tentative_rejected"
+    ]
+    assert len(rejected) == 1
+    assert rejected[0].reason == "conflicted_tentative_construction_event"
+    assert rejected[0].excluded_event_ids == (target_id,)
+    assert target_id in after.conflicted_event_ids
+    assert target_id not in after.tentative_construction_event_ids
+
+
+@pytest.mark.parametrize("event_role", ("initialization", "update"))
+def test_conflicting_active_state_event_invalidates_generation(event_role: str):
+    block, scenario, confirmed = _confirmed_nominal_sequence()
+    target_ids = (
+        confirmed.initialization_event_ids
+        if event_role == "initialization"
+        else confirmed.applied_event_ids
+    )
+    target_id = target_ids[0]
+    target = next(item for item in scenario.events if bearing_event_id(item) == target_id)
+    processor = CausalConfirmedRetardedTimeEKF(
+        block.stations,
+        (*scenario.events, _changed_late_payload(target)),
+        estimator_variant="direct_bearing",
+    )
+    before = processor.advance_to(13.0)
+    after = processor.advance_to(14.5)
+    assert before.valid and target_id in before.active_state_event_ids
+    assert not after.valid and not after.confirmed
+    assert after.status == "questionable"
+    assert after.failure_reason == "conflicted_active_state_event_requires_recovery"
+    assert target_id in after.conflicted_event_ids
+    assert target_id in after.historical_state_event_ids
+    assert target_id not in after.active_state_event_ids
+    invalidation = next(
+        item
+        for item in after.new_lifecycle_diagnostics
+        if item.action == "state_invalidated"
+    )
+    assert invalidation.reason == "conflicted_active_state_event_requires_recovery"
+    assert invalidation.event_ids == (target_id,)
+
+
+def test_exact_duplicate_of_used_event_is_safe():
+    block, scenario, baseline = _confirmed_nominal_sequence()
+    duplicate = next(
+        item
+        for item in scenario.events
+        if bearing_event_id(item) == baseline.initialization_event_ids[0]
+    )
+    processor = CausalConfirmedRetardedTimeEKF(
+        block.stations,
+        (*scenario.events, duplicate),
+        estimator_variant="direct_bearing",
+    )
+    actual = processor.advance_to(13.0)
+    assert actual.valid and actual.confirmed and actual.reset_count == 0
+    assert not actual.conflicted_event_ids
+    assert any(item.action == "duplicate_exact" for item in actual.prefix.journal)
+    np.testing.assert_allclose(actual.state.vector, baseline.state.vector, rtol=0.0, atol=0.0)
+    np.testing.assert_allclose(
+        actual.covariance_state, baseline.covariance_state, rtol=0.0, atol=0.0
+    )
+
+
+def test_large_availability_group_processes_all_confirmed_ekf_updates():
+    block = generate_stress_base_block("informative", 2, base_seed=20260913)
+    scenario = generate_stress_scenario(block, _profile("nominal"))
+    ordered = sorted(
+        scenario.events,
+        key=lambda item: (item.available_timestamp_s, bearing_event_id(item)),
+    )
+    late_ids = {bearing_event_id(item) for item in ordered[15:]}
+    batched = tuple(
+        item if index < 15 else replace(item, available_timestamp_s=14.0)
+        for index, item in enumerate(ordered)
+    )
+    final = CausalConfirmedRetardedTimeEKF(
+        block.stations, batched, estimator_variant="direct_bearing"
+    ).advance_to(14.5)
+    attempted_late_ids = {
+        item.event_id for item in final.update_diagnostics if item.event_id in late_ids
+    }
+    accounted_ids = (
+        set(final.initialization_event_ids)
+        | set(final.applied_event_ids)
+        | set(final.rejected_event_ids)
+    )
+    assert final.valid and final.confirmed and final.reset_count == 0
+    assert attempted_late_ids == late_ids
+    assert late_ids <= accounted_ids
+    assert accounted_ids == set(final.prefix.accepted_event_ids)
+
+
+def test_reset_inside_large_group_classifies_every_remaining_event():
+    block = generate_stress_base_block("informative", 2, base_seed=20260913)
+    scenario = generate_stress_scenario(block, _profile("nominal"))
+    ordered = sorted(
+        scenario.events,
+        key=lambda item: (item.available_timestamp_s, bearing_event_id(item)),
+    )
+    batched = tuple(
+        item
+        if index < 15
+        else replace(
+            item,
+            available_timestamp_s=14.0,
+            direction_local=_offset_direction(item.direction_local, 20.0),
+        )
+        for index, item in enumerate(ordered)
+    )
+    final = CausalConfirmedRetardedTimeEKF(
+        block.stations, batched, estimator_variant="direct_bearing"
+    ).advance_to(14.5)
+    accounted_ids = (
+        set(final.initialization_event_ids)
+        | set(final.applied_event_ids)
+        | set(final.rejected_event_ids)
+    )
+    reasons = dict(final.rejection_reasons)
+    assert not final.valid and final.reset_count == 1
+    assert accounted_ids == set(final.prefix.accepted_event_ids)
+    assert "recovery_group_excluded_after_reset" in reasons.values()
+
+
+def test_conflict_in_historical_generation_does_not_reset_active_generation():
+    block = generate_stress_base_block("informative", 6, base_seed=20260913)
+    scenario = generate_stress_scenario(block, _profile("nominal"))
+    ordered = sorted(scenario.events, key=lambda item: item.available_timestamp_s)
+    corrupt_ids = {bearing_event_id(item) for item in ordered[18:24]}
+    corrupted = tuple(
+        replace(item, direction_local=_offset_direction(item.direction_local, 20.0))
+        if bearing_event_id(item) in corrupt_ids
+        else item
+        for item in scenario.events
+    )
+    probe = CausalConfirmedRetardedTimeEKF(
+        block.stations, corrupted, estimator_variant="direct_bearing"
+    ).advance_to(14.5)
+    assert probe.valid and probe.generation >= 2 and probe.historical_state_event_ids
+    target_id = probe.historical_state_event_ids[0]
+    target = next(item for item in corrupted if bearing_event_id(item) == target_id)
+    processor = CausalConfirmedRetardedTimeEKF(
+        block.stations,
+        (*corrupted, _changed_late_payload(target, available_timestamp_s=15.0)),
+        estimator_variant="direct_bearing",
+    )
+    before = processor.advance_to(14.5)
+    after = processor.advance_to(15.5)
+    assert before.valid and before.generation >= 2
+    assert after.valid and after.confirmed
+    assert after.generation == before.generation
+    assert after.reset_count == before.reset_count
+    assert target_id in after.historical_state_event_ids
+    assert any(
+        item.action == "historical_conflict_quarantined"
+        and item.event_ids == (target_id,)
+        for item in after.new_lifecycle_diagnostics
+    )
