@@ -193,3 +193,15 @@
   availability, first-confirmation time, final validity, censored recovery,
   false resets, conditional errors/coverage and unconditional denominators.
   The 10/50 m tails are diagnostic thresholds, not operational requirements.
+- In the opt-in S7C-C manoeuvre variant, preserve the accepted C1/D2/recovery
+  paths. Use integrated-Wiener `F/Qd` with physical `Qc` units, never reverse
+  a stochastic state as an exact CV trajectory. Retarded bearing updates must
+  use correlated augmented history, a bounded physical history window and
+  explicit `emission_outside_history` failures. Delayed events may update the
+  current node only through retained cross covariance; publication cadence
+  must not affect the event posterior. Truth trajectories are evaluator-only.
+- Keep development and evaluation seeds disjoint, freeze `Qc` before final
+  evaluation, pair variants on the identical event stream and bootstrap whole
+  independent base blocks, not overlapping/dependent publication epochs.
+  Report manoeuvre error alongside valid/confirmed availability and empirical
+  coverage; do not call the stochastic posterior a signal-level CRLB.

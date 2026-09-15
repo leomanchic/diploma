@@ -1,0 +1,19 @@
+geometry,trajectory_kind,period,independent_paired_sequence_count,matched_valid_publication_count,manoeuvre_minus_recovery_position_rmse_m,paired_bootstrap_ci_low_m,paired_bootstrap_ci_high_m,bootstrap_draw_count,bootstrap_seed,estimand
+informative,constant_velocity,pre,8,23,0.6307427716622931,0.07436614900925712,1.1852924034514158,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,constant_velocity,during,8,72,0.8013024000944372,0.5304932144962302,1.1329769788415434,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,constant_velocity,post,8,64,1.1920556910901312,0.9505020739741041,1.4073800876438016,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,constant_acceleration_segment,pre,8,23,0.6307427716622931,0.06708520445893552,1.177194384834517,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,constant_acceleration_segment,during,8,64,-1.9382552603012093,-2.3000119327951194,-1.5471123026392846,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,constant_acceleration_segment,post,8,22,0.2554756304959911,-0.3806254823903379,0.6609928197347834,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,smooth_turn,pre,8,23,0.6307427716622931,0.08780199462533472,1.1993888027287627,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,smooth_turn,during,8,65,-1.3133010564576593,-1.626943854351754,-0.9071950917337318,500,20260917,conditional RMSE difference on matched valid timestamps
+informative,smooth_turn,post,8,30,0.006876659153304265,-0.38991810558582235,0.30961072974379705,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_velocity,pre,8,9,-0.10511509801205932,-0.41998757987379975,0.243488829715083,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_velocity,during,8,70,0.6025248836951445,0.39507477679170155,0.784353920644891,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_velocity,post,8,64,1.038179864623939,0.7800995359093524,1.2817161451796721,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_acceleration_segment,pre,8,9,-0.10511509801205932,-0.41998757987379975,0.243488829715083,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_acceleration_segment,during,8,51,-1.4684547295710915,-2.0222228623825282,-0.9321210409739017,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,constant_acceleration_segment,post,8,40,0.48234377122404615,0.18914193679400035,1.05870696852596,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,smooth_turn,pre,8,9,-0.10511509801205932,-0.41998757987379975,0.243488829715083,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,smooth_turn,during,8,60,-1.8269250944488338,-2.3909981996403578,-1.0370192743587714,500,20260917,conditional RMSE difference on matched valid timestamps
+poorly_conditioned,smooth_turn,post,8,31,0.615154625889728,-0.05901010765430569,1.1321358987178913,500,20260917,conditional RMSE difference on matched valid timestamps

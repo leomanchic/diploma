@@ -663,3 +663,42 @@ run закончил censored recovery. Поэтому conditional error все�
 `results/initialization_recovery_failure_journal.csv`. Truth/outlier labels в
 журнале являются только внешней evaluator-аннотацией. Это не поддержка
 манёвров, не adaptive `Q/R` и не signal-level acoustic frontend.
+
+## Opt-in stochastic-history manoeuvre-bearing filter S7C-C
+
+Модель и все допущения зафиксированы в
+[MANOEUVRE_TRACKING_MODEL.md](MANOEUVRE_TRACKING_MODEL.md), а development/evaluation
+split, seeds, физические границы истории и метрики — в
+[S7C_MANOEUVRE_PROTOCOL.md](S7C_MANOEUVRE_PROTOCOL.md). Состояние `[q,v]`
+переходит с точными `F,Qd` для интегрированного Wiener-ускорения (`Qc` в
+м²/с³). После причинного подтверждения начального CV-префикса фильтр хранит
+полный joint posterior узлов траектории с cross-covariance; запоздалое
+bearing-событие получает emission time из retarded equation, вставляет
+Gaussian bridge и обновляет текущий узел через совместную covariance.
+Никакая истинная дальность или emission time фильтру не передаётся.
+
+`estimators/retarded_ekf_manoeuvre.py` включается **явно**. C1, опубликованный
+D2 и `confirmed_recovery` не меняют поведения. Истина задаётся независимым
+детерминированным `simulation/manoeuvre_trajectory.py`: CV control, участок
+ускорения и плавный поворот, начинающиеся после CV-префикса. Это прямые
+bearing-level наблюдения трёх станций, не audio frontend. Запуск сразу в
+манёвре здесь не проверен.
+
+Ограниченный paired benchmark и визуальный audit:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_stochastic_motion.py tests/test_retarded_ekf_manoeuvre.py
+.\.venv\Scripts\python.exe -m validation.manoeuvre_tracking_study --smoke
+.\.venv\Scripts\python.exe -m validation.manoeuvre_tracking_study
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/manoeuvre_tracking_validation.ipynb
+```
+
+CSV разделены на development selection, зависимые публикации, целые
+последовательности, phase summaries и whole-sequence paired intervals в
+`results/manoeuvre_*.csv`; notebook —
+[manoeuvre_tracking_validation.ipynb](notebooks/manoeuvre_tracking_validation.ipynb).
+При сравнении conditional error необходимо смотреть valid fraction.
+Posterior coverage — эмпирическая диагностика, не signal-level CRLB и не
+доказательство калибровки реальной системы. Реальные аудиоданные,
+коррелированные ошибки bearing, физическая калибровка источника, свойства
+среды и полевые испытания остаются будущей работой.
