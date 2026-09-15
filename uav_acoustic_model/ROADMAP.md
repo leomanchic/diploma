@@ -34,7 +34,7 @@ bearing-измерениям определяет и затем причинно
 | S7C | In progress | Реализовать центральный причинный dynamic 3D tracker по проверенным подэтапам | S7C-A…S7C-D | отдельная приёмка measurement model, event stream, filter и robustness benchmark | S7B |
 | S7C-A | Done | Проверить retarded-time bearing measurement model для 6D constant-velocity state | dynamic state, retarded prediction/residual/Jacobian, observability notebook | analytic/numeric emission time и Jacobian, radial/nonradial/instantaneous rank diagnostics, invariance | S7B |
 | S7C-B | Done | Задать причинный поток асинхронных событий и offline batch reference | event contract, ordering/dropout rules, constrained retarded-time batch baseline | available-time causality, отсутствие future access, offline/final-prefix agreement и independent-sequence benchmark | S7C-A |
-| S7C-C | In progress | Реализовать центральную рекурсивную оценку по проверенным подэтапам | S7C-C1 strict-CV baseline и последующие явно отделённые расширения | отдельная приёмка constant-velocity baseline до process-noise/manoeuvre моделей | S7C-B |
+| S7C-C | In progress | Реализовать центральную рекурсивную оценку по проверенным подэтапам | S7C-C1 strict-CV baseline и явно включаемый stochastic-history вариант для манёвров | отдельные causal/Jacobian/history/coverage gates; синтетический benchmark не завершает полевую приёмку | S7C-B |
 | S7C-C1 | Done | Реализовать причинный retarded-time EKF baseline при строгой constant velocity | `retarded_ekf.py`, deterministic tests, 96-sequence matched study и notebook | `Q=0`, causal batch initialization, Joseph update, PD covariance contract, sequence-level NIS/NEES/coverage | S7C-B |
 | S7C-D | In progress | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark, opt-in robust variants, confirmation/recovery и failure reporting | reproducible stress gates, causal event accounting, availability/error trade-off и явные ограничения | S7C-C |
 | S7C-D1 | Done | Измерить пределы принятого strict-CV C1 при потерях, паузах станций, задержках и выбросах без изменения фильтра | фиксированный протокол, paired 200-block/1800-run study, epoch/sequence/profile CSV и notebook | deterministic/smoke gates, честные denominators/coverage, полный reproducibility audit | S7C-C1 |
@@ -88,11 +88,16 @@ recovery после наблюдаемой потери согласованно
 дальнейшие D-проверки манёвренных моделей зависят от соответствующего
 расширения S7C-C.
 
-Текущий corrective gate внутри S7C-D уточняет существующий recovery-контракт,
-не создавая нового подэтапа: конфликт payload активного поколения прекращает
-confirmed publication и запускает свежую причинную reinitialization, конфликт
-исторического поколения остаётся только audit-событием, а 18-event bound
-ограничивает только построение гипотезы. C1 и опубликованный D2 не изменяются.
+Исправление event contract внутри S7C-D на `d281d730` закрыто: конфликт payload
+активного поколения прекращает confirmed publication и запускает свежую
+причинную reinitialization, исторический конфликт остаётся audit-событием,
+а 18-event bound относится только к построению гипотезы. Новая работа
+внутри S7C-C добавляет явно включаемый `Q>0` augmented-history фильтр для
+заранее заданных гладких манёвров. C1, опубликованный D2 и
+`confirmed_recovery` остаются воспроизводимыми вариантами. Статистический
+benchmark на прямых bearing-событиях не является валидацией акустического
+frontend, окружающей среды или полевой системы; S7C-C и общий S7C остаются
+`In progress`.
 
 Одно мгновенное bearing-измерение одной станции не определяет дальность.
 Temporal retarded-time модель при строгом constant velocity и известном

@@ -1,5 +1,10 @@
 # S7C-C1: causal retarded-time EKF baseline
 
+This document describes the unchanged strict-CV `Q=0` C1 baseline. The
+separate, explicitly enabled stochastic-history manoeuvre extension is
+specified in [MANOEUVRE_TRACKING_MODEL.md](MANOEUVRE_TRACKING_MODEL.md); it
+does not retroactively alter C1 or published D2.
+
 ## Scope
 
 This stage estimates one source state from asynchronous, calibrated bearing

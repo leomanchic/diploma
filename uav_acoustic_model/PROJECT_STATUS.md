@@ -1,11 +1,122 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-13
+Последнее обновление: 2026-09-15
 
 ## Текущий этап
 
-Текущая работа: **S7C-D initialization confirmation and causal recovery**.
-Это корректирующая работа внутри S7C-D, а не новый набор подэтапов.
+Текущая работа: **S7C-C manoeuvre-bearing stochastic-history variant**.
+Исправление event contract на `d281d730` закрыто. Это явно включаемое
+расширение причинного рекурсивного оценивателя внутри S7C-C, не новый
+корректирующий подэтап. C1, опубликованный D2 и `confirmed_recovery` сохранены.
+
+### Журнал S7C-C: математический и deterministic gate
+
+- Зафиксирована модель `x=[q,v]`, `dq=v dt`, `dv=L dW`, `Qc=LLᵀ` в м²/с³.
+  `F(h)=[[I,hI],[0,I]]`,
+  `Qd(h)=[[h³Qc/3,h²Qc/2],[h²Qc/2,hQc]]`. Process noise описывает
+  неопределённость фильтра; ускорение и поворот synthetic truth заданы
+  отдельно и детерминированно.
+- Новый opt-in `CausalManoeuvreRetardedTimeEKF` хранит полный joint posterior
+  узлов истории, включая cross-covariance; emission time решает
+  `t_receive=t_emit+||q(t_emit)-p||/c` только по доступной истории.
+  Промежуточное состояние вставляется как Gaussian integrated-Wiener bridge,
+  затем запоздалое bearing обновляет также текущий узел через cross-covariance.
+  Retarded Jacobian включает implicit `dt_emit/dX`; joint covariance
+  обновляется Joseph-формулой. Для `Qc>0` stochastic reverse-CV projection
+  запрещена. Точный `Qc=0` limit допускает детерминированное rebase.
+- Физические ограничения тестового протокола: `maximum_range=250 m`,
+  `maximum_transport_delay=0.6 s`, `history_step=0.25 s`,
+  `history_window=2.0 s`; `250/343+0.6+0.25<2.0 s`.
+  Наблюдение за пределами истории получает `emission_outside_history`.
+- Файлы стадии: `model/stochastic_motion.py`,
+  `estimators/retarded_ekf_manoeuvre.py`,
+  `simulation/manoeuvre_trajectory.py`,
+  `MANOEUVRE_TRACKING_MODEL.md`, `S7C_MANOEUVRE_PROTOCOL.md`,
+  `tests/test_stochastic_motion.py`, `tests/test_retarded_ekf_manoeuvre.py`.
+- Gate: `.\.venv\Scripts\python.exe -m pytest -q
+  tests/test_stochastic_motion.py tests/test_retarded_ekf_manoeuvre.py`:
+  **18 passed** после добавления event-contract, seed, Joseph-joint,
+  PSD/small-negative-`Qc` и rejected-prior regressions. Smoke
+  matched direct-bearing stream на трёх типах truth:
+  **PASS**, 45 events/config. Точный `Qc=0` matched CV check:
+  `confirmed_recovery` и новый вариант дали **34/34** accepted updates и
+  final position error `0.6182630704890123/0.6182630704891471 m`.
+- До evaluation зафиксированы split/seeds/selection/metrics в
+  `S7C_MANOEUVRE_PROTOCOL.md`; число зависимых публикаций не называется
+  числом независимых sequences.
+
+### Журнал S7C-C: статистический gate и ограничения
+
+- Development seed `20260915`, evaluation seed `20260916`, bootstrap seed
+  `20260917`. Три заранее заданных кандидата `Qc=alpha I`, `alpha=0.05,
+  0.25, 1.0 м²/с³`. Development score (с явным 50 m penalty за invalid):
+  `10.7595, 2.6271, 2.1224 m`; выбрано `alpha=1.0` **до** evaluation.
+  Это тестовые, а не физически откалиброванные параметры.
+- Evaluation: 8 независимых base blocks на геометрию, 2 геометрии = **16
+  независимых base blocks**. Каждый блок имеет три matched truth modes:
+  **48 зависимых trajectory-runs**, `48 × 2 variants × 27` зависимых
+  публикаций. Разные truth modes одного блока разделяют source jitter и
+  bearing noise; их нельзя называть 48 независимыми trials. В каждой
+  geometry/mode группе paired bootstrap resamples целые 8 sequences,
+  `500` повторов. Programmatic provenance audit: 24 development generator
+  seeds и 96 evaluation generator seeds, overlap **0**; в пределах каждого
+  split повторяющихся mechanism-seeds также **0**. Изменённые файлы:
+  `validation/manoeuvre_tracking_study.py`,
+  `notebooks/manoeuvre_tracking_validation.ipynb`,
+  `results/manoeuvre_development_selection.csv`,
+  `results/manoeuvre_tracking_frames.csv`,
+  `results/manoeuvre_tracking_sequences.csv`,
+  `results/manoeuvre_tracking_summary.csv`, `results/manoeuvre_paired_ci.csv`,
+  `README.md`, `ROADMAP.md`, `AGENTS.md`, `PROJECT_STATUS.md`.
+- Conditional position RMSE во время acceleration segment:
+  informative `4.01 → 2.10 m`, poorly-conditioned `3.18 → 1.89 m`;
+  smooth turn `3.26 → 1.96 m` и `3.29 → 1.57 m`
+  (`confirmed_recovery → manoeuvre_history`). Valid fraction соответственно
+  `0.889 → 1.000`, `0.708 → 0.903`, `0.903 → 1.000`, `0.833 → 0.972`.
+  Paired matched-valid during-position-RMSE differences, new minus old,
+  95% sequence-bootstrap CI: acceleration `-1.94 [-2.30,-1.55] m` и
+  `-1.47 [-2.02,-0.93] m`; turn `-1.31 [-1.63,-0.91] m` и
+  `-1.83 [-2.39,-1.04] m`.
+- **Чистый CV control ухудшился:** during position RMSE
+  informative `0.67 → 1.47 m`, poorly-conditioned `0.66 → 1.26 m`;
+  paired differences `+0.80 [+0.53,+1.13] m` и
+  `+0.60 [+0.40,+0.78] m`. Это цена выбранного process noise,
+  а не улучшение от сопровождения на любом режиме.
+- Описательное pooled сравнение acceleration+turn, где разные truth modes
+  одного base block зависимы (без отдельного pooled CI): `pre` conditional
+  q/v RMSE `1.07/0.42 → 1.56/0.58`, valid `64/320` у обоих; `during`
+  `3.47/2.81 → 1.90/2.00`, valid `240/288 → 279/288`; `post`
+  `1.89/0.71 → 2.00/0.99`, valid `123/256 → 255/256`.
+  Следовательно, post conditional error **не улучшился**, но доступность
+  существенно выше. Нельзя сообщать только post conditional RMSE без
+  этих знаменателей.
+- Во время манёвра false NIS rejection чистых bearings на sequence
+  informative acceleration/turn `4.6/4.3 → 0.1/0.1`, poorly-conditioned
+  `4.3/4.9 → 0.6/0.1`; mean resets примерно `1 → 0` (при poorly-conditioned
+  acceleration `1 → 0.1`). Conditional 95% covariance coverage нового
+  варианта `0.95–1.00`, baseline на манёврах `0.10–0.13`;
+  near-100% указывает на вероятную консервативность stochastic covariance,
+  **не** доказывает её калибровку. Maximum history memory в этих группах
+  `153640–167232 B`; runtime/sequence и first accepted post-onset bearing
+  latency отдельно в CSV. Последняя величина — реакция на поступившее
+  событие, не время сходимости ошибки.
+- Notebook `manoeuvre_tracking_validation.ipynb` повторно выполнен через
+  `nbconvert` **PASS** после исправления первого запуска: первоначальный
+  `ModuleNotFoundError: pandas` устранён использованием standard-library
+  `csv`, без новой зависимости. Windows kernel выдаёт прежние нефатальные
+  ZMQ/TCP warnings. Генератор и estimator audio frontend не включают.
+  Полный local pytest: `.\.venv\Scripts\python.exe -m pytest -q` —
+  **440 passed in 162.22 s** в pinned local environment
+  `numpy=2.4.6, scipy=1.17.1, pytest=9.1.1`. On-disk notebook audit:
+  **19 notebooks,
+  204 cells/204 unique cell IDs, 0 error outputs, 0 unexecuted code cells**;
+  затронутый notebook выполнен повторно, неизменённые тяжёлые GCC/SRP
+  исследования не пересчитывались. `.\.venv\Scripts\python.exe -m pip check`:
+  `No broken requirements found`; `git diff --check`: exit 0.
+  Cross-platform CI ещё ожидает опубликованный commit;
+  S7C-C и общий S7C остаются **In progress**.
+
+### Предыдущий журнал S7C-D robustness и corrective recovery
 
 Статус S7C-D1: **Done**. S7C-D2: **Done**. S7C-C1 остаётся **Done** после corrective
 review gate. Первый рекурсивный центральный оцениватель по
@@ -17,8 +128,6 @@ signal-level multi-station frontend не входят в C1 и не заявле
 observation model; он не добавляет robustness-алгоритм. S7C-B
 сохраняет статус **Done** после повторного входного gate на ветке
 `feature/s7c-c1-retarded-ekf`.
-
-### Журнал S7C-D robustness и corrective recovery
 
 - 2026-09-13 — corrective event-contract gate начат от принятого commit
   `a53d12958436e81ba344787f66f9caaaf5f24cde` в ветке

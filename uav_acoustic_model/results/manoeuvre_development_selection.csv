@@ -1,0 +1,4 @@
+alpha_m2_s3,development_selection_score_m,during_conditional_rmse_m,during_valid_fraction,development_seed,independent_base_block_count,dependent_trajectory_run_count
+0.05,10.759508329986911,3.4791832379440204,0.9583333333333334,20260915,4,12
+0.25,2.6270881253145344,2.6270881253145344,1.0,20260915,4,12
+1.0,2.1224117174425072,2.1224117174425072,1.0,20260915,4,12
