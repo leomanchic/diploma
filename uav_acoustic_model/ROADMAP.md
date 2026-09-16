@@ -105,6 +105,30 @@ frontend, окружающей среды или полевой системы; 
 отображения во внешней публикации. Это корректировка текущей реализации, а не
 новый исследовательский подэтап; статусы таблицы не изменяются.
 
+Следующая интеграционная работа внутри того же S7C соединяет проверенные
+компоненты в цепочку `continuous three-station audio → GCC/SRP → calibrated
+BearingMeasurement → causal retarded-time 3D tracking`. Пилот использует один
+общий source stream, непрерывные station channel/noise arrays, отдельные
+calibration/evaluation sequences и прежний frozen `Qc`; полевая физика и новый
+фильтр не добавляются. Из-за стоимости dense augmented history tracker получает
+предобъявленное truth-free frame subset, тогда как bearing-метрики используют
+все кадры. Это текущая работа внутри S7C, не новый подэтап.
+
+Синтетическая часть S7C может считаться завершённой только когда одновременно:
+
+1. continuous multistation streams, координаты ENU и causal timestamps имеют
+   deterministic cross-platform regressions;
+2. GCC и SRP на одинаковом аудио формируют truth-free calibrated measurements
+   с непересекающимся calibration/evaluation provenance;
+3. causal tracker публикует 3D state с явными invalid gaps, failures, resets,
+   denominators, runtime и memory diagnostics;
+4. временная/межстанционная корреляция и empirical covariance coverage измерены
+   и ограничения независимой measurement model явно задокументированы;
+5. полный pytest, новый notebook и Windows/Linux CI зелёные.
+
+Эти критерии не заменяют последующие реальные аудиоданные, синхронизацию
+оборудования, среду и полевую проверку из S8–S13.
+
 Одно мгновенное bearing-измерение одной станции не определяет дальность.
 Temporal retarded-time модель при строгом constant velocity и известном
 конечном `c` может формально получить дополнительную слабую информацию о

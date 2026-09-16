@@ -9,10 +9,11 @@
 S7C-B и ограниченный strict-CV EKF baseline S7C-C1 завершены. S7C-D1
 завершён как количественная проверка неизменённого C1 при потерях, паузах
 станций, задержках и выбросах; опубликованный D2 добавляет opt-in consensus и
-NIS gate. Текущая corrective-реализация внутри S7C-D добавляет tentative
-initialization confirmation и bounded causal recovery, сохраняя C1/D2 как
-отдельные воспроизводимые варианты. Это всё ещё `Q=0` и strict CV; весь S7C-C
-и S7C-D не объявлены завершёнными.
+NIS gate. Tentative initialization confirmation и bounded causal recovery
+сохраняют C1/D2 как отдельные воспроизводимые варианты. Текущая работа внутри
+S7C соединяет exact continuous audio трёх станций, GCC/SRP, калиброванные
+`BearingMeasurement` и явно включаемый `Q>0` stochastic-history tracker.
+Общий S7C-C/S7C-D всё ещё не объявлен завершённым.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -486,6 +487,8 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   validity, conditional errors, coverage и outlier/false-rejection trade-off;
 - `notebooks/initialization_recovery_validation.ipynb` — held-out accuracy,
   tails, availability/coverage и воспроизведение двух D2 reject-lock failures;
+- `notebooks/three_station_audio_tracking_validation.ipynb` — полный synthetic
+  audio-to-bearing-to-track pilot, correlations, failures, runtime и 3D path;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -525,6 +528,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -c "from validation.retarded_ekf_study import run_retarded_ekf_study; run_retarded_ekf_study()"
 .\.venv\Scripts\python.exe -m validation.retarded_ekf_robust_study --sequence-count 100 --base-seed 20260912 --workers 8 --output-directory results
 .\.venv\Scripts\python.exe validation\initialization_recovery_study.py --sequence-count 100 --base-seed 20260914 --workers 8 --output-directory results --progress
+.\.venv\Scripts\python.exe -m validation.three_station_audio_tracking_study
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -542,6 +546,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_ekf_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\retarded_ekf_robust_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\initialization_recovery_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\three_station_audio_tracking_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -708,6 +713,45 @@ Posterior coverage — эмпирическая диагностика, не sig
 доказательство калибровки реальной системы. Реальные аудиоданные,
 коррелированные ошибки bearing, физическая калибровка источника, свойства
 среды и полевые испытания остаются будущей работой.
+
+## Continuous audio трёх станций → causal 3D tracking
+
+Зафиксированный integration pilot описан в
+[THREE_STATION_AUDIO_PROTOCOL.md](THREE_STATION_AUDIO_PROTOCOL.md). Один общий
+random-broadband source непрерывно распространяется к 12 реальным мировым
+координатам микрофонов трёх tetrahedral-станций. Для каждой станции шум
+создаётся один раз на полный channel array; overlapping frames являются views
+этого массива. Один и тот же frame поступает all-six GCC/WLS и equal-weight
+SRP-PHAT, после чего локальное направление переводится в ENU через
+`StationPose` и превращается в truth-free `BearingMeasurement`.
+
+Время bearing — центр приёмного кадра. Availability равно концу кадра плюс
+моделируемая processing/delivery задержка; измеренный wall runtime хранится
+отдельно. Tracker не получает true range, velocity или emission time. Bias/R
+строятся только по отдельным calibration sequences; evaluation seeds и
+фактические source/noise seeds не пересекаются. GCC/SRP выполняются на всех
+кадрах, а dense-history tracker в этом вычислительно ограниченном pilot
+получает deterministic indices `0,32,64,...` (`2.9296875 Hz/station`).
+
+Завершённый набор: 6 calibration + 6 evaluation continuous sequences, по одной
+на каждую `(trajectory, SNR)` cell; это integration pilot, не квалификация
+редких хвостов. Bearing RMSE равен `0.457--0.491 deg` при `-6 dB` и
+`0.0813--0.0834 deg` при `10 dB`; 10/12 method-sequences final valid. На
+подтверждённых публикациях position RMSE `0.939--2.319 m`, velocity RMSE
+`0.728--3.287 m/s`, но empirical covariance coverage на манёврах часто нулевой.
+Lag-1 measurement-error correlation достигает `0.456`, inter-station — `0.202`;
+текущий EKF их игнорирует. Это offline synthetic chain, не real-time/field
+readiness и не signal-level CRLB.
+
+```powershell
+.\.venv\Scripts\python.exe -c "from validation.three_station_audio_tracking_study import smoke_test; print(smoke_test())"
+.\.venv\Scripts\python.exe -m validation.three_station_audio_tracking_study
+.\.venv\Scripts\python.exe -m pytest -q tests/test_three_station_audio_tracking.py
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/three_station_audio_tracking_validation.ipynb
+```
+
+Результаты: `results/three_station_audio_*.csv`; визуальный audit —
+[three_station_audio_tracking_validation.ipynb](notebooks/three_station_audio_tracking_validation.ipynb).
 
 Отчёт различает фактическое
 `first_post_onset_accepted_update_processing_time_s` из update diagnostic и

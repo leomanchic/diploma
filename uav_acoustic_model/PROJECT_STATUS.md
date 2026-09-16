@@ -4,10 +4,89 @@
 
 ## Текущий этап
 
-Текущая работа: **S7C-C manoeuvre-bearing stochastic-history variant**.
+Текущая работа: **S7C three-station continuous-audio integration pilot**.
 Исправление event contract на `d281d730` закрыто. Это явно включаемое
 расширение причинного рекурсивного оценивателя внутри S7C-C, не новый
 корректирующий подэтап. C1, опубликованный D2 и `confirmed_recovery` сохранены.
+
+### Three-station continuous-audio integration pilot
+
+- В ветке `feature/three-station-audio-tracking` от `f1f1785` начата следующая
+  интеграционная работа внутри существующего S7C: один общий непрерывный
+  broadband source распространяется к реальным координатам 12 микрофонов трёх
+  tetrahedral-станций; шум создаётся один раз на полный station stream, а
+  перекрывающиеся кадры являются views общего массива.
+- До evaluation зафиксирован `THREE_STATION_AUDIO_PROTOCOL.md`: `fs=48 kHz`,
+  frame/hop `1024/512`, duration `2.0 s`, SNR `-6/10 dB`, три trajectory kinds,
+  по 1 независимой calibration/evaluation sequence на cell, seeds
+  `20260918/20260919`, random broadband signal и прежний `Qc=I m²/s³`.
+- Availability определяется как `frame_end + 0.010 s modeled processing +
+  station delivery`; измеренный runtime хранится отдельно. Физика bearing
+  использует reception-frame centre, а true emission time остаётся только у
+  evaluator. Calibration bias/R строятся только по calibration sequences.
+- Окончательный smoke всего тракта **PASS** для all-six GCC/WLS и equal-weight
+  SRP-PHAT: по 12/12 valid tracker events, 12 causal publications и final
+  confirmed/valid state. GCC/SRP при этом исполняются на всех кадрах.
+- Наблюдаемая особенность cadence: прежние D2 event-count limits не могли
+  представить confirmation span при hop `10.667 ms`. Для этого пилота заранее
+  зафиксированы schedule-derived capacity settings в протоколе; per-event NIS,
+  consensus, recovery и `Qc` thresholds не подбирались по evaluation errors.
+- Pre-evaluation feasibility run с history window `2 s` был остановлен без
+  созданных CSV и до просмотра evaluation errors: при плотном audio cadence он
+  выполнялся более часа и достиг наблюдаемого process peak RSS около `2.05 GB`.
+  До повторного evaluation в протоколе зафиксировано физически достаточное
+  окно `0.85 s`: `R_max=150 m`, transport bound `0.10 s`, history step
+  `0.25 s`, требуемый implementation span `150/343+0.10+0.25=0.7873 s`; все
+  pilot ranges меньше `110 m`. `Qc`, NIS gates и
+  математика estimator не изменялись. Второй feasibility run подтвердил
+  bounded memory, но updates на каждом перекрывающемся кадре оставались дольше
+  часа. До появления CSV/error metrics зафиксирован deterministic truth-free
+  tracker decimation. Strides `4` и `16` также оставались дольше часа без
+  созданных CSV, поэтому окончательно зафиксированы `1 calibration + 1
+  evaluation sequence/cell` и stride `32`: GCC/SRP всё ещё оцениваются на
+  каждом кадре, tracker получает кадры `0,32,64,...` каждой станции
+  (`2.9296875 Hz/station`, около `8.79 events/s` суммарно). Это 6 независимых
+  sequences в каждом split; rare tails/sequence-level CI не квалифицируются.
+  Ни в одной feasibility-попытке evaluation errors не были доступны.
+- Обнаруженный performance defect smooth-turn устранён без изменения модели:
+  вместо трёх `quad` на каждый отсчёт используется векторизованная 32-точечная
+  Gauss--Legendre quadrature того же интеграла скорости. На 121 точке позиция
+  совпала с независимым scalar-`quad` до `2e-12 m`, скорость до `2e-14 m/s`;
+  одна 2-секундная smooth-turn sequence теперь занимает `16.45 s` wall вместо
+  многих минут.
+- Завершённый pilot содержит 6 calibration и 6 evaluation continuous
+  sequences, 36 calibration rows, 6696 all-frame evaluation bearing rows, 216
+  causal publications, 12 method-sequence rows и 12 summary rows. Все 12
+  tracker streams получили по 18 событий; 10/12 завершились confirmed/valid.
+  Два CV/10 dB stream (GCC и SRP на одном audio) остались
+  `tentative_initialization_unconfirmed`, что сохраняется как отказ.
+- All-frame conditional bearing RMSE: `0.457--0.491 deg` при `-6 dB` и
+  `0.0813--0.0834 deg` при `10 dB`. Для подтверждённых публикаций conditional
+  position RMSE равен `0.939--2.319 m`, velocity RMSE `0.728--3.287 m/s`;
+  confirmed-publication fraction `0.5`. Empirical state-covariance coverage
+  равен `1.0` для CV/-6 dB, `2/3` для acceleration/-6 dB и `0` в остальных
+  valid manoeuvre cells, то есть covariance calibration на манёврах не
+  подтверждена.
+- Calibration covariance во всех 36 группах PD: minimum eigenvalue
+  `7.777e-7 rad²`. Максимальная абсолютная lag-1 correlation `0.456`,
+  inter-station correlation `0.202`; текущий EKF обе корреляции игнорирует.
+  Calibration/evaluation overlap равен нулю для sequence и фактических
+  source/noise seeds. Peak history: 17 узлов и 84,184 bytes owned arrays;
+  максимальные измеренные frontend/tracker runtimes на evaluation sequence:
+  `4.811 s` и `0.509 s`.
+- Timing/provenance audit проверил все 6696 evaluation bearing rows:
+  `true emission < reception centre < frame end < availability`, exact
+  `availability=frame_end+processing+delivery`, 186 кадров на каждую
+  station/method/sequence, один source stream и три раздельных station-noise
+  streams. Truth-use flags ложны во всех bearing/tracker rows.
+- Приёмка локально: профильные **48 passed**, отдельный integration-файл
+  **9 passed**, полный pytest **457 passed за 161.49 s**, `pip check` PASS,
+  `git diff --check` PASS. Новый
+  `three_station_audio_tracking_validation.ipynb` выполнен без error-output;
+  audit всех **20/20** notebooks: nbformat 4, все code cells выполнены, error
+  outputs отсутствуют, cell IDs присутствуют и уникальны. Прежние тяжёлые
+  GCC/SRP notebooks не пересчитывались по явному ограничению задачи; их
+  сохранённые outputs прошли структурный audit. CI ожидает commit/push.
 
 ### Corrective gate: bounded history и causal timestamp reporting
 

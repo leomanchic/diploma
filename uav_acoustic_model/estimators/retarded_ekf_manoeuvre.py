@@ -18,6 +18,7 @@ from scipy.optimize import brentq
 
 from estimators.retarded_ekf_recovery import (
     CausalConfirmedRetardedTimeEKF,
+    InitializationRecoveryConfig,
     RecoveryEventUse,
     RecoveryHypothesisDiagnostic,
     RecoveryLifecycleDiagnostic,
@@ -444,10 +445,11 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
         *, estimator_variant: str,
         history_config: ManoeuvreHistoryConfig,
         sound_speed: float = DEFAULT_SOUND_SPEED,
+        recovery_config: InitializationRecoveryConfig | None = None,
     ) -> None:
         super().__init__(
             stations, events, estimator_variant=estimator_variant,
-            sound_speed=sound_speed,
+            sound_speed=sound_speed, recovery_config=recovery_config,
         )
         history_config.validate_for_sound_speed(sound_speed)
         self._history_config = history_config
