@@ -137,6 +137,34 @@ def _evaluate_publication(scenario: ManoeuvreScenario, variant: str, publication
     }
 
 
+def first_accepted_update_after_onset(
+    publications, reception_by_id: dict[str, float], available_by_id: dict[str, float],
+    onset_s: float,
+) -> tuple[float, float]:
+    """Return actual processing time and first user-visible publication time.
+
+    The processing time is an update diagnostic property where available. The
+    unchanged strict-CV diagnostic predates that field, so its event's causal
+    availability timestamp is the equivalent group-processing time. The
+    publication time is separately reported and may depend on the caller's
+    publication schedule.
+    """
+
+    accepted: list[tuple[float, float]] = []
+    for publication in publications:
+        for diagnostic in publication.update_diagnostics:
+            if (
+                diagnostic.update_applied
+                and reception_by_id[diagnostic.event_id] >= onset_s
+            ):
+                processing = float(getattr(
+                    diagnostic, "processing_time_s",
+                    available_by_id[diagnostic.event_id],
+                ))
+                accepted.append((processing, publication.processing_time_s))
+    return min(accepted) if accepted else (float("nan"), float("nan"))
+
+
 def run_paired_sequence(scenario: ManoeuvreScenario, alpha: float) -> tuple[list[dict], list[dict]]:
     """Identical events into accepted recovery and opt-in stochastic history."""
     config = ManoeuvreHistoryConfig(
@@ -173,11 +201,13 @@ def run_paired_sequence(scenario: ManoeuvreScenario, alpha: float) -> tuple[list
             bearing_event_id(event): event.reception_center_timestamp_s
             for event in scenario.events
         }
-        accepted_post_start = [
-            item.processing_time_s for item in publications
-            for diag in item.update_diagnostics
-            if diag.update_applied and reception_by_id[diag.event_id] >= 5.0
-        ]
+        available_by_id = {
+            bearing_event_id(event): event.available_timestamp_s
+            for event in scenario.events
+        }
+        accepted_processing, accepted_publication = first_accepted_update_after_onset(
+            publications, reception_by_id, available_by_id, 5.0
+        )
         sequence_rows.append({
             "geometry": scenario.geometry, "trajectory_kind": scenario.trajectory_kind,
             "sequence_index": scenario.sequence_index, "seed": scenario.seed,
@@ -190,14 +220,11 @@ def run_paired_sequence(scenario: ManoeuvreScenario, alpha: float) -> tuple[list
             "reset_count": last.reset_count,
             "first_confirmation_time_s": last.first_confirmation_time_s,
             "last_recovery_duration_s": last.last_recovery_duration_s,
-            "first_post_onset_accepted_update_s": (
-                min(accepted_post_start) if accepted_post_start else float("nan")
-            ),
+            "first_post_onset_accepted_update_processing_time_s": accepted_processing,
+            "first_post_onset_accepted_update_first_publication_time_s": accepted_publication,
             "runtime_s": runtime,
             "maximum_history_memory_bytes": getattr(estimator, "maximum_history_memory_bytes", 0),
-            "maximum_history_nodes": max(
-                getattr(item, "history_node_count", 0) for item in publications
-            ),
+            "maximum_history_nodes": getattr(estimator, "maximum_history_node_count", 0),
             "rejection_reasons_json": json.dumps(reasons, sort_keys=True),
         })
     return rows, sequence_rows
@@ -259,8 +286,12 @@ def summarize(rows: list[dict], sequence_rows: list[dict], split: str, alpha: fl
             "mean_reset_count": float(np.mean([item["reset_count"] for item in sequence_subset])),
             "mean_first_confirmation_time_s": _finite_mean(item["first_confirmation_time_s"] for item in sequence_subset),
             "mean_last_recovery_duration_s": _finite_mean(item["last_recovery_duration_s"] for item in sequence_subset),
-            "mean_first_post_onset_accepted_update_lag_s": _finite_mean(
-                item["first_post_onset_accepted_update_s"] - 5.0
+            "mean_first_post_onset_accepted_update_processing_lag_s": _finite_mean(
+                item["first_post_onset_accepted_update_processing_time_s"] - 5.0
+                for item in sequence_subset
+            ),
+            "mean_first_post_onset_accepted_update_first_publication_lag_s": _finite_mean(
+                item["first_post_onset_accepted_update_first_publication_time_s"] - 5.0
                 for item in sequence_subset
             ),
             "mean_runtime_s_per_sequence": float(np.mean([item["runtime_s"] for item in sequence_subset])),
