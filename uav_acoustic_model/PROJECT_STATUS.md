@@ -86,7 +86,9 @@
   audit всех **20/20** notebooks: nbformat 4, все code cells выполнены, error
   outputs отсутствуют, cell IDs присутствуют и уникальны. Прежние тяжёлые
   GCC/SRP notebooks не пересчитывались по явному ограничению задачи; их
-  сохранённые outputs прошли структурный audit. CI ожидает commit/push.
+  сохранённые outputs прошли структурный audit. Implementation commit
+  `3c7c19e2a9b070c07a201e93bc2fdf7da3778165` прошёл GitHub Actions run
+  `35111815954`: Ubuntu/Python 3.12 и Windows/Python 3.12 — `success`.
 
 ### Corrective gate: bounded history и causal timestamp reporting
 
