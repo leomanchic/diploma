@@ -61,8 +61,9 @@ pilot, not a rare-tail qualification or a field-validation claim.
 - Availability is `frame_end + 0.010 s modeled processing delay + station
   delivery delay`, where delivery delays are `0.000/0.015/0.030 s` for
   `S0/S1/S2`.
-- Measured computation runtime is reported independently and does not alter
-  simulated availability.
+- Measured continuous-audio synthesis, frame GCC/SRP frontend, total audio
+  pipeline and tracker-backend wall runtimes are reported independently and
+  do not alter simulated availability.
 - Events are processed only after availability. Earlier publications are not
   rewritten. The retarded-time tracker solves emission time from the bearing
   reception timestamp and estimated history; no true emission time is passed.

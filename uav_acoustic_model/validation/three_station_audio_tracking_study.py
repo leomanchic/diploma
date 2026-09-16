@@ -271,10 +271,12 @@ def generate_audio_sequence(
     sequence_index: int,
     *,
     duration_s: float = DURATION_S,
-) -> tuple[tuple[StationPose, ...], BenchmarkManoeuvreTrajectory, MultistationAudioStream, list[dict[str, object]], float]:
+) -> tuple[tuple[StationPose, ...], BenchmarkManoeuvreTrajectory, MultistationAudioStream, list[dict[str, object]], dict[str, float]]:
+    pipeline_started = time.perf_counter()
     stations = pilot_stations()
     trajectory = trajectory_for_audio_pilot(config.trajectory_kind, sequence_index)
     seed = audio_sequence_seed(split, configuration_index, sequence_index)
+    synthesis_started = time.perf_counter()
     stream = synthesize_multistation_audio(
         stations,
         trajectory,
@@ -285,7 +287,8 @@ def generate_audio_sequence(
         snr_db=config.snr_db,
         seed=seed,
     )
-    records, runtime = extract_audio_bearing_records(
+    synthesis_runtime = time.perf_counter() - synthesis_started
+    records, bearing_runtime = extract_audio_bearing_records(
         stream,
         stations,
         trajectory,
@@ -293,7 +296,12 @@ def generate_audio_sequence(
         configuration_index=configuration_index,
         sequence_index=sequence_index,
     )
-    return stations, trajectory, stream, records, runtime
+    runtimes = {
+        "audio_synthesis_wall_runtime_s": synthesis_runtime,
+        "bearing_frontend_wall_runtime_s": bearing_runtime,
+        "audio_pipeline_wall_runtime_s": time.perf_counter() - pipeline_started,
+    }
+    return stations, trajectory, stream, records, runtimes
 
 
 def _correlation(first, second) -> float:
@@ -661,8 +669,14 @@ def summarize_pilot(bearing_rows, tracking_rows, sequence_rows) -> list[dict[str
                     "mean_tracker_runtime_s_per_sequence": float(np.mean([
                         row["tracker_runtime_s"] for row in sequences
                     ])),
-                    "mean_audio_frontend_wall_runtime_s_per_sequence": float(np.mean([
-                        row["audio_frontend_wall_runtime_s"] for row in sequences
+                    "mean_audio_synthesis_wall_runtime_s_per_sequence": float(np.mean([
+                        row["audio_synthesis_wall_runtime_s"] for row in sequences
+                    ])),
+                    "mean_bearing_frontend_wall_runtime_s_per_sequence": float(np.mean([
+                        row["bearing_frontend_wall_runtime_s"] for row in sequences
+                    ])),
+                    "mean_audio_pipeline_wall_runtime_s_per_sequence": float(np.mean([
+                        row["audio_pipeline_wall_runtime_s"] for row in sequences
                     ])),
                     "maximum_history_memory_bytes": max(
                         row["maximum_history_memory_bytes"] for row in sequences
@@ -742,7 +756,7 @@ def run_three_station_audio_tracking_pilot(
     sequence_rows = []
     for configuration_index, config in enumerate(pilot_configurations()):
         for sequence_index in range(evaluation_sequence_count):
-            stations, trajectory, stream, rows, audio_runtime = generate_audio_sequence(
+            stations, trajectory, stream, rows, audio_runtimes = generate_audio_sequence(
                 config, configuration_index, "evaluation", sequence_index,
                 duration_s=duration_s,
             )
@@ -772,7 +786,7 @@ def run_three_station_audio_tracking_pilot(
                     sequence_seed=stream.base_seed,
                     trajectory_kind=config.trajectory_kind,
                     snr_db=config.snr_db,
-                    audio_frontend_wall_runtime_s=audio_runtime,
+                    **audio_runtimes,
                 )
                 tracking_rows.extend(track)
                 sequence_rows.append(sequence)
@@ -797,7 +811,7 @@ def run_three_station_audio_tracking_pilot(
 
 def smoke_test() -> dict[str, object]:
     config = AudioPilotConfig("constant_velocity", 10.0)
-    stations, trajectory, stream, rows, audio_runtime = generate_audio_sequence(
+    stations, trajectory, stream, rows, audio_runtimes = generate_audio_sequence(
         config, 0, "smoke", 0, duration_s=1.20
     )
     # Smoke calibration uses its own truth only to exercise the contract; the
@@ -816,7 +830,7 @@ def smoke_test() -> dict[str, object]:
             "publication_count": len(track),
             "final_valid": sequence["final_valid"],
         }
-    return {"audio_runtime_s": audio_runtime, "outcomes": outcomes}
+    return {"audio_runtimes_s": audio_runtimes, "outcomes": outcomes}
 
 
 def main() -> None:
