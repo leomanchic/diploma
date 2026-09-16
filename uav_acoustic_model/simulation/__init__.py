@@ -36,6 +36,12 @@ from .continuous_stream import (
     reception_time_grid,
     synthesize_continuous_stream,
 )
+from .multistation_audio import (
+    MultistationAudioStream,
+    StationAudioStream,
+    multistation_audio_seeds,
+    synthesize_multistation_audio,
+)
 
 __all__ = [
     "DEFAULT_FIR_LENGTH",
@@ -65,4 +71,8 @@ __all__ = [
     "extract_overlapping_frames",
     "reception_time_grid",
     "synthesize_continuous_stream",
+    "MultistationAudioStream",
+    "StationAudioStream",
+    "multistation_audio_seeds",
+    "synthesize_multistation_audio",
 ]

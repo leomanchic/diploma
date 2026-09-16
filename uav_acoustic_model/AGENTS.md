@@ -205,3 +205,19 @@
   independent base blocks, not overlapping/dependent publication epochs.
   Report manoeuvre error alongside valid/confirmed availability and empirical
   coverage; do not call the stochastic posterior a signal-level CRLB.
+- In the three-station audio integration, synthesize one common continuous
+  source and one continuous channel/noise array per station. Overlapping frames
+  are views, never independently resynthesized. GCC and SRP must consume the
+  identical frame before `StationPose` transforms the local bearing to ENU.
+- Bearing physics uses the reception-frame centre. Availability begins only
+  after the complete frame plus modeled processing/delivery delay; measured
+  wall runtime is a separate diagnostic. Never pass true range, velocity or
+  emission time to the estimator/tracker.
+- Audio-bearing bias/R come only from whole calibration sequences with source
+  and noise seeds disjoint from evaluation. Report temporal/inter-station
+  correlation as a limitation when the filter assumes independent errors.
+  Dependent overlapping frames are not independent trials.
+- A deterministic tracker frame stride may bound an integration pilot, but it
+  must be frozen before evaluation, observable-data-only, explicit in results,
+  and must not remove all-frame GCC/SRP accuracy reporting. Do not claim
+  real-time readiness from simulated availability timestamps.

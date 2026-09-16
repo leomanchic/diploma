@@ -16,6 +16,9 @@ from scipy.integrate import quad
 from model.geometry import DEFAULT_SOUND_SPEED
 
 
+_GAUSS_LEGENDRE_NODES, _GAUSS_LEGENDRE_WEIGHTS = np.polynomial.legendre.leggauss(32)
+
+
 @dataclass(frozen=True, slots=True)
 class BenchmarkManoeuvreTrajectory:
     initial_position_m: ArrayLike
@@ -113,11 +116,66 @@ class BenchmarkManoeuvreTrajectory:
         result = np.vstack([getattr(self, method)(float(t)) for t in flat])
         return result[0] if scalar else result.reshape(times.shape + (3,))
 
+    def _smooth_turn_q_vectorized(self, times: NDArray[np.float64]) -> NDArray[np.float64]:
+        flat = times.reshape(-1)
+        result = self.initial_position_m + flat[:, None] * self.initial_velocity_mps
+        active_mask = flat > self.manoeuvre_start_s
+        if not np.any(active_mask):
+            return result
+
+        duration = self.manoeuvre_end_s - self.manoeuvre_start_s
+        selected = flat[active_mask]
+        active = np.clip(selected - self.manoeuvre_start_s, 0.0, duration)
+        epochs = 0.5 * active[:, None] * (_GAUSS_LEGENDRE_NODES[None, :] + 1.0)
+        normalized = epochs / duration
+        angles = self.turn_angle_rad * (3.0 * normalized**2 - 2.0 * normalized**3)
+        cosine = np.cos(angles)
+        sine = np.sin(angles)
+        v0 = self.initial_velocity_mps
+        velocities = np.empty(angles.shape + (3,), dtype=float)
+        velocities[..., 0] = cosine * v0[0] - sine * v0[1]
+        velocities[..., 1] = sine * v0[0] + cosine * v0[1]
+        velocities[..., 2] = v0[2]
+        integral = 0.5 * active[:, None] * np.einsum(
+            "j,njk->nk", _GAUSS_LEGENDRE_WEIGHTS, velocities
+        )
+        after = np.maximum(selected - self.manoeuvre_end_s, 0.0)
+        integral += after[:, None] * self._v_scalar(self.manoeuvre_end_s)
+        result[active_mask] = (
+            self.initial_position_m
+            + self.manoeuvre_start_s * v0
+            + integral
+        )
+        return result
+
     def q(self, time_s: ArrayLike) -> NDArray[np.float64]:
-        return self._apply(time_s, "_q_scalar")
+        times = np.asarray(time_s, dtype=float)
+        if np.any(~np.isfinite(times)):
+            raise ValueError("time_s must be finite")
+        if self.kind != "smooth_turn":
+            return self._apply(times, "_q_scalar")
+        result = self._smooth_turn_q_vectorized(times)
+        return result[0] if times.ndim == 0 else result.reshape(times.shape + (3,))
 
     def v(self, time_s: ArrayLike) -> NDArray[np.float64]:
-        return self._apply(time_s, "_v_scalar")
+        times = np.asarray(time_s, dtype=float)
+        if np.any(~np.isfinite(times)):
+            raise ValueError("time_s must be finite")
+        if self.kind != "smooth_turn":
+            return self._apply(times, "_v_scalar")
+        flat = times.reshape(-1)
+        duration = self.manoeuvre_end_s - self.manoeuvre_start_s
+        normalized = np.clip((flat - self.manoeuvre_start_s) / duration, 0.0, 1.0)
+        angles = self.turn_angle_rad * (3.0 * normalized**2 - 2.0 * normalized**3)
+        cosine = np.cos(angles)
+        sine = np.sin(angles)
+        v0 = self.initial_velocity_mps
+        result = np.column_stack((
+            cosine * v0[0] - sine * v0[1],
+            sine * v0[0] + cosine * v0[1],
+            np.full_like(flat, v0[2]),
+        ))
+        return result[0] if times.ndim == 0 else result.reshape(times.shape + (3,))
 
     def a(self, time_s: ArrayLike) -> NDArray[np.float64]:
         times = np.asarray(time_s, dtype=float)
