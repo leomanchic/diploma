@@ -72,15 +72,16 @@
   inter-station correlation `0.202`; текущий EKF обе корреляции игнорирует.
   Calibration/evaluation overlap равен нулю для sequence и фактических
   source/noise seeds. Peak history: 17 узлов и 84,184 bytes owned arrays;
-  максимальные измеренные frontend/tracker runtimes на evaluation sequence:
-  `4.811 s` и `0.509 s`.
+  максимальные измеренные synthesis/frame-bearing/total-audio/tracker wall
+  runtimes на evaluation sequence: `51.371/5.108/56.151/0.529 s`. Эти
+  measured runtimes не входят в simulated availability.
 - Timing/provenance audit проверил все 6696 evaluation bearing rows:
   `true emission < reception centre < frame end < availability`, exact
   `availability=frame_end+processing+delivery`, 186 кадров на каждую
   station/method/sequence, один source stream и три раздельных station-noise
   streams. Truth-use flags ложны во всех bearing/tracker rows.
 - Приёмка локально: профильные **48 passed**, отдельный integration-файл
-  **9 passed**, полный pytest **457 passed за 161.49 s**, `pip check` PASS,
+  **9 passed**, полный pytest **457 passed за 159.45 s**, `pip check` PASS,
   `git diff --check` PASS. Новый
   `three_station_audio_tracking_validation.ipynb` выполнен без error-output;
   audit всех **20/20** notebooks: nbformat 4, все code cells выполнены, error
@@ -89,6 +90,10 @@
   сохранённые outputs прошли структурный audit. Implementation commit
   `3c7c19e2a9b070c07a201e93bc2fdf7da3778165` прошёл GitHub Actions run
   `35111815954`: Ubuntu/Python 3.12 и Windows/Python 3.12 — `success`.
+- После audit подписи runtime устранена неоднозначность: synthesis, frame
+  GCC/SRP frontend, total audio pipeline и tracker backend измеряются и
+  сохраняются раздельно; accuracy/coverage/failure rows не изменились.
+  Финальный повтор полного pytest после этой поправки: **457 passed**.
 
 ### Corrective gate: bounded history и causal timestamp reporting
 
