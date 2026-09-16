@@ -5,17 +5,25 @@ from dataclasses import fields
 import numpy as np
 import pytest
 
-from model.bearing_events import CausalBearingEventStream
+from model.bearing_events import (
+    CausalBearingEventStream,
+    measurements_are_exact_duplicates,
+)
 from model.geometry import tetrahedral_array
 from model.measurements import BearingMeasurement
 from model.station import StationPose
 from simulation.continuous_stream import extract_overlapping_frames
 from simulation.multistation_audio import multistation_audio_seeds, synthesize_multistation_audio
+from simulation.trajectory import ConstantVelocityTrajectory
 from validation.three_station_audio_tracking_study import (
     AudioPilotConfig,
     ESTIMATOR_VARIANTS,
     FRAME_LENGTH,
     HOP_LENGTH,
+    DURATION_S,
+    HISTORY_WINDOW_S,
+    MANOEUVRE_END_S,
+    MANOEUVRE_START_S,
     MODELED_PROCESSING_DELAY_S,
     STATION_DELIVERY_DELAY_S,
     audio_sequence_seed,
@@ -23,6 +31,7 @@ from validation.three_station_audio_tracking_study import (
     calibrate_audio_bearings,
     extract_audio_bearing_records,
     pilot_stations,
+    summarize_sequence_phases,
     trajectory_for_audio_pilot,
 )
 
@@ -55,6 +64,10 @@ def test_multistation_audio_uses_one_source_and_is_reproducible():
         np.testing.assert_array_equal(left.channels, right.channels)
         assert left.propagation.source_time_support_s[0] == first.source_start_time_s
         assert left.propagation.source_time_support_s == right.propagation.source_time_support_s
+        assert left.propagation.doppler_bandlimit_checked
+        assert left.propagation.maximum_emitted_frequency_hz == 10_000.0
+    assert first.doppler_bandlimit_checked
+    assert first.maximum_emitted_frequency_hz == 10_000.0
     assert first.noise_generated_once_per_station_stream
     assert not first.frames_resynthesized_independently
 
@@ -156,16 +169,85 @@ def test_calibration_is_split_isolated_and_measurement_contract_is_truth_free():
     forbidden = {"truth_direction", "true_position", "true_emission_time", "angular_error"}
     assert forbidden.isdisjoint({field.name for field in fields(BearingMeasurement)})
     for measurement in measurements:
-        key = (
-            measurement.station_id,
-            measurement.estimator_variant,
-            "constant_velocity",
-            10.0,
-        )
+        key = (measurement.station_id, measurement.estimator_variant)
         if measurement.valid:
             np.testing.assert_array_equal(
                 measurement.covariance_tangent_rad2, calibrations[key].covariance_rad2
             )
+
+
+def test_measurements_do_not_select_calibration_from_truth_scenario_labels():
+    stations, trajectory, stream = _short_stream(duration_s=0.05)
+    calibration_rows, _ = extract_audio_bearing_records(
+        stream, stations, trajectory, split="calibration",
+        configuration_index=0, sequence_index=0,
+    )
+    calibrations = calibrate_audio_bearings(calibration_rows, 1)
+    original = [dict(row, split="evaluation") for row in calibration_rows]
+    relabelled = [
+        dict(row, split="evaluation", trajectory_kind="hidden", snr_db=-123.0)
+        for row in calibration_rows
+    ]
+    first = bearing_measurements_from_records(
+        original, calibrations, ESTIMATOR_VARIANTS[0]
+    )
+    second = bearing_measurements_from_records(
+        relabelled, calibrations, ESTIMATOR_VARIANTS[0]
+    )
+    assert len(first) == len(second)
+    assert all(
+        measurements_are_exact_duplicates(left, right)
+        for left, right in zip(first, second, strict=True)
+    )
+
+
+def test_multistation_audio_rejects_a_doppler_shifted_aliasing_band():
+    station = pilot_stations()[0]
+    approaching = ConstantVelocityTrajectory(
+        [100.0, 0.0, 20.0], [-30.0, 0.0, 0.0]
+    )
+    with pytest.raises(ValueError, match="strictly below Nyquist"):
+        synthesize_multistation_audio(
+            (station,), approaching, duration_s=0.02,
+            reception_start_time_s=0.5, snr_db=None, seed=19,
+            maximum_emitted_frequency_hz=23_000.0,
+        )
+
+
+def test_pilot_timing_has_confirmable_history_before_fixed_manoeuvre():
+    assert MANOEUVRE_START_S - 0.5 > HISTORY_WINDOW_S
+    assert MANOEUVRE_END_S > MANOEUVRE_START_S
+    assert 0.5 + DURATION_S > MANOEUVRE_END_S
+    trajectory = trajectory_for_audio_pilot("smooth_turn", 0)
+    assert trajectory.manoeuvre_start_s == MANOEUVRE_START_S
+    assert trajectory.manoeuvre_end_s == MANOEUVRE_END_S
+
+
+def test_phase_reporting_marks_zero_update_as_prediction_without_correction():
+    publications = [
+        {
+            "publication_motion_phase_evaluator_only": phase,
+            "valid": True,
+            "position_error_m": float(index + 1),
+            "velocity_error_mps": 0.1,
+            "valid_and_covered": True,
+            "time_since_last_accepted_update_s": float("nan"),
+        }
+        for index, phase in enumerate(
+            ("before_manoeuvre", "during_manoeuvre", "after_manoeuvre")
+        )
+    ]
+    sequence = {
+        "estimator_variant": ESTIMATOR_VARIANTS[0],
+        "confirmed_before_manoeuvre": True,
+    }
+    phases = summarize_sequence_phases(publications, [], sequence)
+    assert len(phases) == 3
+    assert all(row["accepted_update_count"] == 0 for row in phases)
+    assert all(
+        row["correction_status"] == "prediction_without_correction_in_phase"
+        for row in phases
+    )
 
 
 def test_split_seeds_are_disjoint_and_deterministic():

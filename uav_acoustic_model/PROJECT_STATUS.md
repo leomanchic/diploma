@@ -11,6 +11,54 @@
 
 ### Three-station continuous-audio integration pilot
 
+- 2026-09-16 — corrective validation-contract gate opened on
+  `fix/audio-tracking-validation-contract` from `2e9701f`. Before the new
+  evaluation run, the protocol was frozen as follows: one pooled calibration
+  per `(station_id, estimator_variant)` over all six calibration scenarios;
+  evaluation trajectory/SNR labels are not calibration lookup inputs;
+  duration `4.5 s`; source-time manoeuvre interval `[2.5,3.5) s`; unchanged
+  `Qc=I m^2/s^3`, NIS gates, frame/hop and tracker stride. The known emitted
+  band edge `10 kHz` is now passed to the existing Doppler/Nyquist guard.
+- Targeted pre-evaluation gate: **13 passed**. It includes an invariance test
+  showing that relabelling trajectory/SNR with unchanged observations leaves
+  every `BearingMeasurement` unchanged, a valid `10 kHz` band check, explicit
+  rejection of a Doppler-shifted aliasing case, and phase-reporting coverage.
+  The smoke chain also passed for both GCC/WLS and SRP-PHAT with 12/12 valid
+  events and a final confirmed state.
+- Corrected held-out pilot: 6 calibration + 6 evaluation continuous sequences,
+  **6 pooled calibration rows**, **15120** all-frame bearing rows, **504**
+  causal publications, **316** attempted update rows, **36** per-sequence phase
+  rows, 12 sequence rows and 12 aggregate rows. Calibration/event tables
+  reconcile exactly: **286 accepted + 30 rejected** update attempts.
+- **10/12** method-sequences confirmed by `1.5853125 s`, before the fixed
+  manoeuvre at `2.5 s`, and each received **9 accepted updates** with
+  evaluator-only emission time inside `[2.5,3.5) s`. Both acceleration/−6 dB
+  streams remained `tentative_initialization_unconfirmed`; they have zero
+  updates and explicit `prediction_without_correction` status rather than
+  invented state-error or coverage values. Maximum elapsed processing time
+  since an accepted update among confirmed streams was `0.3113333333 s`.
+- Conditional all-frame bearing RMSE is `0.4759--0.4867 deg` at `-6 dB` and
+  `0.08154--0.08300 deg` at `10 dB`. Across valid aggregate cells, conditional
+  position RMSE is `0.1134--0.9909 m`, velocity RMSE
+  `0.1251--1.5326 m/s`, and empirical coverage `0.8065--1.0`. These are
+  dependent-publication diagnostics from one evaluation sequence per cell,
+  not rare-tail qualification.
+- All six pooled tangent covariances are PD: minimum eigenvalue
+  `1.6102696526e-5 rad^2`, maximum condition number `1.199173683`. Maximum
+  absolute lag-1/inter-station residual correlations are `0.354840357` and
+  `0.066897522`; the filter still ignores both. The known source band edge is
+  present and checked in all 15120 bearing rows.
+- Corrected local gate: targeted **13 passed**, final full pytest **461 passed
+  in 173.74 s**, affected notebook executed without error-output, `pip check`
+  PASS and `git diff --check` PASS. Notebook gate: affected notebook has 10/10
+  unique cell IDs, no error output and no unexecuted code; structural audit of
+  all **20/20** committed notebooks is clean. All four rendered figures were
+  inspected at original size: axes/units/denominators are readable, invalid
+  gaps remain visible, and the phase plot labels evaluator-only emission-time
+  scoring explicitly. GitHub CI is recorded below after completion.
+  Historical numbers from the superseded 2.0 s pilot are retained later in
+  this journal only as provenance and must not be read as the current result.
+
 - В ветке `feature/three-station-audio-tracking` от `f1f1785` начата следующая
   интеграционная работа внутри существующего S7C: один общий непрерывный
   broadband source распространяется к реальным координатам 12 микрофонов трёх

@@ -728,25 +728,37 @@ SRP-PHAT, после чего локальное направление пере
 Время bearing — центр приёмного кадра. Availability равно концу кадра плюс
 моделируемая processing/delivery задержка; измеренный wall runtime хранится
 отдельно. Tracker не получает true range, velocity или emission time. Bias/R
-строятся только по отдельным calibration sequences; evaluation seeds и
+строятся только по отдельным calibration sequences: все шесть объявленных
+физических calibration-сценариев объединяются с одинаковым весом кадров в одну
+заранее зафиксированную таблицу на `(station_id, estimator_variant)`. Метки
+trajectory и SNR не участвуют в evaluation-time lookup; их изменение при
+неизменных наблюдениях не меняет `BearingMeasurement`. Evaluation seeds и
 фактические source/noise seeds не пересекаются. GCC/SRP выполняются на всех
 кадрах, а dense-history tracker в этом вычислительно ограниченном pilot
 получает deterministic indices `0,32,64,...` (`2.9296875 Hz/station`).
 
-Завершённый набор: 6 calibration + 6 evaluation continuous sequences, по одной
-на каждую `(trajectory, SNR)` cell; это integration pilot, не квалификация
-редких хвостов. Bearing RMSE равен `0.457--0.491 deg` при `-6 dB` и
-`0.0813--0.0834 deg` при `10 dB`; 10/12 method-sequences final valid. На
-подтверждённых публикациях position RMSE `0.939--2.319 m`, velocity RMSE
-`0.728--3.287 m/s`, но empirical covariance coverage на манёврах часто нулевой.
-Lag-1 measurement-error correlation достигает `0.456`, inter-station — `0.202`;
-текущий EKF их игнорирует. Это offline synthetic chain, не real-time/field
+Исправленный набор использует записи `4.5 s`, фиксированный source-time манёвр
+`[2.5,3.5) s` и известную emitted band edge `10 kHz`, переданную существующему
+Doppler/Nyquist guard. Получено 6 calibration + 6 evaluation continuous
+sequences, по одной на каждую `(trajectory, SNR)` cell; это integration pilot,
+не квалификация редких хвостов. Из 12 method-sequences 10 подтвердились до
+манёвра и завершились valid; каждый из них имеет 9 принятых updates с emission
+time внутри манёвра. Два acceleration/−6 dB потока остались явными
+`tentative_initialization_unconfirmed` и `prediction_without_correction`.
+
+Bearing RMSE равен `0.476--0.487 deg` при `-6 dB` и `0.0815--0.0830 deg` при
+`10 dB`. Для valid cells conditional position RMSE `0.113--0.991 m`, velocity
+RMSE `0.125--1.533 m/s`, coverage `0.806--1.0`. Lag-1 measurement-error
+correlation достигает `0.355`, inter-station — `0.067`; текущий EKF их
+игнорирует. Event-level и sequence-level учёт совпал: 286 accepted и 30
+rejected update-attempts. Это offline synthetic chain, не real-time/field
 readiness и не signal-level CRLB.
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from validation.three_station_audio_tracking_study import smoke_test; print(smoke_test())"
 .\.venv\Scripts\python.exe -m validation.three_station_audio_tracking_study
 .\.venv\Scripts\python.exe -m pytest -q tests/test_three_station_audio_tracking.py
+.\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/three_station_audio_tracking_validation.ipynb
 ```
 

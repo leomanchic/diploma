@@ -11,8 +11,10 @@ pilot, not a rare-tail qualification or a field-validation claim.
   `0.20 m` maximum aperture and its complete world-coordinate microphone set.
 - One common moving-source waveform feeds all twelve microphones through the
   exact retarded-time kinematic model in a homogeneous stationary medium.
-- Signal: random broadband, `300--10000 Hz`; `fs=48000 Hz`.
-- Duration: `2.0 s`; reception interval starts at `0.5 s`.
+- Signal: random broadband, `300--10000 Hz`; `fs=48000 Hz`. The known
+  `10000 Hz` emitted upper edge is passed to the existing Doppler/Nyquist
+  guard; every station must satisfy `f_emit,max max(dt_emit/dt_receive)<fs/2`.
+- Duration: `4.5 s`; reception interval starts at `0.5 s`.
 - Frame length: `1024`; hop length: `512` (50% overlap).
 - Bearing estimators run on every frame. The tracker consumes every thirty-
   second frame from every station (`2.9296875 Hz/station`, deterministic frame
@@ -24,8 +26,11 @@ pilot, not a rare-tail qualification or a field-validation claim.
 - SNR: `-6 dB` and `10 dB`, defined separately from the full clean/noise RMS
   of each continuous station recording.
 - Trajectories: constant velocity, a finite constant-acceleration segment and
-  a smooth turn. Manoeuvres start at `1.0 s`, after an initial CV interval,
-  and finish at `1.5 s`.
+  a smooth turn. The source-time manoeuvre interval is fixed at
+  `[2.5,3.5) s`; the longer initial CV interval permits confirmation and more
+  than one complete `0.85 s` history window before the manoeuvre. The record
+  also includes post-manoeuvre observations. The same declared interval is
+  retained as an offline control window for the constant-velocity trajectory.
 - `Qc = I m^2/s^3`, fixed by the accepted S7C-C development experiment. It is
   not retuned from the audio evaluation.
 - Tracker history is `0.85 s`, with a declared maximum range of `150 m`,
@@ -47,9 +52,14 @@ pilot, not a rare-tail qualification or a field-validation claim.
   1 independent evaluation sequence (6 sequences in each split). Frames
   within a sequence overlap and
   are dependent; they are never counted as independent trials.
-- Calibration is separate for station, estimator, SNR and trajectory. The
-  calibration mean tangent residual and sample covariance are frozen before
-  the corresponding evaluation cell is processed.
+- Calibration is one fixed table per `(station_id, estimator_variant)`. For
+  each such pair, all valid dependent frames from all six predeclared
+  calibration cells (three trajectories times two SNR levels) are pooled with
+  equal frame weight. The resulting mean tangent residual and sample
+  covariance are frozen before any evaluation sequence is processed. Neither
+  trajectory nor SNR labels participate in evaluation-time calibration
+  lookup; this deliberately trades cell-specific sharpness for a truth-free
+  first correction. No adaptive SNR estimator is introduced.
 - Compared audio bearing variants: all-six-pair GCC/WLS and equal-weight
   SRP-PHAT. Both consume the identical station frame.
 - No true state, range, velocity, error, outlier label or true emission time
@@ -67,6 +77,12 @@ pilot, not a rare-tail qualification or a field-validation claim.
 - Events are processed only after availability. Earlier publications are not
   rewritten. The retarded-time tracker solves emission time from the bearing
   reception timestamp and estimated history; no true emission time is passed.
+- Update events are labelled before/during/after the manoeuvre only offline,
+  using evaluator-only true emission time. State-error/coverage publications
+  are labelled by their state processing epoch. The report keeps these two
+  clocks explicit, records accepted and rejected update attempts per phase,
+  and labels a phase with zero accepted updates as prediction without
+  correction.
 - The confirmation span is `0.05 s`, the allowance is 180 events with up to
   20 individual confirmation failures, and the initialization buffer is 360
   events. These settings are fixed from the `10.667 ms` frame cadence and the
@@ -77,7 +93,9 @@ pilot, not a rare-tail qualification or a field-validation claim.
 
 - Report bearing coverage/error, tracker confirmed availability, final valid
   fraction, conditional position/velocity errors, empirical covariance
-  coverage, failures, resets, runtime and history memory.
+  coverage, failures, resets, runtime and history memory. For every sequence,
+  also report whether confirmation occurred before `2.5 s`, phase-specific
+  accepted/rejected updates, and time since the last accepted update.
 - Temporal lag-one and aligned inter-station tangent-error correlations are
   diagnostics. The present filter still assumes independent measurement
   errors; measured correlations are therefore an explicit limitation.

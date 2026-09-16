@@ -47,6 +47,8 @@ class MultistationAudioStream:
     source_seed: int
     signal_model: str
     sampling_rate_hz: float
+    maximum_emitted_frequency_hz: float
+    doppler_bandlimit_checked: bool
     noise_generated_once_per_station_stream: bool = True
     frames_resynthesized_independently: bool = False
 
@@ -102,6 +104,7 @@ def synthesize_multistation_audio(
     chunk_size_samples: int = 4096,
     fir_length: int = DEFAULT_FIR_LENGTH,
     geometric_attenuation: bool = False,
+    maximum_emitted_frequency_hz: float = 10_000.0,
 ) -> MultistationAudioStream:
     """Generate one continuous source and one continuous recording per station.
 
@@ -115,6 +118,14 @@ def synthesize_multistation_audio(
         raise ValueError("stations must be non-empty with unique station_id values")
     sampling_rate = float(sampling_rate_hz)
     speed = float(sound_speed)
+    maximum_frequency = float(maximum_emitted_frequency_hz)
+    if (
+        not np.isfinite(maximum_frequency)
+        or not 300.0 < maximum_frequency < sampling_rate / 2.0
+    ):
+        raise ValueError(
+            "maximum_emitted_frequency_hz must satisfy 300 < f_max < Nyquist"
+        )
     reception = reception_time_grid(reception_start_time_s, duration_s, sampling_rate)
     source_start, source_count = _common_source_support(
         reception, poses, trajectory, sampling_rate, speed, int(fir_length)
@@ -128,7 +139,7 @@ def synthesize_multistation_audio(
             source_count,
             source_rng,
             minimum_frequency_hz=300.0,
-            maximum_frequency_hz=10_000.0,
+            maximum_frequency_hz=maximum_frequency,
             taper_fraction=0.0,
         )
     elif model == "deterministic_multisine":
@@ -136,7 +147,7 @@ def synthesize_multistation_audio(
             sampling_rate,
             source_count / sampling_rate,
             minimum_frequency_hz=300.0,
-            maximum_frequency_hz=10_000.0,
+            maximum_frequency_hz=maximum_frequency,
             taper_fraction=0.0,
             phase_offset_rad=float(source_rng.uniform(0.0, 2.0 * np.pi)),
         )
@@ -156,6 +167,7 @@ def synthesize_multistation_audio(
             geometric_attenuation=geometric_attenuation,
             fir_length=int(fir_length),
             chunk_size_samples=int(chunk_size_samples),
+            maximum_emitted_frequency_hz=maximum_frequency,
         )
         if propagation.valid_region != (0, reception.size):
             raise RuntimeError("common source support does not cover a station stream")
@@ -193,6 +205,8 @@ def synthesize_multistation_audio(
         int(source_seed),
         model,
         sampling_rate,
+        maximum_frequency,
+        True,
     )
 
 
