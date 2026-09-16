@@ -114,6 +114,18 @@ calibration/evaluation sequences и прежний frozen `Qc`; полевая �
 предобъявленное truth-free frame subset, тогда как bearing-метрики используют
 все кадры. Это текущая работа внутри S7C, не новый подэтап.
 
+Корректирующий validation-contract gate этой же интеграционной работы завершил
+три обязательных проверки без изменения `Qc`, NIS-порогов или алгоритма:
+evaluation-time uncertainty теперь выбирается только по
+`(station_id, estimator_variant)` из pooled calibration split; удлинённая
+`4.5 s` запись с фиксированным манёвром `[2.5,3.5) s` действительно содержит
+confirmed tracking до манёвра и updates во время него для 10/12 потоков, а два
+отказа остаются явными; известная emitted band edge `10 kHz` проходит
+Doppler/Nyquist guard, тогда как aliasing-case отклоняется. Phase reporting
+различает evaluator-only emission-time разметку updates и processing-time
+разметку state errors. Это исправление текущей работы, не новый подэтап;
+S7C и S7C-C остаются `In progress` до последующих синтетических и полевых gates.
+
 Синтетическая часть S7C может считаться завершённой только когда одновременно:
 
 1. continuous multistation streams, координаты ENU и causal timestamps имеют

@@ -23,6 +23,7 @@ from estimators.retarded_ekf_manoeuvre import (
     ManoeuvreHistoryConfig,
 )
 from estimators.retarded_ekf_recovery import InitializationRecoveryConfig
+from model.bearing_events import bearing_event_id
 from model.bearing_statistics import calibrate_bearing_covariance, tangent_residual
 from model.geometry import tetrahedral_array
 from model.measurements import BearingMeasurement
@@ -39,13 +40,14 @@ EVALUATION_BASE_SEED = 20260919
 SMOKE_BASE_SEED = 20260917
 CALIBRATION_SEQUENCE_COUNT = 1
 EVALUATION_SEQUENCE_COUNT = 1
-DURATION_S = 2.0
+DURATION_S = 4.5
 RECEPTION_START_TIME_S = 0.5
 SAMPLING_RATE_HZ = 48_000.0
 FRAME_LENGTH = 1024
 HOP_LENGTH = 512
 TRACKER_FRAME_STRIDE = 32
 SIGNAL_MODEL = "random_broadband"
+SOURCE_MAXIMUM_FREQUENCY_HZ = 10_000.0
 SNR_LEVELS_DB = (-6.0, 10.0)
 TRAJECTORY_KINDS = (
     "constant_velocity",
@@ -56,11 +58,17 @@ ESTIMATOR_VARIANTS = ("all_6_equal_gcc_wls", "equal_weight_srp_phat")
 MODELED_PROCESSING_DELAY_S = 0.010
 STATION_DELIVERY_DELAY_S = {"S0": 0.000, "S1": 0.015, "S2": 0.030}
 QC_ALPHA_M2_S3 = 1.0
+MANOEUVRE_START_S = 2.5
+MANOEUVRE_END_S = 3.5
 HISTORY_WINDOW_S = 0.85
 MAXIMUM_TRACKER_RANGE_M = 150.0
 MAXIMUM_TRANSPORT_DELAY_S = 0.10
 POSITION_COVERAGE_THRESHOLD = float(chi2.ppf(0.95, 6))
 RESULTS = Path(__file__).resolve().parents[1] / "results"
+CALIBRATION_POOLING_RULE = (
+    "unweighted_valid_frames_from_all_predeclared_calibration_scenarios"
+)
+MOTION_PHASES = ("before_manoeuvre", "during_manoeuvre", "after_manoeuvre")
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +81,8 @@ class AudioPilotConfig:
 class AudioBearingCalibration:
     station_id: str
     estimator_variant: str
-    trajectory_kind: str
-    snr_db: float
+    pooling_rule: str
+    physical_configuration_count: int
     sequence_count: int
     dependent_frame_count: int
     successful_frame_count: int
@@ -85,6 +93,8 @@ class AudioBearingCalibration:
     temporal_lag1_az: float
     temporal_lag1_el: float
     maximum_absolute_interstation_correlation: float
+    included_trajectory_kinds: tuple[str, ...]
+    included_snr_db: tuple[float, ...]
 
 
 def pilot_stations() -> tuple[StationPose, ...]:
@@ -129,8 +139,8 @@ def trajectory_for_audio_pilot(kind: str, sequence_index: int) -> BenchmarkManoe
         np.asarray([70.0, 55.0, 40.0]) + offset,
         [7.0, -3.0, 1.5],
         kind,
-        manoeuvre_start_s=1.0,
-        manoeuvre_end_s=1.5,
+        manoeuvre_start_s=MANOEUVRE_START_S,
+        manoeuvre_end_s=MANOEUVRE_END_S,
         acceleration_mps2=[0.0, 3.0, 0.8],
         turn_angle_rad=0.45,
     )
@@ -231,6 +241,12 @@ def extract_audio_bearing_records(
                         "trajectory_kind": trajectory.kind,
                         "snr_db": station_stream.nominal_snr_db,
                         "signal_model": stream.signal_model,
+                        "source_maximum_frequency_hz": (
+                            stream.maximum_emitted_frequency_hz
+                        ),
+                        "doppler_bandlimit_checked": (
+                            stream.doppler_bandlimit_checked
+                        ),
                         "station_id": station.station_id,
                         "estimator_variant": method,
                         "frame_index": frame_index,
@@ -286,6 +302,7 @@ def generate_audio_sequence(
         signal_model=SIGNAL_MODEL,
         snr_db=config.snr_db,
         seed=seed,
+        maximum_emitted_frequency_hz=SOURCE_MAXIMUM_FREQUENCY_HZ,
     )
     synthesis_runtime = time.perf_counter() - synthesis_started
     records, bearing_runtime = extract_audio_bearing_records(
@@ -315,10 +332,10 @@ def _correlation(first, second) -> float:
 
 def _temporal_correlations(rows: list[dict[str, object]]) -> tuple[float, float]:
     values = [[], []]
-    by_sequence: dict[int, list[dict[str, object]]] = defaultdict(list)
+    by_sequence: dict[str, list[dict[str, object]]] = defaultdict(list)
     for row in rows:
         if row["valid"]:
-            by_sequence[int(row["sequence_index"])].append(row)
+            by_sequence[str(row["sequence_id"])].append(row)
     for sequence_rows in by_sequence.values():
         sequence_rows.sort(key=lambda row: int(row["frame_index"]))
         residuals = np.asarray([row["residual_rad"] for row in sequence_rows])
@@ -336,7 +353,7 @@ def _interstation_maximum(rows: list[dict[str, object]]) -> float:
     correlations = []
     station_ids = sorted({str(row["station_id"]) for row in rows})
     lookup = {
-        (int(row["sequence_index"]), int(row["frame_index"]), str(row["station_id"])): row
+        (str(row["sequence_id"]), int(row["frame_index"]), str(row["station_id"])): row
         for row in rows if row["valid"]
     }
     for left_index, left in enumerate(station_ids):
@@ -361,20 +378,23 @@ def _interstation_maximum(rows: list[dict[str, object]]) -> float:
 
 def calibrate_audio_bearings(
     rows: list[dict[str, object]], sequence_count: int
-) -> dict[tuple[str, str, str, float], AudioBearingCalibration]:
-    """Fit bias/R from calibration rows only, without eigenvalue loading."""
+) -> dict[tuple[str, str], AudioBearingCalibration]:
+    """Fit one predeclared pooled bias/R per station and estimator.
 
+    All valid frames from all supplied calibration scenarios enter with equal
+    frame weight.  Scenario truth labels are used only to document the pool;
+    they are never keys when an evaluation measurement is constructed.
+    """
+
+    declared_per_configuration = int(sequence_count)
+    if declared_per_configuration < 1:
+        raise ValueError("sequence_count must be positive")
     calibrations = {}
-    groups: dict[tuple[str, str, str, float], list[dict[str, object]]] = defaultdict(list)
+    groups: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
     for row in rows:
         if row["split"] != "calibration":
             raise ValueError("calibration must not consume evaluation rows")
-        key = (
-            str(row["station_id"]),
-            str(row["estimator_variant"]),
-            str(row["trajectory_kind"]),
-            float(row["snr_db"]),
-        )
+        key = (str(row["station_id"]), str(row["estimator_variant"]))
         groups[key].append(row)
     for key, subset in groups.items():
         valid = [row for row in subset if row["valid"]]
@@ -382,25 +402,30 @@ def calibrate_audio_bearings(
         fitted = calibrate_bearing_covariance(residuals)
         if fitted.rank != 2 or np.min(fitted.eigenvalues_rad2) <= 0.0:
             raise RuntimeError(f"audio bearing calibration is not positive definite: {key}")
-        method_rows = [
-            row for row in rows
-            if row["estimator_variant"] == key[1]
-            and row["trajectory_kind"] == key[2]
-            and float(row["snr_db"]) == key[3]
-        ]
+        method_rows = [row for row in rows if row["estimator_variant"] == key[1]]
+        sequence_ids = {str(row["sequence_id"]) for row in subset}
+        configuration_ids = {int(row["configuration_index"]) for row in subset}
+        expected_sequence_count = declared_per_configuration * len(configuration_ids)
+        if len(sequence_ids) != expected_sequence_count:
+            raise RuntimeError(
+                "calibration pool does not contain the declared number of whole sequences"
+            )
         temporal = _temporal_correlations(valid)
         calibrations[key] = AudioBearingCalibration(
-            key[0], key[1], key[2], key[3], int(sequence_count), len(subset), len(valid),
+            key[0], key[1], CALIBRATION_POOLING_RULE, len(configuration_ids),
+            len(sequence_ids), len(subset), len(valid),
             fitted.mean_residual_rad.copy(), fitted.covariance_rad2.copy(),
             fitted.eigenvalues_rad2.copy(), fitted.condition_number,
             temporal[0], temporal[1], _interstation_maximum(method_rows),
+            tuple(sorted({str(row["trajectory_kind"]) for row in subset})),
+            tuple(sorted({float(row["snr_db"]) for row in subset})),
         )
     return calibrations
 
 
 def bearing_measurements_from_records(
     rows: list[dict[str, object]],
-    calibrations: dict[tuple[str, str, str, float], AudioBearingCalibration],
+    calibrations: dict[tuple[str, str], AudioBearingCalibration],
     method: str,
     *,
     frame_stride: int = 1,
@@ -414,9 +439,7 @@ def bearing_measurements_from_records(
             or int(row["frame_index"]) % frame_stride != 0
         ):
             continue
-        key = (
-            str(row["station_id"]), method, str(row["trajectory_kind"]), float(row["snr_db"])
-        )
+        key = (str(row["station_id"]), method)
         calibration = calibrations[key]
         common = dict(
             station_id=str(row["station_id"]),
@@ -443,12 +466,23 @@ def bearing_measurements_from_records(
     return tuple(measurements)
 
 
+def _motion_phase(time_s: float) -> str:
+    """Return the predeclared offline manoeuvre phase for one truth epoch."""
+
+    epoch = float(time_s)
+    if epoch < MANOEUVRE_START_S:
+        return "before_manoeuvre"
+    if epoch < MANOEUVRE_END_S:
+        return "during_manoeuvre"
+    return "after_manoeuvre"
+
+
 def run_tracker(
     stations: tuple[StationPose, ...],
     trajectory: BenchmarkManoeuvreTrajectory,
     measurements: tuple[BearingMeasurement, ...],
     method: str,
-) -> tuple[list[dict[str, object]], dict[str, object]]:
+) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]]]:
     config = ManoeuvreHistoryConfig(
         np.eye(3) * QC_ALPHA_M2_S3,
         history_step_s=0.25,
@@ -472,9 +506,53 @@ def run_tracker(
     started = time.perf_counter()
     publications = [estimator.advance_to(epoch) for epoch in publication_times]
     runtime = time.perf_counter() - started
+    station_map = {station.station_id: station for station in stations}
+    measurement_map = {bearing_event_id(item): item for item in measurements}
     rows = []
+    update_rows = []
+    last_accepted_update_time = float("nan")
     for publication in publications:
         epoch = float(publication.processing_time_s)
+        for diagnostic in publication.update_diagnostics:
+            measurement = measurement_map[diagnostic.event_id]
+            station = station_map[measurement.station_id]
+            true_emission = float(
+                solve_emission_time(
+                    measurement.reception_center_timestamp_s,
+                    station.position_world_m,
+                    trajectory,
+                )
+            )
+            diagnostic_processing_time = float(
+                getattr(diagnostic, "processing_time_s", epoch)
+            )
+            applied = bool(diagnostic.update_applied)
+            if applied:
+                last_accepted_update_time = diagnostic_processing_time
+            update_rows.append(
+                {
+                    "event_id": diagnostic.event_id,
+                    "station_id": measurement.station_id,
+                    "frame_index": measurement.frame_index,
+                    "estimator_variant": method,
+                    "processing_time_s": diagnostic_processing_time,
+                    "reception_center_timestamp_s": (
+                        measurement.reception_center_timestamp_s
+                    ),
+                    "true_emission_time_s_evaluator_only": true_emission,
+                    "update_motion_phase_evaluator_only": _motion_phase(true_emission),
+                    "update_applied": applied,
+                    "failure_reason": diagnostic.failure_reason or "",
+                    "pre_update_nis": float(
+                        getattr(
+                            diagnostic,
+                            "pre_update_nis",
+                            getattr(diagnostic, "normalized_innovation_squared", np.nan),
+                        )
+                    ),
+                    "truth_used_by_tracker": False,
+                }
+            )
         truth = np.concatenate((trajectory.q(epoch), trajectory.v(epoch)))
         valid = bool(publication.valid and publication.state is not None)
         position_error = velocity_error = state_nees = float("nan")
@@ -513,18 +591,56 @@ def run_tracker(
                 "state_nees": state_nees,
                 "valid_and_covered": bool(valid and covered),
                 "reset_count": int(publication.reset_count),
+                "publication_motion_phase_evaluator_only": _motion_phase(epoch),
+                "last_accepted_update_processing_time_s": (
+                    last_accepted_update_time
+                ),
+                "time_since_last_accepted_update_s": (
+                    epoch - last_accepted_update_time
+                    if np.isfinite(last_accepted_update_time)
+                    else float("nan")
+                ),
+                "correction_status": (
+                    "measurement_correction_available"
+                    if np.isfinite(last_accepted_update_time)
+                    else "prediction_without_correction"
+                ),
                 "truth_used_by_tracker": False,
             }
         )
     final = publications[-1]
+    time_since_values = np.asarray(
+        [row["time_since_last_accepted_update_s"] for row in rows], dtype=float
+    )
+    finite_time_since = time_since_values[np.isfinite(time_since_values)]
+    accepted_update_count = sum(row["update_applied"] for row in update_rows)
+    rejected_update_count = len(update_rows) - accepted_update_count
     sequence = {
         "estimator_variant": method,
         "event_count": len(measurements),
         "valid_measurement_count": sum(item.valid for item in measurements),
         "initialization_event_count": len(final.initialization_event_ids),
-        "accepted_update_count": len(final.applied_event_ids),
+        "accepted_update_count": accepted_update_count,
+        "rejected_update_count": rejected_update_count,
         "rejected_event_count": len(final.rejected_event_ids),
         "first_confirmation_time_s": final.first_confirmation_time_s,
+        "confirmed_before_manoeuvre": bool(
+            np.isfinite(final.first_confirmation_time_s)
+            and final.first_confirmation_time_s < MANOEUVRE_START_S
+        ),
+        "final_time_since_last_accepted_update_s": rows[-1][
+            "time_since_last_accepted_update_s"
+        ],
+        "maximum_time_since_last_accepted_update_s": (
+            float(np.max(finite_time_since))
+            if finite_time_since.size
+            else float("nan")
+        ),
+        "correction_status": (
+            "prediction_with_measurement_corrections"
+            if accepted_update_count
+            else "prediction_without_correction"
+        ),
         "final_valid": bool(final.valid),
         "final_confirmed": bool(final.confirmed),
         "reset_count": int(final.reset_count),
@@ -534,7 +650,92 @@ def run_tracker(
         "maximum_history_memory_bytes": estimator.maximum_history_memory_bytes,
         "maximum_history_nodes": estimator.maximum_history_node_count,
     }
-    return rows, sequence
+    return rows, sequence, update_rows
+
+
+def summarize_sequence_phases(
+    tracking_rows: list[dict[str, object]],
+    update_rows: list[dict[str, object]],
+    sequence_row: dict[str, object],
+) -> list[dict[str, object]]:
+    """Report per-sequence phase metrics without feeding truth to the tracker."""
+
+    result = []
+    for phase in MOTION_PHASES:
+        publications = [
+            row for row in tracking_rows
+            if row["publication_motion_phase_evaluator_only"] == phase
+        ]
+        valid = [row for row in publications if row["valid"]]
+        updates = [
+            row for row in update_rows
+            if row["update_motion_phase_evaluator_only"] == phase
+        ]
+        accepted = [row for row in updates if row["update_applied"]]
+        rejected = [row for row in updates if not row["update_applied"]]
+        time_since = np.asarray(
+            [row["time_since_last_accepted_update_s"] for row in publications],
+            dtype=float,
+        )
+        time_since = time_since[np.isfinite(time_since)]
+        result.append(
+            {
+                "estimator_variant": sequence_row["estimator_variant"],
+                "motion_phase": phase,
+                "publication_phase_basis": "state_processing_time_s",
+                "update_phase_basis": "evaluator_only_true_emission_time_s",
+                "confirmed_before_manoeuvre": sequence_row[
+                    "confirmed_before_manoeuvre"
+                ],
+                "accepted_update_count": len(accepted),
+                "rejected_update_count": len(rejected),
+                "update_attempt_count": len(updates),
+                "correction_status": (
+                    "measurement_correction_in_phase"
+                    if accepted
+                    else "prediction_without_correction_in_phase"
+                ),
+                "dependent_publication_count": len(publications),
+                "valid_publication_count": len(valid),
+                "valid_publication_fraction": (
+                    len(valid) / len(publications) if publications else float("nan")
+                ),
+                "position_rmse_m_conditional": (
+                    float(
+                        np.sqrt(
+                            np.mean([row["position_error_m"] ** 2 for row in valid])
+                        )
+                    )
+                    if valid else float("nan")
+                ),
+                "position_p95_m_conditional": _percentile(
+                    [row["position_error_m"] for row in valid], 95
+                ),
+                "velocity_rmse_mps_conditional": (
+                    float(
+                        np.sqrt(
+                            np.mean([row["velocity_error_mps"] ** 2 for row in valid])
+                        )
+                    )
+                    if valid else float("nan")
+                ),
+                "coverage_conditional": (
+                    float(np.mean([row["valid_and_covered"] for row in valid]))
+                    if valid else float("nan")
+                ),
+                "valid_and_covered_fraction": (
+                    float(np.mean([row["valid_and_covered"] for row in publications]))
+                    if publications else float("nan")
+                ),
+                "final_time_since_last_accepted_update_s": (
+                    float(time_since[-1]) if time_since.size else float("nan")
+                ),
+                "maximum_time_since_last_accepted_update_s": (
+                    float(np.max(time_since)) if time_since.size else float("nan")
+                ),
+            }
+        )
+    return result
 
 
 def _csv_bearing_row(row: dict[str, object]) -> dict[str, object]:
@@ -555,8 +756,12 @@ def _calibration_rows(calibrations) -> list[dict[str, object]]:
                 "split": "calibration",
                 "station_id": value.station_id,
                 "estimator_variant": value.estimator_variant,
-                "trajectory_kind": value.trajectory_kind,
-                "snr_db": value.snr_db,
+                "pooling_rule": value.pooling_rule,
+                "physical_configuration_count": value.physical_configuration_count,
+                "included_trajectory_kinds_json": json.dumps(
+                    value.included_trajectory_kinds
+                ),
+                "included_snr_db_json": json.dumps(value.included_snr_db),
                 "independent_sequence_count": value.sequence_count,
                 "dependent_frame_count": value.dependent_frame_count,
                 "successful_frame_count": value.successful_frame_count,
@@ -664,6 +869,12 @@ def summarize_pilot(bearing_rows, tracking_rows, sequence_rows) -> list[dict[str
                     "mean_first_confirmation_time_s": _finite_mean([
                         row["first_confirmation_time_s"] for row in sequences
                     ]),
+                    "confirmed_before_manoeuvre_sequence_fraction": float(np.mean([
+                        row["confirmed_before_manoeuvre"] for row in sequences
+                    ])),
+                    "prediction_without_correction_sequence_fraction": float(np.mean([
+                        row["accepted_update_count"] == 0 for row in sequences
+                    ])),
                     "mean_reset_count": float(np.mean([row["reset_count"] for row in sequences])),
                     "failure_reasons_json": json.dumps(failures, sort_keys=True),
                     "mean_tracker_runtime_s_per_sequence": float(np.mean([
@@ -753,6 +964,8 @@ def run_three_station_audio_tracking_pilot(
 
     evaluation_bearings = []
     tracking_rows = []
+    update_rows = []
+    phase_rows = []
     sequence_rows = []
     for configuration_index, config in enumerate(pilot_configurations()):
         for sequence_index in range(evaluation_sequence_count):
@@ -771,8 +984,18 @@ def run_three_station_audio_tracking_pilot(
                 measurements = bearing_measurements_from_records(
                     rows, calibrations, method, frame_stride=TRACKER_FRAME_STRIDE
                 )
-                track, sequence = run_tracker(stations, trajectory, measurements, method)
+                track, sequence, updates = run_tracker(
+                    stations, trajectory, measurements, method
+                )
                 for row in track:
+                    row.update(
+                        configuration_index=configuration_index,
+                        sequence_index=sequence_index,
+                        sequence_seed=stream.base_seed,
+                        trajectory_kind=config.trajectory_kind,
+                        snr_db=config.snr_db,
+                    )
+                for row in updates:
                     row.update(
                         configuration_index=configuration_index,
                         sequence_index=sequence_index,
@@ -788,7 +1011,18 @@ def run_three_station_audio_tracking_pilot(
                     snr_db=config.snr_db,
                     **audio_runtimes,
                 )
+                phases = summarize_sequence_phases(track, updates, sequence)
+                for row in phases:
+                    row.update(
+                        configuration_index=configuration_index,
+                        sequence_index=sequence_index,
+                        sequence_seed=stream.base_seed,
+                        trajectory_kind=config.trajectory_kind,
+                        snr_db=config.snr_db,
+                    )
                 tracking_rows.extend(track)
+                update_rows.extend(updates)
+                phase_rows.extend(phases)
                 sequence_rows.append(sequence)
             if progress:
                 print(
@@ -803,6 +1037,8 @@ def run_three_station_audio_tracking_pilot(
         _csv_bearing_row(row) for row in evaluation_bearings
     ])
     _write_csv(output_directory / "three_station_audio_tracking_results.csv", tracking_rows)
+    _write_csv(output_directory / "three_station_audio_update_results.csv", update_rows)
+    _write_csv(output_directory / "three_station_audio_phase_summary.csv", phase_rows)
     _write_csv(output_directory / "three_station_audio_sequence_results.csv", sequence_rows)
     _write_csv(output_directory / "three_station_audio_summary.csv", summaries)
     _write_csv(output_directory / "three_station_audio_seed_provenance.csv", seed_rows)
@@ -823,7 +1059,7 @@ def smoke_test() -> dict[str, object]:
         measurements = bearing_measurements_from_records(
             rows, calibrations, method, frame_stride=TRACKER_FRAME_STRIDE
         )
-        track, sequence = run_tracker(stations, trajectory, measurements, method)
+        track, sequence, _ = run_tracker(stations, trajectory, measurements, method)
         outcomes[method] = {
             "bearing_count": len(measurements),
             "valid_bearing_count": sum(item.valid for item in measurements),
@@ -851,6 +1087,10 @@ if __name__ == "__main__":
 __all__ = [
     "AudioBearingCalibration",
     "AudioPilotConfig",
+    "CALIBRATION_POOLING_RULE",
+    "MANOEUVRE_END_S",
+    "MANOEUVRE_START_S",
+    "SOURCE_MAXIMUM_FREQUENCY_HZ",
     "audio_sequence_seed",
     "bearing_measurements_from_records",
     "calibrate_audio_bearings",
@@ -861,5 +1101,6 @@ __all__ = [
     "run_three_station_audio_tracking_pilot",
     "run_tracker",
     "smoke_test",
+    "summarize_sequence_phases",
     "trajectory_for_audio_pilot",
 ]
