@@ -1,6 +1,6 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-15
+Последнее обновление: 2026-09-16
 
 ## Текущий этап
 
@@ -8,6 +8,49 @@
 Исправление event contract на `d281d730` закрыто. Это явно включаемое
 расширение причинного рекурсивного оценивателя внутри S7C-C, не новый
 корректирующий подэтап. C1, опубликованный D2 и `confirmed_recovery` сохранены.
+
+### Corrective gate: bounded history и causal timestamp reporting
+
+- В ветке `fix/s7c-history-memory-reporting` от `5644338` исправлено
+  transient-разрастание `AugmentedMotionHistory.propagate_to`: после каждого
+  добавленного propagation-узла устаревшие блоки joint Gaussian
+  маргинализируются выбором оставшейся mean/covariance submatrix. Сохраняются
+  все cross-covariance оставшихся узлов и один граничный узел для bridge-
+  интерполяции.
+- Для `history_window=2 s`, `history_step=0.25 s` измеренный peak node count
+  при паузах `2/10/30/300 s` равен **9/11/11/11**, final node count не больше
+  10. До исправления `10/30 s` давали 41/121 узел. Короткий bounded результат
+  совпадает с независимым `full growth → marginalization` reference до и после
+  bearing-update; covariance остаётся symmetric/PSD.
+- Peak storage теперь фиксируется внутри history немедленно после добавления
+  propagation- и bridge-узлов, до последующей очистки. Определение:
+  `mean.nbytes + joint_covariance.nbytes + 8 bytes × epoch_count`. Это owned
+  numerical history payload, не RSS процесса, Python overhead или память
+  временных матричных вычислений. Bridge-узлы внутри окна зависят от частоты
+  измерений, поэтому независимость памяти от event rate не заявляется.
+- Метрика первого принятого post-onset bearing разделена на фактический
+  `...update_processing_time_s` из update diagnostic и отдельный
+  `...first_publication_time_s`. Regression для
+  `smooth_turn/informative/sequence=0`, seed `20260916`: фактическое время
+  **5.447551467380961 s** одинаково для двух publication schedules, первое
+  отображение меняется с **5.5 s** на **5.75 s**.
+- Targeted command: `.\.venv\Scripts\python.exe -m pytest -q
+  tests/test_retarded_ekf_manoeuvre.py tests/test_stochastic_motion.py` —
+  **26 passed**. Qc не перенастраивался; GCC/SRP Monte Carlo не запускались.
+  Повторный fixed-`Qc` evaluation сохранил **2592 frame rows, 96 sequence rows,
+  36 summary rows**. Относительно `5644338` максимальное абсолютное изменение
+  `valid/confirmed fraction`, position/velocity RMSE/P95/max, coverage,
+  `valid AND covered` и reset count равно **0.0**. Runtime и память измерены
+  заново: средний runtime на sequence равен **0.560329 s** для
+  `confirmed_recovery` и **0.462413 s** для `manoeuvre_history`; исправленный
+  maximum owned history storage равен **167232 bytes / 24 nodes** для
+  `informative` и **181400 bytes / 25 nodes** для `poorly_conditioned`.
+- Выполненный `notebooks/manoeuvre_tracking_validation.ipynb` подтверждает
+  новые timestamp/storage поля без error output. Общий notebook audit:
+  **19/19** valid, без error output, невыполненных code cells и повторяющихся
+  cell IDs. Полный локальный gate: **448 passed in 141.01 s**; `pip check` и
+  `git diff --check` — **PASS**. Windows/Linux CI должен быть зелёным перед
+  закрытием этой корректировки.
 
 ### Журнал S7C-C: математический и deterministic gate
 

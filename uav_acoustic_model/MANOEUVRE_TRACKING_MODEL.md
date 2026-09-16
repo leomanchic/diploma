@@ -39,6 +39,11 @@ The causal processor stores ordered node epochs `t0<...<tn`, an augmented
 state `X=[x(t0),...,x(tn)]` and its **full joint covariance**. Forward
 augmentation uses `F,Qd`, retains every cross block, and prunes old nodes by
 marginalization (submatrix selection), never by treating them as independent.
+Pruning runs after every causal propagation node, not after an entire
+event-free gap. Transient propagation storage is therefore bounded by the
+declared window/step, the retained interpolation-boundary node and the
+just-added pre-prune node. Bearing-dependent bridge nodes inside the window
+are additional; memory is not claimed independent of measurement frequency.
 The declared history age must be at least
 `maximum_range_m/c + maximum_transport_delay_s + history_step_s`.
 Measurement events beyond this bound fail with `emission_outside_history`;
@@ -110,3 +115,9 @@ The history covariance and coverage are empirical diagnostics, not a signal
 CRLB. Real audio, temporally correlated bearing errors, sound-source physical
 calibration, variable medium properties and field tests remain outside this
 stage.
+
+`maximum_history_memory_bytes` is the peak owned numerical history payload:
+`mean.nbytes + joint_covariance.nbytes + 8 bytes` per stored epoch. It is
+recorded immediately after propagation-node and bridge-node insertion, before
+any following marginalization. It is not full process RSS, Python-container
+overhead, or peak memory of temporary matrix computations.

@@ -3,6 +3,7 @@
 from dataclasses import replace
 
 import numpy as np
+import pytest
 
 from estimators.retarded_ekf_manoeuvre import (
     AugmentedMotionHistory,
@@ -26,7 +27,8 @@ from validation.retarded_ekf_stress_study import (
     generate_stress_scenario,
 )
 from validation.manoeuvre_tracking_study import (
-    DEVELOPMENT_SEED, EVALUATION_SEED, generate_manoeuvre_scenario,
+    DEVELOPMENT_SEED, EVALUATION_SEED, PUBLICATION_TIMES_S,
+    first_accepted_update_after_onset, generate_manoeuvre_scenario,
     run_paired_sequence,
 )
 
@@ -51,6 +53,15 @@ def _history(qc=0.25, step=0.25):
     history = AugmentedMotionHistory(state, np.eye(6) * 0.5, config)
     history.propagate_to(1.5)
     return state, history
+
+
+def _full_growth_then_marginalize(history, target_s):
+    """Independent reference matching the pre-fix propagation order."""
+    while target_s - history.times_s[-1] > history.config.history_step_s + 1e-12:
+        history._append_one(history.times_s[-1] + history.config.history_step_s)
+    if target_s > history.times_s[-1] + 1e-12:
+        history._append_one(target_s)
+    history.prune()
 
 
 def test_history_emission_solver_matches_independent_cv_solver_and_jacobian():
@@ -346,3 +357,122 @@ def test_exact_duplicate_used_event_does_not_reset_or_update_twice():
     assert any(item.action == "duplicate_exact" for item in repeated.prefix.journal)
     np.testing.assert_allclose(repeated.state.vector, clean.state.vector, rtol=0.0, atol=2e-11)
     np.testing.assert_allclose(repeated.covariance_state, clean.covariance_state, rtol=0.0, atol=2e-11)
+
+
+@pytest.mark.parametrize("gap_s", (2.0, 10.0, 30.0, 300.0))
+def test_propagation_peak_nodes_are_bounded_by_window_not_gap(gap_s):
+    config = ManoeuvreHistoryConfig(
+        np.eye(3), history_step_s=0.25, history_window_s=2.0,
+        maximum_range_m=250.0, maximum_transport_delay_s=0.6,
+    )
+    history = AugmentedMotionHistory(
+        ConstantVelocityState([70, 55, 40], [7, -3, 1.5], 0.0),
+        np.eye(6), config,
+    )
+    history.propagate_to(gap_s)
+    # Nine nodes fill [0,2]. One retained interpolation boundary and one
+    # just-appended pre-prune node make 11 the gap-independent peak.
+    assert history.maximum_node_count <= 11
+    assert history.node_count <= 10
+    assert history.maximum_memory_bytes <= 35_464
+    np.testing.assert_allclose(history.covariance, history.covariance.T, rtol=0, atol=1e-12)
+    assert np.linalg.eigvalsh(history.covariance)[0] >= -1e-10
+
+
+def test_incremental_pruning_matches_full_growth_then_marginalization():
+    state = ConstantVelocityState([70, 55, 40], [7, -3, 1.5], 0.0)
+    config = ManoeuvreHistoryConfig(
+        np.eye(3) * 0.25, history_step_s=0.25, history_window_s=2.0,
+        maximum_range_m=250.0, maximum_transport_delay_s=0.6,
+    )
+    bounded = AugmentedMotionHistory(state, np.eye(6), config)
+    reference = AugmentedMotionHistory(state, np.eye(6), config)
+    bounded.propagate_to(5.0)
+    _full_growth_then_marginalize(reference, 5.0)
+    np.testing.assert_allclose(bounded.times_s, reference.times_s, rtol=0, atol=0)
+    np.testing.assert_allclose(bounded.mean, reference.mean, rtol=0, atol=2e-13)
+    np.testing.assert_allclose(bounded.covariance, reference.covariance, rtol=0, atol=2e-12)
+
+
+def test_incremental_pruning_matches_reference_after_correlated_bearing_update():
+    station = _station()
+    state = ConstantVelocityState([70, 55, 40], [7, -3, 1.5], 0.0)
+    config = ManoeuvreHistoryConfig(
+        np.eye(3) * 0.25, history_step_s=0.25, history_window_s=2.0,
+        maximum_range_m=250.0, maximum_transport_delay_s=0.6,
+    )
+    bounded = AugmentedMotionHistory(state, np.eye(6), config)
+    reference = AugmentedMotionHistory(state, np.eye(6), config)
+    bounded.propagate_to(1.5)
+    reference.propagate_to(1.5)
+    measurement = _measurement(station, state, reception=1.0)
+    phi, elevation = direction_angles(measurement.direction_local)
+    tangent = tangent_basis(phi, elevation).T @ np.deg2rad([0.2, 0.1])
+    angle = np.linalg.norm(tangent)
+    measurement = replace(
+        measurement,
+        direction_local=(np.cos(angle) * measurement.direction_local
+                         + np.sin(angle) * tangent / angle),
+    )
+    assert bounded.update_bearing(station, measurement, 1e9).update_applied
+    assert reference.update_bearing(station, measurement, 1e9).update_applied
+    bounded.propagate_to(6.0)
+    _full_growth_then_marginalize(reference, 6.0)
+    np.testing.assert_allclose(bounded.times_s, reference.times_s, rtol=0, atol=0)
+    np.testing.assert_allclose(bounded.mean, reference.mean, rtol=0, atol=3e-12)
+    np.testing.assert_allclose(bounded.covariance, reference.covariance, rtol=0, atol=3e-11)
+    np.testing.assert_allclose(bounded.covariance, bounded.covariance.T, rtol=0, atol=1e-12)
+    assert np.linalg.eigvalsh(bounded.covariance)[0] >= -1e-10
+
+
+def test_bridge_node_is_included_in_owned_history_peak_memory():
+    station = _station()
+    state = ConstantVelocityState([70, 55, 40], [7, -3, 1.5], 0.0)
+    config = ManoeuvreHistoryConfig(
+        np.eye(3) * 0.25, history_step_s=0.25, history_window_s=2.0,
+        maximum_range_m=250.0, maximum_transport_delay_s=0.6,
+    )
+    history = AugmentedMotionHistory(state, np.eye(6), config)
+    history.propagate_to(2.25)
+    before_nodes = history.node_count
+    before_bytes = history.memory_bytes
+    measurement = _measurement(station, state, reception=1.5)
+    result = history.update_bearing(station, measurement, maximum_pre_update_nis=1e9)
+    assert result.update_applied
+    assert history.node_count == before_nodes + 1
+    assert history.maximum_node_count >= history.node_count
+    assert history.maximum_memory_bytes >= history.memory_bytes > before_bytes
+    assert history.memory_bytes == (
+        history.mean.nbytes + history.covariance.nbytes + 8 * history.node_count
+    )
+
+
+def test_first_accepted_update_processing_time_is_publication_schedule_invariant():
+    scenario = generate_manoeuvre_scenario(
+        "informative", "smooth_turn", 0, EVALUATION_SEED
+    )
+    reception = {bearing_event_id(item): item.reception_center_timestamp_s
+                 for item in scenario.events}
+    available = {bearing_event_id(item): item.available_timestamp_s
+                 for item in scenario.events}
+    config = ManoeuvreHistoryConfig(
+        np.eye(3), history_step_s=0.25, history_window_s=2.0,
+        maximum_range_m=250.0, maximum_transport_delay_s=0.6,
+    )
+
+    def run(schedule):
+        estimator = CausalManoeuvreRetardedTimeEKF(
+            scenario.stations, scenario.events, estimator_variant="direct_bearing",
+            history_config=config,
+        )
+        publications = [estimator.advance_to(timestamp) for timestamp in schedule]
+        return first_accepted_update_after_onset(
+            publications, reception, available, 5.0
+        )
+
+    regular = run(PUBLICATION_TIMES_S)
+    sparse = run((4.9, 5.75, 14.5))
+    assert regular[0] == pytest.approx(5.447551467380961, rel=0, abs=1e-15)
+    assert sparse[0] == pytest.approx(regular[0], rel=0, abs=0)
+    assert regular[1] == 5.5
+    assert sparse[1] == 5.75

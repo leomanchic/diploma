@@ -63,8 +63,17 @@ peak retained history nodes and bytes. Reporting of confidence intervals uses
 paired bootstrap resampling of whole independent sequences (500 draws,
   fixed seed 20260917), never within-sequence time points. Cross-mode pooled
   intervals, if ever needed, must resample base blocks together across modes.
-  Coverage is an
+Coverage is an
 empirical diagnostic, not a calibrated signal-level CRLB.
+
+The first accepted post-onset update has two distinct timestamps. Its
+`processing_time_s` is the actual availability-group time recorded by the
+update diagnostic and is invariant to external publication cadence. Its
+`first_publication_time_s` is when that already processed update first appears
+to a caller and may depend on the publication schedule. History peak bytes use
+the owned-array definition in `MANOEUVRE_TRACKING_MODEL.md`; they include
+pre-prune propagation nodes and bridge nodes, but not process RSS or temporary
+linear-algebra allocations.
 
 First run deterministic tests and one-sequence smoke per truth kind. Only
 after those PASS run development, freeze alpha, and then evaluation once.

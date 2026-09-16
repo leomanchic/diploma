@@ -143,6 +143,7 @@ class AugmentedMotionHistory:
         self.mean = np.array(state.vector, copy=True)
         self.covariance = 0.5 * (matrix + matrix.T)
         self.maximum_node_count = 1
+        self.maximum_memory_bytes = self.memory_bytes
 
     @property
     def node_count(self) -> int:
@@ -150,7 +151,20 @@ class AugmentedMotionHistory:
 
     @property
     def memory_bytes(self) -> int:
+        """Owned numerical history payload, not process RSS or temporaries.
+
+        The value is ``mean.nbytes + covariance.nbytes + 8 bytes/epoch``.
+        It deliberately excludes Python container overhead and temporary
+        arrays allocated by linear algebra operations.
+        """
+
         return self.mean.nbytes + self.covariance.nbytes + 8 * len(self.times_s)
+
+    def _record_peak_storage(self) -> None:
+        """Record owned history storage before any following marginalization."""
+
+        self.maximum_node_count = max(self.maximum_node_count, self.node_count)
+        self.maximum_memory_bytes = max(self.maximum_memory_bytes, self.memory_bytes)
 
     @property
     def oldest_time_s(self) -> float:
@@ -190,7 +204,7 @@ class AugmentedMotionHistory:
         )
         self.covariance = 0.5 * (enlarged + enlarged.T)
         self.times_s.append(float(time_s))
-        self.maximum_node_count = max(self.maximum_node_count, self.node_count)
+        self._record_peak_storage()
 
     def propagate_to(self, time_s: float) -> None:
         target = float(time_s)
@@ -198,9 +212,14 @@ class AugmentedMotionHistory:
             raise ValueError("history propagation must be causal")
         while target - self.times_s[-1] > self.config.history_step_s + 1e-12:
             self._append_one(self.times_s[-1] + self.config.history_step_s)
+            # Marginalize as the causal frontier moves.  Keeping the oldest
+            # node whose successor is inside the window preserves the boundary
+            # pair needed for bridge interpolation without transient growth
+            # proportional to the event-free gap.
+            self.prune()
         if target > self.times_s[-1] + 1e-12:
             self._append_one(target)
-        self.prune()
+            self.prune()
 
     def prune(self) -> None:
         while (
@@ -282,7 +301,7 @@ class AugmentedMotionHistory:
             + expanded[np.ix_(scalar_order, scalar_order)].T
         )
         self.times_s.insert(index, t)
-        self.maximum_node_count = max(self.maximum_node_count, self.node_count)
+        self._record_peak_storage()
 
     def emission_time(self, station: StationPose, reception_time_s: float) -> float:
         reception = float(reception_time_s)
@@ -435,6 +454,7 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
         self._history: AugmentedMotionHistory | None = None
         self._manoeuvre_publications: list[ManoeuvrePublication] = []
         self._maximum_history_memory_bytes = 0
+        self._maximum_history_node_count = 0
 
     @property
     def publications(self) -> tuple[ManoeuvrePublication, ...]:
@@ -442,7 +462,27 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
 
     @property
     def maximum_history_memory_bytes(self) -> int:
+        """Peak owned numerical history payload across all generations."""
+
         return self._maximum_history_memory_bytes
+
+    @property
+    def maximum_history_node_count(self) -> int:
+        """Peak retained nodes, including transient bridge nodes."""
+
+        return self._maximum_history_node_count
+
+    def _record_history_peak(self) -> None:
+        if self._history is None:
+            return
+        self._maximum_history_memory_bytes = max(
+            self._maximum_history_memory_bytes,
+            self._history.maximum_memory_bytes,
+        )
+        self._maximum_history_node_count = max(
+            self._maximum_history_node_count,
+            self._history.maximum_node_count,
+        )
 
     def _invalidate_state(
         self, processing_time_s: float, *, action: str, reason: str,
@@ -482,6 +522,7 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
                 )
                 if initial_state.reference_time_s < processing_time_s:
                     self._history.propagate_to(processing_time_s)
+                self._record_history_peak()
             return list(updates), hypotheses, lifecycle
 
         conflict_hypotheses, conflict_lifecycle, invalidated = self._handle_conflicts(
@@ -500,9 +541,7 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
                 self._station_map[measurement.station_id], measurement,
                 self._config.pre_update_nis_threshold,
             )
-            self._maximum_history_memory_bytes = max(
-                self._maximum_history_memory_bytes, self._history.memory_bytes
-            )
+            self._record_history_peak()
             updates.append(update)
             self._processed_ids.add(identity)
             if update.update_applied:
@@ -527,9 +566,7 @@ class CausalManoeuvreRetardedTimeEKF(CausalConfirmedRetardedTimeEKF):
                 break
         if self._history is not None:
             self._state, self._covariance = self._history.latest_state()
-            self._maximum_history_memory_bytes = max(
-                self._maximum_history_memory_bytes, self._history.memory_bytes
-            )
+            self._record_history_peak()
         return updates, conflict_hypotheses, lifecycle
 
     def advance_to(self, processing_time_s: float) -> ManoeuvrePublication:
