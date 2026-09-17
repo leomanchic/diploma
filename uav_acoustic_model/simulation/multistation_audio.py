@@ -49,6 +49,8 @@ class MultistationAudioStream:
     sampling_rate_hz: float
     maximum_emitted_frequency_hz: float
     doppler_bandlimit_checked: bool
+    source_recording_id: str | None = None
+    source_session_id: str | None = None
     noise_generated_once_per_station_stream: bool = True
     frames_resynthesized_independently: bool = False
 
@@ -105,6 +107,9 @@ def synthesize_multistation_audio(
     fir_length: int = DEFAULT_FIR_LENGTH,
     geometric_attenuation: bool = False,
     maximum_emitted_frequency_hz: float = 10_000.0,
+    external_source_signal: NDArray[np.float64] | None = None,
+    source_recording_id: str | None = None,
+    source_session_id: str | None = None,
 ) -> MultistationAudioStream:
     """Generate one continuous source and one continuous recording per station.
 
@@ -133,7 +138,22 @@ def synthesize_multistation_audio(
     source_seed, noise_seeds = multistation_audio_seeds(seed, len(poses))
     source_rng = np.random.default_rng(source_seed)
     model = str(signal_model).lower()
-    if model == "random_broadband":
+    if external_source_signal is not None:
+        if model != "recorded_source_approximation":
+            raise ValueError(
+                "external_source_signal requires signal_model="
+                "'recorded_source_approximation'"
+            )
+        supplied = np.asarray(external_source_signal, dtype=float)
+        if supplied.ndim != 1 or supplied.size < source_count:
+            raise ValueError(
+                "external_source_signal must be one-dimensional and cover "
+                "the complete source-time support"
+            )
+        if not np.all(np.isfinite(supplied)):
+            raise ValueError("external_source_signal must be finite")
+        source = supplied[:source_count].copy()
+    elif model == "random_broadband":
         source = random_bandlimited_signal(
             sampling_rate,
             source_count,
@@ -152,7 +172,10 @@ def synthesize_multistation_audio(
             phase_offset_rad=float(source_rng.uniform(0.0, 2.0 * np.pi)),
         )
     else:
-        raise ValueError("signal_model must be random_broadband or deterministic_multisine")
+        raise ValueError(
+            "signal_model must be random_broadband, deterministic_multisine, "
+            "or recorded_source_approximation with external_source_signal"
+        )
 
     station_streams: list[StationAudioStream] = []
     for station, noise_seed in zip(poses, noise_seeds, strict=True):
@@ -207,6 +230,8 @@ def synthesize_multistation_audio(
         sampling_rate,
         maximum_frequency,
         True,
+        None if source_recording_id is None else str(source_recording_id),
+        None if source_session_id is None else str(source_session_id),
     )
 
 

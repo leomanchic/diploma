@@ -39,7 +39,7 @@ bearing-измерениям определяет и затем причинно
 | S7C-D | In progress | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark, opt-in robust variants, confirmation/recovery и failure reporting | reproducible stress gates, causal event accounting, availability/error trade-off и явные ограничения | S7C-C |
 | S7C-D1 | Done | Измерить пределы принятого strict-CV C1 при потерях, паузах станций, задержках и выбросах без изменения фильтра | фиксированный протокол, paired 200-block/1800-run study, epoch/sequence/profile CSV и notebook | deterministic/smoke gates, честные denominators/coverage, полный reproducibility audit | S7C-C1 |
 | S7C-D2 | Done | Добавить явно включаемые robust initialization и pre-update NIS gate без изменения C1 default | consensus diagnostics, four-way ablation, paired held-out benchmark, CSV и notebook | baseline reproducibility, separate/combined mechanism tests, held-out whole-sequence comparison, full gates | S7C-D1 |
-| S8 | Planned | Добавить измеренные сигналы БПЛА и held-out datasets | dataset interface, signal model, held-out validation | train/evaluation separation и воспроизводимость | S4, S7A |
+| S8 | In progress | Проверить тракт с записанным приближением source signal | versioned manifest/loader, recorded-source integration pilot, source/session split audit | воспроизводимый provenance, calibration-only uncertainty, явная граница integration demo vs held-out/field validation | S4, S7A, synthetic S7C pilot |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -140,6 +140,19 @@ S7C и S7C-C остаются `In progress` до последующих синт
 
 Эти критерии не заменяют последующие реальные аудиоданные, синхронизацию
 оборудования, среду и полевую проверку из S8–S13.
+
+Сквозной синтетический pilot `continuous three-station audio → GCC/SRP →
+BearingMeasurement → causal 3D tracking` завершён как отдельный интеграционный
+gate: его validation contract и Windows/Linux CI зелёные. Это завершение
+синтетической интеграции, но не статистическая квалификация редких хвостов и не
+полевая валидация. Текущий S8 добавляет только записанное приближение source
+signal и не добавляет новую среду, отражения, ветер или фильтр.
+
+Recorded-source pilot внутри S8 завершён в ограниченном
+`single_session_integration_demonstration` scope. S8 остаётся `In progress`:
+для held-out статистической приёмки нужны разные исходные записи/сеансы в
+calibration и evaluation. Непересекающиеся интервалы одной записи этой
+зависимости не устраняют.
 
 Одно мгновенное bearing-измерение одной станции не определяет дальность.
 Temporal retarded-time модель при строгом constant velocity и известном

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "approximation_notice": "The recording is an approximation to an emitted source waveform. It already contains the original microphone response, indoor propagation, background sound and any source motion; this reuse does not establish absolute SPL or detection range.",
+  "recordings": [
+    {
+      "recording_id": "freesound-683298-sadiquecat-mavic-mini-2",
+      "session_id": "freesound-683298-single-session",
+      "title": "Dji Mavic Mini 2 hover above ground UP-DOWN XY mic placement Zoom H5.wav",
+      "creator": "Sadiquecat",
+      "source_page_url": "https://freesound.org/people/Sadiquecat/sounds/683298/",
+      "distributed_preview_url": "https://cdn.freesound.org/previews/683/683298_5287430-hq.ogg",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "permission_summary": "The source page declares Creative Commons Zero and permits copying, modification and redistribution without permission.",
+      "recording_date_published": "2023-04-10",
+      "recording_conditions": "Indoor DJI Mavic Mini 2 hover recording; Zoom H5 stock XY microphone on a bench; uploader states that the material was only segmented and may contain footsteps or remote-control beeps.",
+      "original_resolution": {
+        "sample_rate_hz": 96000,
+        "bit_depth": 24,
+        "channels": 2,
+        "container": "WAV"
+      },
+      "distributed_artifact": {
+        "format": "OGG Vorbis HQ preview",
+        "decoded_sample_rate_hz": 96000,
+        "channels": 2,
+        "duration_s": 28.05946875,
+        "size_bytes": 663525
+      },
+      "local_path": "freesound_683298_hq.ogg",
+      "sha256": "88e6c54548d98197ddf987c828e563a1afb35601246423354c2b4a707c5ec747",
+      "selected_intervals_s": {
+        "calibration": [2.0, 8.0],
+        "evaluation": [12.0, 18.0]
+      },
+      "simulation_preprocessing": "Decode HQ OGG preview, average channels, resample to 48 kHz, remove DC, FFT-bandlimit to the declared 10 kHz emitted edge, and peak-normalize to 0.95. Absolute level is intentionally discarded.",
+      "independent_source_split": false,
+      "split_limitation": "Calibration and evaluation intervals are disjoint but belong to the same recording session, so they are not independent source-data trials. Results are limited to an integration demonstration."
+    }
+  ]
+}
