@@ -797,9 +797,17 @@ def _finite_mean(values):
     return float(np.mean(finite)) if finite.size else float("nan")
 
 
-def summarize_pilot(bearing_rows, tracking_rows, sequence_rows) -> list[dict[str, object]]:
+def summarize_pilot(
+    bearing_rows,
+    tracking_rows,
+    sequence_rows,
+    configurations: tuple[AudioPilotConfig, ...] | None = None,
+) -> list[dict[str, object]]:
     summaries = []
-    for config in pilot_configurations():
+    selected_configurations = (
+        pilot_configurations() if configurations is None else tuple(configurations)
+    )
+    for config in selected_configurations:
         for method in ESTIMATOR_VARIANTS:
             bearings = [
                 row for row in bearing_rows

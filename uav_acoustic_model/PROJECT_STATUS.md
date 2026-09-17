@@ -1,13 +1,76 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-16
+Последнее обновление: 2026-09-17
 
 ## Текущий этап
 
-Текущая работа: **S7C three-station continuous-audio integration pilot**.
-Исправление event contract на `d281d730` закрыто. Это явно включаемое
-расширение причинного рекурсивного оценивателя внутри S7C-C, не новый
-корректирующий подэтап. C1, опубликованный D2 и `confirmed_recovery` сохранены.
+Текущая работа: **S8 recorded-source integration pilot**. Сквозной
+синтетический S7C pilot принят отдельно; он не является статистической
+квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
+`confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
+
+### S8 recorded-source integration pilot
+
+- 2026-09-17 — создана ветка `feature/s8-recorded-source-pilot` от
+  `cf6e6c9`. Добавлен manifest-backed loader и одна CC0-запись DJI Mavic Mini 2
+  (Freesound 683298, автор Sadiquecat, Zoom H5, indoor): исходно WAV
+  `96 kHz/24 bit/stereo`, в репозитории хранится публичный HQ OGG preview
+  `663525 bytes`, SHA-256
+  `88e6c54548d98197ddf987c828e563a1afb35601246423354c2b4a707c5ec747`.
+- Запись явно трактуется только как **приближение исходного сигнала**: она уже
+  содержит АЧХ исходного микрофона, среду записи, фон и возможное движение.
+  Амплитуда нормируется, поэтому эксперимент не подтверждает абсолютный SPL
+  или дальность обнаружения.
+- Предобработка: channel mean, `96→48 kHz` polyphase resampling, DC removal,
+  FFT band-limit `10 kHz`, peak normalization `0.95`. Интервалы calibration
+  `[2,8) s` и evaluation `[12,18) s` не пересекаются, но относятся к одному
+  session; `independent_source_split=false`, поэтому итог ограничен
+  integration demonstration и не называется held-out source evaluation.
+- Первый профильный gate: **18 passed in 10.70 s**. Проверены provenance,
+  hash, разрешение, interval/session semantics, детерминированность,
+  band-limit, непрерывное распространение и отсутствие независимого синтеза
+  перекрывающихся кадров.
+- Frozen pilot использует одну CV-траекторию, `duration=3.0 s`, SNR `-6/10
+  dB`, calibration/evaluation seeds `20260920/20260921`, прежние `Qc=I
+  m²/s³`, NIS gates, frame/hop `1024/512` и tracker stride `32`. GCC/WLS и
+  SRP-PHAT получают одинаковые frame keys. Первый запуск полностью вычислил
+  данные, но экспорт до записи CSV остановился из-за жёстко заданной
+  six-configuration broadband-сетки в `summarize_pilot`; API исправлен на
+  явный configuration subset с прежним default, добавлена regression и
+  повторён только этот небольшой S8 pilot без перенастройки параметров.
+- Итоговые артефакты: **6** calibration rows, **3360** зависимых all-frame
+  bearing rows, **108** зависимых publications, **63** update attempts,
+  **12** phase rows, **4** method-sequence rows и **4** matched comparison
+  rows. Все 3360 bearings valid; update accounting — **54 accepted / 9
+  rejected**. Все четыре method-sequence завершились confirmed/valid;
+  first confirmation `1.5553--1.8966 s`.
+- Recorded-source conditional bearing RMSE: GCC/SRP `12.469/3.478 deg` при
+  `-6 dB` и `0.2355/0.2361 deg` при `10 dB`. Frozen broadband RMSE для тех же
+  cells равен `0.4867/0.4847 deg` и `0.08154/0.08158 deg`; recorded-minus-
+  broadband difference соответственно `+11.983/+2.993 deg` и
+  `+0.1539/+0.1545 deg`. Это описательное наблюдение одной session, не общий
+  ranking GCC против SRP.
+- Conditional position RMSE GCC/SRP: `4.760/6.046 m` при `-6 dB` и
+  `0.538/0.588 m` при `10 dB`; velocity RMSE `2.617/4.220 m/s` и
+  `0.287/0.302 m/s`; conditional coverage `1.0/0.75` и `1.0/1.0`.
+  Calibration `R` во всех шести группах PD: minimum eigenvalue
+  `5.7979066e-4 rad²`, maximum condition number `3.4414`. Максимальные
+  абсолютные lag-1/inter-station residual correlations `0.2880/0.1226`;
+  фильтр их по-прежнему игнорирует.
+- Финальный gate: новый notebook выполнен top-to-bottom, `nbformat` valid,
+  **9/9** cell IDs уникальны, **4/4** code cells выполнены, error-output **0**.
+  Две PNG-фигуры просмотрены в исходном разрешении; после исправления коротких
+  labels обрезки и перекрытия отсутствуют. Структурный audit всех **21/21**
+  committed notebooks не нашёл missing/duplicate IDs, error outputs или
+  невыполненных непустых code cells. Полный `pytest`: **472 passed in 166.52
+  s**; `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  Прежние тяжёлые GCC/SRP Monte Carlo не пересчитывались.
+- Recorded-source pilot принят в ограниченном scope, но общий S8 остаётся **In
+  progress** до появления как минимум независимых recording sessions для
+  настоящего calibration/evaluation split. Следующие ограничения не закрыты:
+  field ground truth, hardware/clock synchronization, absolute acoustic
+  calibration, source directivity, environment, temporal/inter-station error
+  correlation и редкие хвосты.
 
 ### Three-station continuous-audio integration pilot
 

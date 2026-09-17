@@ -10,10 +10,11 @@ S7C-B и ограниченный strict-CV EKF baseline S7C-C1 завершен
 завершён как количественная проверка неизменённого C1 при потерях, паузах
 станций, задержках и выбросах; опубликованный D2 добавляет opt-in consensus и
 NIS gate. Tentative initialization confirmation и bounded causal recovery
-сохраняют C1/D2 как отдельные воспроизводимые варианты. Текущая работа внутри
-S7C соединяет exact continuous audio трёх станций, GCC/SRP, калиброванные
+сохраняют C1/D2 как отдельные воспроизводимые варианты. Сквозной synthetic
+pilot S7C соединил continuous audio трёх станций, GCC/SRP, калиброванные
 `BearingMeasurement` и явно включаемый `Q>0` stochastic-history tracker.
-Общий S7C-C/S7C-D всё ещё не объявлен завершённым.
+Текущий S8 проверяет тот же тракт с manifest-backed записанным приближением
+source signal. Общий S7C-C/S7C-D и полевая валидация не объявлены завершёнными.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -764,6 +765,38 @@ readiness и не signal-level CRLB.
 
 Результаты: `results/three_station_audio_*.csv`; визуальный audit —
 [three_station_audio_tracking_validation.ipynb](notebooks/three_station_audio_tracking_validation.ipynb).
+
+## S8: recorded-source integration demonstration
+
+Протокол [S8_RECORDED_SOURCE_PROTOCOL.md](S8_RECORDED_SOURCE_PROTOCOL.md)
+переиспользует неизменённые propagation, GCC/SRP, calibration и tracker с
+одной CC0-записью DJI Mavic Mini 2. Provenance, разрешение, исходное
+`96 kHz/24 bit/stereo`, условия Zoom H5 indoor-записи, SHA-256 и выбранные
+интервалы находятся в
+[`data/recorded_sources/manifest.json`](data/recorded_sources/manifest.json).
+Loader `simulation/recorded_source.py` проверяет hash, декодирует OGG, усредняет
+каналы, resample-ит в `48 kHz`, удаляет DC, ограничивает emitted band до
+`10 kHz` и нормирует peak до `0.95`.
+
+Это **приближение исходного сигнала**, уже содержащее исходный микрофон,
+помещение/фон и возможное движение. Нормировка исключает абсолютную
+амплитудную калибровку: результат не подтверждает SPL или дальность
+обнаружения. Calibration `[2,8) s` и evaluation `[12,18) s` не пересекаются,
+но принадлежат одной recording session. Поэтому четыре matched GCC/SRP cells
+являются single-session integration demonstration, а не независимой held-out
+валидацией записей.
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.recorded_source_pilot --smoke
+.\.venv\Scripts\python.exe -m validation.recorded_source_pilot
+.\.venv\Scripts\python.exe -m pytest -q tests/test_recorded_source.py tests/test_recorded_source_pilot.py
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/recorded_source_pilot.ipynb
+```
+
+Численные таблицы: `results/recorded_source_*.csv`; сравнение с frozen
+broadband pilot находится в `recorded_source_broadband_comparison.csv`, а
+графики и ограничения — в
+[recorded_source_pilot.ipynb](notebooks/recorded_source_pilot.ipynb).
 
 Отчёт различает фактическое
 `first_post_onset_accepted_update_processing_time_s` из update diagnostic и

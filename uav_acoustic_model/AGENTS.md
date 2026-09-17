@@ -221,3 +221,12 @@
   must be frozen before evaluation, observable-data-only, explicit in results,
   and must not remove all-frame GCC/SRP accuracy reporting. Do not claim
   real-time readiness from simulated availability timestamps.
+- Every recorded-source asset must have a versioned manifest with origin,
+  permission/license, recording resolution and conditions, selected intervals
+  and a verified content hash. Treat a microphone recording only as an
+  approximation to an emitted waveform: it cannot establish absolute SPL or
+  detection range after level normalization and simulated re-propagation.
+- Split recorded-source calibration/evaluation by original recording or
+  session. Disjoint fragments of one recording may prevent sample overlap but
+  are not independent source-data trials; label such work as an integration
+  demonstration and do not report independent-source confidence intervals.
