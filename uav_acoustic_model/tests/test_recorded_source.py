@@ -1,5 +1,6 @@
 """Contracts for manifest-backed recorded-source approximations."""
 
+import copy
 from pathlib import Path
 
 import numpy as np
@@ -37,6 +38,50 @@ def test_recorded_source_manifest_provenance_and_single_session_scope():
     assert audit["intervals_disjoint"]
     assert not audit["source_data_independent_between_splits"]
     assert audit["scope"] == "single_session_integration_demonstration"
+
+
+def test_recorded_source_split_is_derived_from_session_and_origin_ids():
+    manifest = load_recorded_source_manifest(MANIFEST)
+    audit = recorded_source_split_audit(manifest)
+    assert audit["calibration_session_count"] == 2
+    assert audit["evaluation_session_count"] == 2
+    assert not audit["overlapping_session_ids"]
+    assert not audit["overlapping_origin_asset_ids"]
+    assert audit["source_data_independent_between_splits"]
+    assert audit["scope"] == "held_out_independent_recording_evaluation"
+    assert not audit["declared_independence_flag_used"]
+
+
+def test_independence_flag_cannot_make_one_session_independent():
+    manifest = load_recorded_source_manifest(MANIFEST)
+    one_session = copy.deepcopy(manifest)
+    entry = one_session["recordings"][0]
+    entry["split_membership"] = ["calibration", "evaluation"]
+    entry["independent_source_split"] = True
+    one_session["recordings"] = [entry]
+    audit = recorded_source_split_audit(
+        one_session, minimum_sessions_per_split=1
+    )
+    assert audit["overlapping_session_ids"] == (entry["session_id"],)
+    assert audit["overlapping_origin_asset_ids"] == (entry["origin_asset_id"],)
+    assert not audit["source_data_independent_between_splits"]
+    assert not audit["declared_independence_flag_used"]
+
+
+@pytest.mark.parametrize(
+    ("recording_id", "split"),
+    [
+        ("freesound-263022-alcappuccino-phantom-2", "calibration"),
+        ("freesound-383904-simeonradivoev-mini-quadcopter", "evaluation"),
+        ("freesound-321687-n-audioman-drone-takeoff", "evaluation"),
+    ],
+)
+def test_all_added_recordings_have_verified_hash_and_load(recording_id, split):
+    clip = load_recorded_source_clip(MANIFEST, recording_id, split)
+    assert clip.recording_id == recording_id
+    assert clip.origin_asset_id.startswith("freesound:")
+    assert clip.samples.size == 6 * 48_000
+    assert np.all(np.isfinite(clip.samples))
 
 
 def test_recorded_source_loader_is_deterministic_mono_and_bandlimited():

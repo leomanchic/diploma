@@ -9,6 +9,76 @@
 квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
 `confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
 
+### S8 independent recording sessions — provenance gate
+
+- 2026-09-17 — создана ветка `feature/s8-independent-recordings` от
+  `df1c029`. До evaluation найден и зафиксирован состав нового split:
+  calibration использует Freesound assets `683298` (Mavic Mini 2, Sadiquecat)
+  и `263022` (Phantom 2, Alcappuccino), evaluation — `383904` (mini
+  quadcopter, simeonradivoev) и `321687` (quadcopter take-off/hover,
+  n_audioman). Это четыре разных `recording_id`, `session_id` и
+  `origin_asset_id`; первые три записи CC0, последняя CC BY 4.0 с явной
+  атрибуцией.
+- Manifest обновлён до schema 2 и содержит origin/license, условия записи,
+  исходное разрешение, выбранный интервал, HQ-preview размер и проверенный
+  SHA-256. Три новых preview-файла декодируются как заявлено. Записи остаются
+  только приближением emitted waveform и не подтверждают absolute SPL или
+  detection range.
+- `recorded_source_split_audit()` больше не доверяет
+  `independent_source_split`: независимость выводится из фактического состава
+  split по recording/session/origin IDs, минимум два сеанса на split и нулевое
+  пересечение lineage. Отдельная regression показывает, что флаг `true` не
+  делает один сеанс независимым. Предварительный профильный gate: **16 passed**.
+- До evaluation заморожен `S8_INDEPENDENT_RECORDINGS_PROTOCOL.md`: отдельные
+  recorded/broadband калибровки по двум calibration sessions, два held-out
+  evaluation sessions, SNR `-6/10 dB`, CV-траектория,
+  frame/hop `1024/512`. Pre-evaluation feasibility-run со stride `32` был
+  остановлен до записи CSV и до появления error metrics из-за чрезмерной
+  стоимости первого held-out low-SNR recovery; окончательно зафиксирован
+  stride `64` (`1.46484375 Hz/station`), при этом all-frame bearing-метрики
+  сохранены. Второй feasibility-run показал prohibitive combinatorial
+  initialization search при `duration=3.0 s`; он также остановлен до CSV/error
+  metrics. Окончательная длительность ограниченного пилота — `2.0 s`, что
+  оставляет 9 causal events (6 construction + до 3 confirmation) и допускает
+  явный initialization failure. Прежние `Qc=I m²/s³`, NIS-пороги и алгоритмы
+  не менялись.
+  Внутри пары совпадают траектория, длительность, reception/frame timestamps и
+  standard-normal AWGN draws; меняется только clean source и масштаб шума.
+  Calibration lookup использует только station/method/source-model, не truth
+  scenario labels. Расширенный pre-evaluation gate: **22 passed in 19.73 s**.
+- Ограниченный benchmark завершён: **8** calibration и **8** evaluation
+  continuous streams (2 sessions × 2 SNR × 2 source models в каждом split),
+  **12** calibration rows, **8928** dependent evaluation bearing rows,
+  **144** dependent publications и **16** method-session rows. Исторические
+  `results/recorded_source_*.csv` не изменялись. Все 12 calibration covariance
+  PD: eigenvalue range `1.37464e-5...4.10247e-2 rad²`, maximum condition
+  `2.64261`.
+- Все **8928/8928** bearings valid. Session-level conditional recorded RMSE:
+  mini-quadcopter session GCC/SRP `84.642/76.379°` при `-6 dB` и
+  `48.026/34.855°` при `10 dB`; take-off/hover session `9.260/4.725°` и
+  `0.341/0.344°`. Paired broadband range `0.0802...0.4798°`. Это сильная
+  session dependence при всего двух held-out sessions, не общий ranking.
+- Ни один из **16/16** method-session tracker runs не подтвердился:
+  `3` завершились `initialization_failed:no_observable_hypothesis`, `13` —
+  `tentative_initialization_unconfirmed`; accepted/rejected post-initialization
+  updates `0/0`. Поэтому position/velocity errors и posterior coverage
+  остаются `NaN`/unavailable, а не нулевыми. Recorded initialization runtime
+  mean GCC/SRP `55.24/39.09 s`, maxima `141.31/146.05 s`; broadband mean
+  `0.0384/0.0376 s`. Короткий frozen protocol проверяет failure reporting, но
+  не валидирует tracking accuracy.
+- Новый notebook выполнен top-to-bottom: **12/12** unique cell IDs, **5/5**
+  code cells executed, error-output `0`. Три PNG-фигуры просмотрены в исходном
+  разрешении; labels, log scales и failure denominators читаемы. S8 остаётся
+  **In progress**: independent-session bearing benchmark воспроизводим, но
+  tracking, полевая среда, hardware synchronization, absolute calibration и
+  ground truth не подтверждены.
+- Финальный gate: targeted **23 passed in 18.73 s**, полный pytest **484 passed
+  in 177.48 s**, `pip check` PASS, `git diff --check` PASS. Структурный audit
+  всех **22/22** committed notebooks: nbformat valid, unique cell IDs,
+  error-output `0`, невыполненных непустых code cells `0`. По явному scope
+  задачи выполнен только новый notebook; неизменённые тяжёлые GCC/SRP
+  исследования не перезапускались.
+
 ### S8 recorded-source integration pilot
 
 - 2026-09-17 — создана ветка `feature/s8-recorded-source-pilot` от

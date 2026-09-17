@@ -230,3 +230,8 @@
   session. Disjoint fragments of one recording may prevent sample overlap but
   are not independent source-data trials; label such work as an integration
   demonstration and do not report independent-source confidence intervals.
+- Derive recorded-source split independence from the actual unique
+  `recording_id`, `session_id` and `origin_asset_id` composition. Require the
+  declared minimum count on both sides and no session/origin overlap. Never
+  trust an `independent_source_split` boolean, and count repeated SNRs, clips,
+  frames or transcodes of one session as dependent observations.

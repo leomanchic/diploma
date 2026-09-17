@@ -14,7 +14,10 @@ NIS gate. Tentative initialization confirmation и bounded causal recovery
 pilot S7C соединил continuous audio трёх станций, GCC/SRP, калиброванные
 `BearingMeasurement` и явно включаемый `Q>0` stochastic-history tracker.
 Текущий S8 проверяет тот же тракт с manifest-backed записанным приближением
-source signal. Общий S7C-C/S7C-D и полевая валидация не объявлены завершёнными.
+source signal. После исторической single-session демонстрации добавлен
+held-out split из двух calibration и двух evaluation recording sessions;
+source/session/origin lineage проверяется программно. Общий S7C-C/S7C-D и
+полевая валидация не объявлены завершёнными.
 
 Одностанционная часть проекта по-прежнему охватывает точную сферическую и
 плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
@@ -490,6 +493,9 @@ bearing measurement benchmark, not tracking and not a signal-level CRLB**.
   tails, availability/coverage и воспроизведение двух D2 reject-lock failures;
 - `notebooks/three_station_audio_tracking_validation.ipynb` — полный synthetic
   audio-to-bearing-to-track pilot, correlations, failures, runtime и 3D path;
+- `notebooks/independent_recordings_validation.ipynb` — S8 source-session
+  audit, paired recorded/broadband bearing errors, initialization failures,
+  runtime и calibration scale;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -802,3 +808,42 @@ broadband pilot находится в `recorded_source_broadband_comparison.csv`
 `first_post_onset_accepted_update_processing_time_s` из update diagnostic и
 `first_post_onset_accepted_update_first_publication_time_s`. Первое не зависит
 от частоты внешних публикаций, второе закономерно может зависеть.
+
+### S8 independent-session held-out pilot
+
+Новый протокол
+[S8_INDEPENDENT_RECORDINGS_PROTOCOL.md](S8_INDEPENDENT_RECORDINGS_PROTOCOL.md)
+сохраняет исторические `results/recorded_source_*.csv` и добавляет четыре
+origin assets: два calibration sessions (`683298`, `263022`) и два evaluation
+sessions (`383904`, `321687`). Manifest schema 2 хранит `recording_id`,
+`session_id`, `origin_asset_id`, источник, лицензию, условия, разрешение,
+выбранный интервал и SHA-256. Три assets имеют CC0, `321687` — CC BY 4.0 с
+атрибуцией. Audit вычисляет независимость по фактическим IDs и не доверяет
+boolean-флагу; fragments/transcodes одного session считаются одной единицей.
+
+Recorded и random-broadband члены пары используют одинаковые CV-траекторию,
+`2.0 s` длительность, timestamps и standard-normal AWGN draws. Для них
+строятся отдельные calibration-only bias/R по двум calibration sessions.
+Ограниченный evaluation содержит 2 held-out sessions × 2 SNR × 2 source
+models; GCC/SRP оцениваются на всех кадрах, tracker получает frozen stride
+`64`. `Qc=I m²/s³`, NIS gates и estimator algorithms не менялись.
+
+Все `8928/8928` frame bearings valid, но session-level recorded RMSE меняется
+от `0.341°` до `84.642°`, тогда как paired broadband — `0.080–0.480°`.
+Ни один из 16 method-session tracker runs не подтвердился за короткие 9
+events: 3 `no_observable_hypothesis`, 13
+`tentative_initialization_unconfirmed`, 0 accepted updates. Поэтому position,
+velocity и posterior coverage здесь остаются недоступными, а не нулевыми.
+Это честный отрицательный integration result и не field/SPL/detection-range
+validation.
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot --smoke
+.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot
+.\.venv\Scripts\python.exe -m pytest -q tests/test_recorded_source.py tests/test_recorded_source_pilot.py tests/test_independent_recordings_pilot.py
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/independent_recordings_validation.ipynb
+```
+
+Новые таблицы имеют prefix `results/independent_recordings_`; основная
+единица отчёта — исходный source session, не frame или SNR-run. Notebook:
+[independent_recordings_validation.ipynb](notebooks/independent_recordings_validation.ipynb).
