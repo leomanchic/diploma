@@ -46,4 +46,3 @@ all-frame bearing error, causal initialization/update/failure accounting,
 conditional tracking error, coverage and runtime. Compare matching cells with
 the frozen broadband pilot, but do not interpret one source session as a
 population estimate or use evaluation errors to change parameters.
-
