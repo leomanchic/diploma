@@ -39,7 +39,7 @@ bearing-измерениям определяет и затем причинно
 | S7C-D | In progress | Проверить dropout/outlier/out-of-sequence robustness | controlled benchmark, opt-in robust variants, confirmation/recovery и failure reporting | reproducible stress gates, causal event accounting, availability/error trade-off и явные ограничения | S7C-C |
 | S7C-D1 | Done | Измерить пределы принятого strict-CV C1 при потерях, паузах станций, задержках и выбросах без изменения фильтра | фиксированный протокол, paired 200-block/1800-run study, epoch/sequence/profile CSV и notebook | deterministic/smoke gates, честные denominators/coverage, полный reproducibility audit | S7C-C1 |
 | S7C-D2 | Done | Добавить явно включаемые robust initialization и pre-update NIS gate без изменения C1 default | consensus diagnostics, four-way ablation, paired held-out benchmark, CSV и notebook | baseline reproducibility, separate/combined mechanism tests, held-out whole-sequence comparison, full gates | S7C-D1 |
-| S8 | In progress | Проверить тракт с записанным приближением source signal | versioned manifest/loader, recorded-source integration pilot, source/session split audit | воспроизводимый provenance, calibration-only uncertainty, явная граница integration demo vs held-out/field validation | S4, S7A, synthetic S7C pilot |
+| S8 | In progress | Проверить тракт с записанным приближением source signal | versioned manifest/loader, independent-session paired recorded/broadband pilot, source/session/origin split audit | воспроизводимый provenance, calibration-only uncertainty, session-level denominators и явная граница held-out source benchmark vs field validation | S4, S7A, synthetic S7C pilot |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -153,6 +153,17 @@ Recorded-source pilot внутри S8 завершён в ограниченно
 для held-out статистической приёмки нужны разные исходные записи/сеансы в
 calibration и evaluation. Непересекающиеся интервалы одной записи этой
 зависимости не устраняют.
+
+Следующий S8 gate добавил четыре provenance-verified исходных session:
+2 calibration и 2 evaluation без пересечения `session_id`/`origin_asset_id`.
+Manifest audit больше не доверяет ручному boolean-флагу, а выводит
+независимость из фактического состава. Ограниченный paired recorded/broadband
+benchmark завершён на source-session уровне, но causal tracker не подтвердил
+ни один из 16 method-session запусков в коротком `2 s`/9-event протоколе.
+Поэтому bearing-level held-out результат воспроизводим, а position/velocity
+accuracy и posterior coverage остаются непроверенными. S8 сохраняет статус
+`In progress`: это отрицательный integration result, не полевая валидация и не
+основание менять `Qc`, NIS gates или алгоритм по evaluation.
 
 Одно мгновенное bearing-измерение одной станции не определяет дальность.
 Temporal retarded-time модель при строгом constant velocity и известном

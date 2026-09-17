@@ -1,10 +1,24 @@
 {
-  "schema_version": 1,
-  "approximation_notice": "The recording is an approximation to an emitted source waveform. It already contains the original microphone response, indoor propagation, background sound and any source motion; this reuse does not establish absolute SPL or detection range.",
+  "schema_version": 2,
+  "approximation_notice": "Each recording is only an approximation to an emitted source waveform. It already contains the original microphone response, recording environment, background sound and source motion; normalized re-propagation cannot establish absolute SPL or detection range.",
+  "independent_split_protocol": {
+    "minimum_sessions_per_split": 2,
+    "calibration_recording_ids": [
+      "freesound-683298-sadiquecat-mavic-mini-2",
+      "freesound-263022-alcappuccino-phantom-2"
+    ],
+    "evaluation_recording_ids": [
+      "freesound-383904-simeonradivoev-mini-quadcopter",
+      "freesound-321687-n-audioman-drone-takeoff"
+    ],
+    "independence_rule": "A split is independent only when calibration and evaluation each contain at least two unique recording_id, session_id and origin_asset_id values, with no session_id or origin_asset_id shared across splits. Files, fragments and transcodes sharing a session or origin asset count once."
+  },
   "recordings": [
     {
       "recording_id": "freesound-683298-sadiquecat-mavic-mini-2",
-      "session_id": "freesound-683298-single-session",
+      "session_id": "sadiquecat-mavic-mini-2-indoor-zoom-h5",
+      "origin_asset_id": "freesound:683298",
+      "split_membership": ["calibration"],
       "title": "Dji Mavic Mini 2 hover above ground UP-DOWN XY mic placement Zoom H5.wav",
       "creator": "Sadiquecat",
       "source_page_url": "https://freesound.org/people/Sadiquecat/sounds/683298/",
@@ -13,7 +27,8 @@
       "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
       "permission_summary": "The source page declares Creative Commons Zero and permits copying, modification and redistribution without permission.",
       "recording_date_published": "2023-04-10",
-      "recording_conditions": "Indoor DJI Mavic Mini 2 hover recording; Zoom H5 stock XY microphone on a bench; uploader states that the material was only segmented and may contain footsteps or remote-control beeps.",
+      "recording_conditions": "Indoor DJI Mavic Mini 2 hover; Zoom H5 stock XY microphone on a bench; uploader states that the material was only segmented and may contain footsteps or remote-control beeps.",
+      "session_evidence": "The source page identifies one indoor Mavic Mini 2/Zoom H5 capture. It is treated as one session regardless of its fragments or transcodes.",
       "original_resolution": {
         "sample_rate_hz": 96000,
         "bit_depth": 24,
@@ -33,9 +48,108 @@
         "calibration": [2.0, 8.0],
         "evaluation": [12.0, 18.0]
       },
-      "simulation_preprocessing": "Decode HQ OGG preview, average channels, resample to 48 kHz, remove DC, FFT-bandlimit to the declared 10 kHz emitted edge, and peak-normalize to 0.95. Absolute level is intentionally discarded.",
-      "independent_source_split": false,
-      "split_limitation": "Calibration and evaluation intervals are disjoint but belong to the same recording session, so they are not independent source-data trials. Results are limited to an integration demonstration."
+      "historical_interval_note": "The evaluation interval is retained only to reproduce the historical single-session pilot. It is not part of the independent evaluation split.",
+      "simulation_preprocessing": "Decode HQ OGG preview, average channels, resample to 48 kHz, remove DC, FFT-bandlimit to 10 kHz and peak-normalize to 0.95. Absolute level is discarded."
+    },
+    {
+      "recording_id": "freesound-263022-alcappuccino-phantom-2",
+      "session_id": "alcappuccino-phantom-2-gopro-takeoff-landing",
+      "origin_asset_id": "freesound:263022",
+      "split_membership": ["calibration"],
+      "title": "Quadrocopter Take-Off And Landing",
+      "creator": "Alcappuccino",
+      "source_page_url": "https://freesound.org/people/Alcappuccino/sounds/263022/",
+      "distributed_preview_url": "https://cdn.freesound.org/previews/263/263022_4536481-hq.ogg",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "permission_summary": "The source page declares Creative Commons Zero and permits copying, modification and redistribution without permission.",
+      "recording_date_published": "2015-02-04",
+      "recording_conditions": "DJI Phantom 2 take-off and landing; audio captured by a GoPro camera attached to the aircraft.",
+      "session_evidence": "The source page describes the Phantom 2 take-off/landing capture represented by Freesound asset 263022.",
+      "original_resolution": {
+        "sample_rate_hz": 48000,
+        "bit_depth": 16,
+        "channels": 2,
+        "container": "WAV"
+      },
+      "distributed_artifact": {
+        "format": "OGG Vorbis HQ preview",
+        "decoded_sample_rate_hz": 48000,
+        "channels": 2,
+        "duration_s": 59.076,
+        "size_bytes": 921887
+      },
+      "local_path": "freesound_263022_hq.ogg",
+      "sha256": "3edfa92c8d0dd5c73adfffed7c9bdb70c4d9b2153cb98c14cd2c7bf7d0d8fa2d",
+      "selected_intervals_s": {"calibration": [5.0, 11.0]},
+      "simulation_preprocessing": "Decode HQ OGG preview, average channels, retain 48 kHz, remove DC, FFT-bandlimit to 10 kHz and peak-normalize to 0.95. Absolute level is discarded."
+    },
+    {
+      "recording_id": "freesound-383904-simeonradivoev-mini-quadcopter",
+      "session_id": "simeonradivoev-mini-quadcopter-raw-speed-takes",
+      "origin_asset_id": "freesound:383904",
+      "split_membership": ["evaluation"],
+      "title": "Mini Quadcopter Turning on/off",
+      "creator": "simeonradivoev",
+      "source_page_url": "https://freesound.org/people/simeonradivoev/sounds/383904/",
+      "distributed_preview_url": "https://cdn.freesound.org/previews/383/383904_2278166-hq.ogg",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "permission_summary": "The source page declares Creative Commons Zero and permits copying, modification and redistribution without permission.",
+      "recording_date_published": "2017-03-11",
+      "recording_conditions": "Raw takes of a mini quadcopter turning on and off at several speeds; recording equipment and environment are not stated on the source page.",
+      "session_evidence": "The source page describes one set of raw mini-quadcopter takes represented by Freesound asset 383904.",
+      "original_resolution": {
+        "sample_rate_hz": 44100,
+        "bit_depth": 16,
+        "channels": 2,
+        "container": "WAV"
+      },
+      "distributed_artifact": {
+        "format": "OGG Vorbis HQ preview",
+        "decoded_sample_rate_hz": 44100,
+        "channels": 2,
+        "duration_s": 60.432,
+        "size_bytes": 1370978
+      },
+      "local_path": "freesound_383904_hq.ogg",
+      "sha256": "fde1abaddd96ec5dbe8261bdba4a5523d1244f4c31d0017980dc826591d33561",
+      "selected_intervals_s": {"evaluation": [5.0, 11.0]},
+      "simulation_preprocessing": "Decode HQ OGG preview, average channels, resample to 48 kHz, remove DC, FFT-bandlimit to 10 kHz and peak-normalize to 0.95. Absolute level is discarded."
+    },
+    {
+      "recording_id": "freesound-321687-n-audioman-drone-takeoff",
+      "session_id": "n-audioman-quadcopter-takeoff-hover-distance",
+      "origin_asset_id": "freesound:321687",
+      "split_membership": ["evaluation"],
+      "title": "15Y08M20-Drone_Take_Off 01.WAV",
+      "creator": "n_audioman",
+      "source_page_url": "https://freesound.org/people/n_audioman/sounds/321687/",
+      "distributed_preview_url": "https://cdn.freesound.org/previews/321/321687_3554699-hq.ogg",
+      "license": "CC-BY-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "permission_summary": "The source page declares Attribution 4.0; redistribution and adaptation are permitted with attribution to n_audioman and a license reference.",
+      "attribution": "15Y08M20-Drone_Take_Off 01.WAV by n_audioman, licensed under CC BY 4.0.",
+      "recording_date_published": "2015-09-11",
+      "recording_conditions": "A quadcopter-style drone takes off and then hovers at a distance; the source page does not state recording equipment or environment.",
+      "session_evidence": "The source page describes the take-off/hover capture represented by Freesound asset 321687.",
+      "original_resolution": {
+        "sample_rate_hz": 96000,
+        "bit_depth": 24,
+        "channels": 2,
+        "container": "WAV"
+      },
+      "distributed_artifact": {
+        "format": "OGG Vorbis HQ preview",
+        "decoded_sample_rate_hz": 96000,
+        "channels": 2,
+        "duration_s": 32.049,
+        "size_bytes": 609803
+      },
+      "local_path": "freesound_321687_hq.ogg",
+      "sha256": "f704cb8e6ecc5175c86cf468bfd15e02e49079c69bf2275f05316b29836cd3a6",
+      "selected_intervals_s": {"evaluation": [10.0, 16.0]},
+      "simulation_preprocessing": "Decode HQ OGG preview, average channels, resample to 48 kHz, remove DC, FFT-bandlimit to 10 kHz and peak-normalize to 0.95. Absolute level is discarded."
     }
   ]
 }
