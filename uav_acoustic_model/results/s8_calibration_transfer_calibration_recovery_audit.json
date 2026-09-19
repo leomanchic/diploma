@@ -1,0 +1,23 @@
+{
+  "absolute_reproducibility_tolerance": 1e-10,
+  "calibration_evaluation_origin_overlap_count": 0,
+  "calibration_evaluation_recording_overlap_count": 0,
+  "calibration_evaluation_seed_overlap_counts": {
+    "noise_seed": 0,
+    "sequence_seed": 0,
+    "source_seed": 0
+  },
+  "calibration_evaluation_session_overlap_count": 0,
+  "calibration_sequence_count": 8,
+  "dependent_calibration_frame_count": 20160,
+  "directed_leave_one_session_out_group_count": 48,
+  "duplicate_calibration_frame_key_count": 0,
+  "evaluation_audio_synthesized": false,
+  "maximum_pooled_bias_difference_rad": 0.0,
+  "maximum_pooled_covariance_difference_rad2": 0.0,
+  "original_session_count": 2,
+  "pooled_attribution_group_count": 12,
+  "session_snr_group_count": 48,
+  "split": "calibration_only",
+  "tracker_invoked": false
+}

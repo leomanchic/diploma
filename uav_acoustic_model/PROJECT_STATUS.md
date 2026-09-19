@@ -9,7 +9,76 @@
 квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
 `confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
 
-### S8 calibration-transfer analysis — сохранённые данные, без повторного аудио
+### S8 calibration-transfer analysis — calibration-only дополнение
+
+Первоначальный saved-only аудит ниже завершён отдельно. По последующему
+разрешению пользователя выполнена **однократная повторная обработка только
+двух исходных calibration-сеансов**, чьи покадровые residuals отсутствовали
+в прежних артефактах и Git. Протокол `S8_CALIBRATION_TRANSFER_PROTOCOL.md`
+зафиксировал расчёты до запуска. Исходное evaluation-аудио, tracker и старые
+Monte Carlo не повторялись; опубликованные pooled bias/R и результаты S8
+остались неизменными. Все выводы ниже — диагностические, не новый выбор
+рабочей калибровки.
+
+- Обработаны **2 исходных сеанса**, по `-6/+10 dB`, recorded и paired
+  broadband: 8 continuous calibration streams и **20160 перекрывающихся,
+  статистически зависимых кадров**. Для 3 станций × 2 методов × 2 моделей
+  источника сохранены 48 session/SNR групп, 12 pooled-decomposition групп и
+  48 направленных leave-one-session-out проверок. ID сеанса, записи и origin,
+  а также sequence/source/noise seeds не пересекаются с evaluation;
+  повторяющихся ключей calibration frame нет. У всех 12 исходных pooled
+  bias/R максимальные абсолютные расхождения с повторным fit равны **0 rad**
+  и **0 rad²** (предзаданный допуск `1e-10`).
+- Residual — двумерный spherical log-map в локальном tangent basis, единицы
+  rad angular arc; `R` в rad². Для каждого набора сессий выполнено точное
+  sample-scatter разложение
+  `(n−1)R_pool = Σ_s(n_s−1)R_s + Σ_s n_s(μ_s−μ)(μ_s−μ)^T`.
+  Максимальная ошибка реконструкции `7.39e-13 rad²`. Среди recorded групп
+  разделение средних двух сеансов `11.299–19.460°`, broadband
+  `0.0033–0.0216°`. Межсеансовое слагаемое составляет `1.95–7.05%`
+  recorded scatter; **92.74–96.22% общего pooled scatter** приходится на
+  within-session scatter Phantom-сеанса. Поэтому широкое pooled `R` вызвано
+  не только различием средних между двумя сеансами.
+- Recorded Phantom при `-6/+10 dB`: описательные средние по шести зависимым
+  station/method группам median error `43.86/9.90°`, P95 `133.40/91.03°`,
+  доля `>30°` `0.596/0.245`; Mavic соответственно `2.24/0.195°`,
+  `14.70/0.405°`, `0.0175/0`. В recorded pooled-группах доля `>30°`
+  `0.170–0.266`; удаление верхних 5% по geodesic error сдвигает среднее
+  на `4.25–4.42°`, полный covariance trace в `1.78–2.16` раза выше
+  trimmed-варианта. Trim здесь только sensitivity diagnostic, не
+  применённая калибровка. Ошибка не сводится к нескольким редким выбросам:
+  один исходный сеанс содержит широкий режим грубых bearing-ошибок.
+- В directed leave-one-session-out fit использует **оба SNR одного
+  calibration-сеанса**, test — другой сеанс при одном SNR; центрированный
+  `NIS=(r−μ_train)^T R_train⁻¹(r−μ_train)` и `χ²₂` — только Gaussian benchmark.
+  При train на точном Mavic и test на Phantom `-6/+10 dB` среднее по шести
+  зависимым группам несовпадение bias `23.81/6.24°`, P95 NIS около
+  `3460/1345`, доля выше `χ²₂` P95 `0.822/0.526`. Обратный перенос даёт
+  bias mismatch около `15°`, но долю выше порога `0` из-за широкого `R`
+  Phantom; его covariance trace в `52.5–432.7` раза больше Mavic train.
+  Broadband cross-session mismatch всего `0.003–0.046°`. Два исходных
+  сеанса и зависимые кадры не дают надёжной статистической квалификации
+  переноса или доверительных интервалов по популяции записей.
+- Артефакты: `validation/s8_calibration_session_recovery.py`,
+  `tests/test_s8_calibration_session_recovery.py`, сохранённые покадровые
+  calibration residuals/seed provenance, session/SNR, scatter attribution и
+  directed LOSO CSV в `results/s8_calibration_transfer_calibration_*.csv`,
+  audit JSON и дополненный notebook. `--reanalyze-saved` пересчитывает
+  диагностические таблицы из сохранённых residuals **без синтеза аудио**.
+  Изначальный анализ только по 12 pooled строкам действительно не мог
+  восстановить эти величины; он оставлен ниже как исторический результат.
+  Причина не в знаке/единицах реализации, а в неоднородных исходных
+  записанных сеансах и недостатке независимых сеансов для generalization.
+- Проверка дополнения: 9/9 целевых тестов; полный `pytest -q` — **498 passed
+  in 186.81 s**; `pip check` — `No broken requirements found`;
+  `git diff --check` — без ошибок (Git предупредил только о LF→CRLF в
+  рабочей копии). Затронутый notebook выполнен через nbconvert: nbformat
+  valid, **8/8** code cells выполнены, 4 PNG, error-output 0, cell IDs
+  уникальны. Структурный аудит всех 24 notebooks: 149 выполненных code
+  cells, error-output 0, невыполненных code cells 0, дубликатов IDs 0.
+  Неизменённые тяжёлые GCC/SRP notebooks не исполнялись повторно по
+  ограничению пользователя. Нефатальные Windows ZMQ/kernel warnings
+  при nbconvert не влияли на выходы.
 
 - 2026-09-19 — ветка `analysis/s8-calibration-transfer` от `22ea123`.
   Исходные S8 CSV и алгоритмы фильтра/пороги/`Qc` не меняются. Анализ читает
