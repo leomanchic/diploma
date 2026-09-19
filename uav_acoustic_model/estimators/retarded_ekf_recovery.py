@@ -141,6 +141,43 @@ class RecoveryHypothesisDiagnostic:
 
 
 @dataclass(frozen=True, slots=True)
+class RecoveryCandidateDiagnostic:
+    """Truth-free reason for accepting/rejecting one construction subset.
+
+    This is observational instrumentation; it does not change candidate order,
+    thresholds, the fit budget, or any estimator state transition.
+    """
+
+    processing_time_s: float
+    generation: int
+    construction_event_ids: tuple[str, ...]
+    reason: str
+    geometric_rank: int
+    batch_failure_reason: str | None
+    batch_local_rank: int | None
+    batch_scaled_condition_number: float | None
+    batch_maximum_angular_residual_rad: float | None
+    batch_scaled_projected_kkt_residual: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryBatchFitDiagnostic:
+    """One attempted nonlinear fit, including a budget-denied attempt."""
+
+    processing_time_s: float
+    generation: int
+    phase: str
+    event_ids: tuple[str, ...]
+    reason: str
+    fit_count_after_attempt: int
+    batch_failure_reason: str | None
+    local_observability_rank: int | None
+    scaled_condition_number: float | None
+    maximum_angular_residual_rad: float | None
+    scaled_projected_kkt_residual: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class RecoveryLifecycleDiagnostic:
     processing_time_s: float
     generation: int
@@ -416,6 +453,9 @@ class CausalConfirmedRetardedTimeEKF:
         self._active_generation_ids: set[str] = set()
         self._event_uses: list[RecoveryEventUse] = []
         self._hypothesis_history: list[RecoveryHypothesisDiagnostic] = []
+        self._candidate_history: list[RecoveryCandidateDiagnostic] = []
+        self._batch_fit_history: list[RecoveryBatchFitDiagnostic] = []
+        self._fit_context = "construction"
         self._lifecycle_history: list[RecoveryLifecycleDiagnostic] = []
         self._inconsistency_streak: list[BearingMeasurement] = []
         self._reset_count = 0
@@ -428,6 +468,18 @@ class CausalConfirmedRetardedTimeEKF:
     @property
     def publications(self) -> tuple[RecoveryPublication, ...]:
         return tuple(self._publications)
+
+    @property
+    def candidate_diagnostics(self) -> tuple[RecoveryCandidateDiagnostic, ...]:
+        """All construction-subset decisions, including pre-budget rejections."""
+
+        return tuple(self._candidate_history)
+
+    @property
+    def batch_fit_diagnostics(self) -> tuple[RecoveryBatchFitDiagnostic, ...]:
+        """Observed fit outcomes and explicit budget denials; no truth fields."""
+
+        return tuple(self._batch_fit_history)
 
     def _lifecycle(self, time_s: float, action: str, reason: str, ids: Sequence[str] = ()) -> RecoveryLifecycleDiagnostic:
         item = RecoveryLifecycleDiagnostic(
@@ -483,15 +535,42 @@ class CausalConfirmedRetardedTimeEKF:
         """Count actual batch fits, including final consensus refits."""
 
         limit = self._config.maximum_batch_optimizations_per_generation
+        event_ids = tuple(sorted(bearing_event_id(item) for item in measurements))
         if limit is not None and self._batch_optimization_count >= limit:
+            self._batch_fit_history.append(RecoveryBatchFitDiagnostic(
+                float(reference_time_s), self._generation + 1, self._fit_context,
+                event_ids, "computational_budget_exceeded_before_fit",
+                self._batch_optimization_count, None, None, None, None, None,
+            ))
             raise _InitializationBudgetExceeded
         self._batch_optimization_count += 1
         started = time.perf_counter()
         try:
-            return estimate_retarded_constant_velocity_batch(
+            batch = estimate_retarded_constant_velocity_batch(
                 self._stations, measurements,
                 reference_time_s=reference_time_s, sound_speed=self._sound_speed,
             )
+            if not batch.valid or batch.state is None:
+                reason = "batch_invalid"
+            elif batch.local_observability_rank != self._criteria.required_local_rank:
+                reason = "local_rank_below_required"
+            elif batch.scaled_information_condition_number > self._criteria.maximum_scaled_condition_number:
+                reason = "scaled_condition_above_limit"
+            elif batch.maximum_angular_residual_rad > self._criteria.maximum_angular_residual_rad:
+                reason = "maximum_angular_residual_above_limit"
+            elif batch.scaled_projected_kkt_residual > self._criteria.maximum_scaled_kkt_residual:
+                reason = "scaled_projected_kkt_above_limit"
+            else:
+                reason = "batch_passed"
+            self._batch_fit_history.append(RecoveryBatchFitDiagnostic(
+                float(reference_time_s), self._generation + 1, self._fit_context,
+                event_ids, reason, self._batch_optimization_count,
+                batch.failure_reason, batch.local_observability_rank,
+                batch.scaled_information_condition_number,
+                batch.maximum_angular_residual_rad,
+                batch.scaled_projected_kkt_residual,
+            ))
+            return batch
         finally:
             elapsed = time.perf_counter() - started
             self._batch_optimization_runtime_s += elapsed
@@ -527,11 +606,49 @@ class CausalConfirmedRetardedTimeEKF:
             )
             if rank < self._criteria.required_local_rank:
                 self._failed_signatures.add(signature)
+                self._candidate_history.append(RecoveryCandidateDiagnostic(
+                    float(processing_time_s), self._generation + 1, signature,
+                    "geometric_rank_deficient", rank, None, None, None, None, None,
+                ))
                 continue
-            batch = self._initialization_batch(subset, processing_time_s)
+            try:
+                batch = self._initialization_batch(subset, processing_time_s)
+            except _InitializationBudgetExceeded:
+                self._candidate_history.append(RecoveryCandidateDiagnostic(
+                    float(processing_time_s), self._generation + 1, signature,
+                    "computational_budget_exceeded_before_fit", rank, None,
+                    None, None, None, None,
+                ))
+                raise
             if not _batch_passes(batch, self._criteria) or batch.state is None:
                 self._failed_signatures.add(signature)
+                if not batch.valid or batch.state is None:
+                    reason = "batch_invalid"
+                elif batch.local_observability_rank != self._criteria.required_local_rank:
+                    reason = "local_rank_below_required"
+                elif batch.scaled_information_condition_number > self._criteria.maximum_scaled_condition_number:
+                    reason = "scaled_condition_above_limit"
+                elif batch.maximum_angular_residual_rad > self._criteria.maximum_angular_residual_rad:
+                    reason = "maximum_angular_residual_above_limit"
+                else:
+                    reason = "scaled_projected_kkt_above_limit"
+                self._candidate_history.append(RecoveryCandidateDiagnostic(
+                    float(processing_time_s), self._generation + 1, signature,
+                    reason, rank, batch.failure_reason,
+                    batch.local_observability_rank,
+                    batch.scaled_information_condition_number,
+                    batch.maximum_angular_residual_rad,
+                    batch.scaled_projected_kkt_residual,
+                ))
                 continue
+            self._candidate_history.append(RecoveryCandidateDiagnostic(
+                float(processing_time_s), self._generation + 1, signature,
+                "candidate_viable", rank, batch.failure_reason,
+                batch.local_observability_rank,
+                batch.scaled_information_condition_number,
+                batch.maximum_angular_residual_rad,
+                batch.scaled_projected_kkt_residual,
+            ))
             preliminary = _scores(
                 batch.state, self._station_map, measurements, self._sound_speed
             )
@@ -683,16 +800,20 @@ class CausalConfirmedRetardedTimeEKF:
                 if np.isfinite(preliminary_map[bearing_event_id(item)])
                 and preliminary_map[bearing_event_id(item)] <= self._config.fit_nis_threshold
             )
-            final_batch, final_scores, final_inliers = _refine_consensus(
-                self._stations,
-                self._station_map,
-                preliminary_inliers,
-                reference_time_s=processing_time_s,
-                sound_speed=self._sound_speed,
-                threshold=self._config.fit_nis_threshold,
-                criteria=self._criteria,
-                fit_batch=self._initialization_batch,
-            )
+            self._fit_context = "confirmation_refit"
+            try:
+                final_batch, final_scores, final_inliers = _refine_consensus(
+                    self._stations,
+                    self._station_map,
+                    preliminary_inliers,
+                    reference_time_s=processing_time_s,
+                    sound_speed=self._sound_speed,
+                    threshold=self._config.fit_nis_threshold,
+                    criteria=self._criteria,
+                    fit_batch=self._initialization_batch,
+                )
+            finally:
+                self._fit_context = "construction"
             final_ids = {bearing_event_id(item) for item in final_inliers}
             confirmation_ids = tuple(
                 sorted(bearing_event_id(item) for item in inliers if bearing_event_id(item) in final_ids)
@@ -1132,6 +1253,8 @@ __all__ = [
     "CausalConfirmedRetardedTimeEKF",
     "InitializationRecoveryConfig",
     "RecoveryEventUse",
+    "RecoveryCandidateDiagnostic",
+    "RecoveryBatchFitDiagnostic",
     "RecoveryHypothesisDiagnostic",
     "RecoveryLifecycleDiagnostic",
     "RecoveryPublication",
