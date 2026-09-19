@@ -482,6 +482,8 @@ def run_tracker(
     trajectory: BenchmarkManoeuvreTrajectory,
     measurements: tuple[BearingMeasurement, ...],
     method: str,
+    *,
+    maximum_batch_optimizations_per_generation: int | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]]]:
     config = ManoeuvreHistoryConfig(
         np.eye(3) * QC_ALPHA_M2_S3,
@@ -500,6 +502,9 @@ def run_tracker(
             maximum_confirmation_failures=20,
             maximum_confirmation_events=180,
             maximum_initialization_buffer_events=360,
+            maximum_batch_optimizations_per_generation=(
+                maximum_batch_optimizations_per_generation
+            ),
         ),
     )
     publication_times = sorted({float(item.available_timestamp_s) for item in measurements})
@@ -606,6 +611,8 @@ def run_tracker(
                     else "prediction_without_correction"
                 ),
                 "truth_used_by_tracker": False,
+                "batch_optimization_count": int(publication.batch_optimization_count),
+                "batch_optimization_budget": publication.batch_optimization_budget,
             }
         )
     final = publications[-1]
@@ -647,6 +654,9 @@ def run_tracker(
         "failure_reason": final.failure_reason or "",
         "rejection_reasons_json": json.dumps(Counter(dict(final.rejection_reasons).values()), sort_keys=True),
         "tracker_runtime_s": runtime,
+        "batch_optimization_count": int(final.batch_optimization_count),
+        "batch_optimization_runtime_s": float(final.batch_optimization_runtime_s),
+        "batch_optimization_budget": final.batch_optimization_budget,
         "maximum_history_memory_bytes": estimator.maximum_history_memory_bytes,
         "maximum_history_nodes": estimator.maximum_history_node_count,
     }

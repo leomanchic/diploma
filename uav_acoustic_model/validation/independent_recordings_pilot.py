@@ -17,7 +17,17 @@ from pathlib import Path
 
 import numpy as np
 
-from simulation.multistation_audio import MultistationAudioStream, synthesize_multistation_audio
+from estimators.retarded_ekf_manoeuvre import CausalManoeuvreRetardedTimeEKF, ManoeuvreHistoryConfig
+from estimators.retarded_ekf_recovery import InitializationRecoveryConfig
+from model.bearing_events import bearing_event_id
+from model.dynamic_state import ConstantVelocityState
+from model.measurements import BearingMeasurement
+from model.retarded_bearing import predict_retarded_bearing
+from simulation.continuous_stream import reception_time_grid
+from simulation.fractional_delay import DEFAULT_FIR_LENGTH
+from simulation.multistation_audio import (
+    MultistationAudioStream, _common_source_support, synthesize_multistation_audio,
+)
 from simulation.recorded_source import (
     RecordedSourceClip,
     load_recorded_source_clip,
@@ -30,9 +40,14 @@ from validation.three_station_audio_tracking_study import (
     FRAME_LENGTH,
     HOP_LENGTH,
     QC_ALPHA_M2_S3,
+    HISTORY_WINDOW_S,
+    MAXIMUM_TRACKER_RANGE_M,
+    MAXIMUM_TRANSPORT_DELAY_S,
+    MODELED_PROCESSING_DELAY_S,
     RECEPTION_START_TIME_S,
     RESULTS,
     SOURCE_MAXIMUM_FREQUENCY_HZ,
+    STATION_DELIVERY_DELAY_S,
     _calibration_rows,
     _csv_bearing_row,
     _write_csv,
@@ -50,11 +65,141 @@ MANIFEST_PATH = ROOT / "data" / "recorded_sources" / "manifest.json"
 CALIBRATION_BASE_SEED = 20260923
 EVALUATION_BASE_SEED = 20260924
 SMOKE_BASE_SEED = 20260925
-DURATION_S = 2.0
+DURATION_S = 4.5
 SNR_LEVELS_DB = (-6.0, 10.0)
 SOURCE_MODELS = ("recorded_source_approximation", "random_broadband")
-RESULT_SCOPE = "held_out_independent_recording_evaluation"
+RESULT_SCOPE = "held_out_independent_recording_tracking_feasibility"
 INDEPENDENT_TRACKER_FRAME_STRIDE = 64
+# Frozen before the corrected evaluation. Count actual nonlinear batch fits,
+# including consensus refits; this is not a wall-clock timeout.
+INITIALIZATION_BATCH_OPTIMIZATION_BUDGET = 4
+RESULT_PREFIX = "s8_tracking_feasibility_"
+
+
+def ideal_bearing_schedule(duration_s: float) -> tuple[BearingMeasurement, ...]:
+    """Exact retarded bearings on the audio frame/reception/availability grid.
+
+    Used solely as a positive scheduling control, before audio processing.
+    Truth is used here to *generate* measurements, never by the tracker.
+    """
+
+    stations = pilot_stations()
+    trajectory = trajectory_for_audio_pilot("constant_velocity", 0)
+    state = ConstantVelocityState(trajectory.q(0.0), trajectory.v(0.0), 0.0)
+    sample_count = reception_time_grid(
+        RECEPTION_START_TIME_S, duration_s, 48_000.0
+    ).size
+    frame_count = 1 + (sample_count - FRAME_LENGTH) // HOP_LENGTH
+    if frame_count < 1:
+        raise ValueError("duration is shorter than one frame")
+    covariance = np.diag(np.deg2rad([0.3, 0.5]) ** 2)
+    events = []
+    for frame_index in range(0, frame_count, INDEPENDENT_TRACKER_FRAME_STRIDE):
+        start_sample = frame_index * HOP_LENGTH
+        center = RECEPTION_START_TIME_S + (
+            start_sample + (FRAME_LENGTH - 1) / 2
+        ) / 48_000.0
+        end = RECEPTION_START_TIME_S + (
+            start_sample + FRAME_LENGTH - 1
+        ) / 48_000.0
+        for station in stations:
+            direction = predict_retarded_bearing(state, station, center).direction_local
+            events.append(BearingMeasurement(
+                station_id=station.station_id,
+                sequence_id="s8-exact-schedule-control",
+                frame_index=frame_index,
+                reception_center_timestamp_s=center,
+                available_timestamp_s=(
+                    end + MODELED_PROCESSING_DELAY_S
+                    + STATION_DELIVERY_DELAY_S[station.station_id]
+                ),
+                direction_local=direction,
+                covariance_tangent_rad2=covariance,
+                calibration_bias_tangent_rad=np.zeros(2),
+                estimator_variant="direct_bearing",
+            ))
+    return tuple(events)
+
+
+def run_ideal_schedule_control(
+    duration_s: float, *, batch_optimization_budget: int = INITIALIZATION_BATCH_OPTIMIZATION_BUDGET,
+) -> dict[str, object]:
+    """Check causal confirmation and later corrections on perfect data."""
+
+    events = ideal_bearing_schedule(duration_s)
+    estimator = CausalManoeuvreRetardedTimeEKF(
+        pilot_stations(), events, estimator_variant="direct_bearing",
+        history_config=ManoeuvreHistoryConfig(
+            np.eye(3) * QC_ALPHA_M2_S3,
+            history_step_s=0.25,
+            history_window_s=HISTORY_WINDOW_S,
+            maximum_range_m=MAXIMUM_TRACKER_RANGE_M,
+            maximum_transport_delay_s=MAXIMUM_TRANSPORT_DELAY_S,
+        ),
+        recovery_config=InitializationRecoveryConfig(
+            confirmation_reception_span_s=0.05,
+            maximum_confirmation_failures=20,
+            maximum_confirmation_events=180,
+            maximum_initialization_buffer_events=360,
+            maximum_batch_optimizations_per_generation=(
+                batch_optimization_budget
+            ),
+        ),
+    )
+    updates = []
+    publications = []
+    for timestamp in sorted({event.available_timestamp_s for event in events}):
+        publication = estimator.advance_to(timestamp)
+        publications.append(publication)
+        updates.extend(publication.update_diagnostics)
+    final = publications[-1]
+    frame_by_event = {bearing_event_id(event): event.frame_index for event in events}
+    accepted_groups = {
+        frame_by_event[item.event_id] for item in updates if item.update_applied
+    }
+    return {
+        "duration_s": duration_s,
+        "frame_group_count": len({event.frame_index for event in events}),
+        "event_count": len(events),
+        "confirmed": bool(final.confirmed),
+        "first_confirmation_time_s": final.first_confirmation_time_s,
+        "accepted_update_count": sum(item.update_applied for item in updates),
+        "accepted_post_init_frame_group_count": len(accepted_groups),
+        "rejected_update_count": sum(not item.update_applied for item in updates),
+        "failure_reason": final.failure_reason or "",
+        "batch_optimization_count": final.batch_optimization_count,
+    }
+
+
+def recording_support_preflight(duration_s: float = DURATION_S) -> list[dict[str, object]]:
+    """Require the real clip to cover emission times plus FIR guards; no repeat."""
+
+    reception = reception_time_grid(RECEPTION_START_TIME_S, duration_s, 48_000.0)
+    stations = pilot_stations()
+    audit = []
+    for split in ("calibration", "evaluation"):
+        for session_index, recording_id in enumerate(recording_ids_for_split(split)):
+            clip = _clip(recording_id, split)
+            source_start, needed = _common_source_support(
+                reception, stations,
+                trajectory_for_audio_pilot("constant_velocity", session_index),
+                clip.sampling_rate_hz, 343.0, DEFAULT_FIR_LENGTH,
+            )
+            if needed > clip.samples.size:
+                raise ValueError(
+                    f"{recording_id}: selected interval has {clip.samples.size} "
+                    f"samples but emission/FIR support requires {needed}"
+                )
+            audit.append({
+                "split": split, "recording_id": recording_id,
+                "selected_interval_samples": clip.samples.size,
+                "required_source_samples_including_fir_guard": needed,
+                "remaining_samples": clip.samples.size - needed,
+                "required_source_start_time_s": source_start,
+                "required_source_stop_time_s": source_start + (needed - 1) / clip.sampling_rate_hz,
+                "repeat_or_padding_used": False,
+            })
+    return audit
 
 
 def _manifest_and_audit() -> tuple[dict[str, object], dict[str, object]]:
@@ -323,8 +468,15 @@ def _session_row(
         "rejected_update_count": int(sequence["rejected_update_count"]),
         "reset_count": int(sequence["reset_count"]),
         "failure_reason": str(sequence["failure_reason"]),
+        "failure_class": (
+            "computational_budget" if sequence["failure_reason"] == "computational_budget_exceeded"
+            else "none" if sequence["final_valid"] else "statistical_or_geometric"
+        ),
         "update_failure_reasons_json": json.dumps(failures, sort_keys=True),
         "tracker_runtime_s": float(sequence["tracker_runtime_s"]),
+        "batch_optimization_count": int(sequence["batch_optimization_count"]),
+        "batch_optimization_runtime_s": float(sequence["batch_optimization_runtime_s"]),
+        "batch_optimization_budget": sequence["batch_optimization_budget"],
         "audio_synthesis_wall_runtime_s": float(sequence["audio_synthesis_wall_runtime_s"]),
         "bearing_frontend_wall_runtime_s": float(sequence["bearing_frontend_wall_runtime_s"]),
         "maximum_history_memory_bytes": int(sequence["maximum_history_memory_bytes"]),
@@ -367,6 +519,21 @@ def _aggregate_session_rows(rows: list[dict[str, object]]) -> list[dict[str, obj
             "accepted_update_count": sum(int(row["accepted_update_count"]) for row in subset),
             "rejected_update_count": sum(int(row["rejected_update_count"]) for row in subset),
             "failure_count": sum(not bool(row["final_valid"]) for row in subset),
+            "computational_budget_failure_count": sum(
+                row["failure_class"] == "computational_budget" for row in subset
+            ),
+            "statistical_or_geometric_failure_count": sum(
+                row["failure_class"] == "statistical_or_geometric" for row in subset
+            ),
+            "mean_confirmed_publication_fraction": float(np.mean([
+                row["confirmed_publication_fraction"] for row in subset
+            ])),
+            "mean_valid_publication_fraction": float(np.mean([
+                row["valid_publication_fraction"] for row in subset
+            ])),
+            "mean_valid_and_covered_fraction": float(np.mean([
+                row["valid_and_covered_fraction"] for row in subset
+            ])),
             "session_level_confidence_interval_reported": False,
             "small_session_count_limitation": True,
             "result_scope": RESULT_SCOPE,
@@ -438,6 +605,14 @@ def run_independent_recordings_pilot(
     """Run the frozen paired calibration/evaluation protocol."""
 
     _, audit = _manifest_and_audit()
+    # Complete these truth-generated scheduling/source-support controls before
+    # any calibration or evaluation waveform is processed.
+    old_control = run_ideal_schedule_control(2.0)
+    corrected_control = run_ideal_schedule_control(DURATION_S)
+    if (old_control["confirmed"] or not corrected_control["confirmed"]
+            or corrected_control["accepted_update_count"] < 3):
+        raise RuntimeError("the frozen tracker schedule failed its positive control")
+    support_rows = recording_support_preflight(DURATION_S)
     calibration_records = {model: [] for model in SOURCE_MODELS}
     seed_rows = []
     recording_ids = recording_ids_for_split("calibration")
@@ -508,7 +683,10 @@ def run_independent_recordings_pilot(
                         frame_stride=INDEPENDENT_TRACKER_FRAME_STRIDE,
                     )
                     track, sequence, updates = run_tracker(
-                        stations, trajectory, measurements, method
+                        stations, trajectory, measurements, method,
+                        maximum_batch_optimizations_per_generation=(
+                            INITIALIZATION_BATCH_OPTIMIZATION_BUDGET
+                        ),
                     )
                     common = {
                         "split": "evaluation",
@@ -524,6 +702,7 @@ def run_independent_recordings_pilot(
                         "frame_length_samples": FRAME_LENGTH,
                         "hop_length_samples": HOP_LENGTH,
                         "tracker_frame_stride": INDEPENDENT_TRACKER_FRAME_STRIDE,
+                        "batch_optimization_budget": INITIALIZATION_BATCH_OPTIMIZATION_BUDGET,
                         "qc_alpha_m2_s3": QC_ALPHA_M2_S3,
                         "calibration_source_model": source_model,
                         "calibration_selection_keys": (
@@ -567,15 +746,17 @@ def run_independent_recordings_pilot(
     summary_rows = _aggregate_session_rows(session_rows)
     comparison_rows = _comparison_rows(session_rows)
     output_directory.mkdir(parents=True, exist_ok=True)
-    _write_csv(output_directory / "independent_recordings_calibration.csv", calibration_rows)
-    _write_csv(output_directory / "independent_recordings_bearing_results.csv", [_csv_bearing_row(row) for row in evaluation_bearings])
-    _write_csv(output_directory / "independent_recordings_tracking_results.csv", tracking_rows)
-    _write_update_csv(output_directory / "independent_recordings_update_results.csv", update_rows)
-    _write_csv(output_directory / "independent_recordings_session_results.csv", session_rows)
-    _write_csv(output_directory / "independent_recordings_summary.csv", summary_rows)
-    _write_csv(output_directory / "independent_recordings_recorded_broadband_comparison.csv", comparison_rows)
-    _write_csv(output_directory / "independent_recordings_seed_provenance.csv", seed_rows)
-    _write_csv(output_directory / "independent_recordings_split_audit.csv", [{
+    _write_csv(output_directory / f"{RESULT_PREFIX}schedule_control.csv", [old_control, corrected_control])
+    _write_csv(output_directory / f"{RESULT_PREFIX}source_support.csv", support_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}calibration.csv", calibration_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}bearing_results.csv", [_csv_bearing_row(row) for row in evaluation_bearings])
+    _write_csv(output_directory / f"{RESULT_PREFIX}tracking_results.csv", tracking_rows)
+    _write_update_csv(output_directory / f"{RESULT_PREFIX}update_results.csv", update_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}session_results.csv", session_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}summary.csv", summary_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}recorded_broadband_comparison.csv", comparison_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}seed_provenance.csv", seed_rows)
+    _write_csv(output_directory / f"{RESULT_PREFIX}split_audit.csv", [{
         key: json.dumps(value) if isinstance(value, tuple) else value
         for key, value in audit.items()
     }])
@@ -630,14 +811,19 @@ if __name__ == "__main__":
 
 __all__ = [
     "DURATION_S",
+    "INITIALIZATION_BATCH_OPTIMIZATION_BUDGET",
     "INDEPENDENT_TRACKER_FRAME_STRIDE",
     "MANIFEST_PATH",
     "RESULT_SCOPE",
+    "RESULT_PREFIX",
     "SNR_LEVELS_DB",
     "SOURCE_MODELS",
     "generate_paired_sequences",
+    "ideal_bearing_schedule",
     "paired_sequence_seed",
     "recording_ids_for_split",
+    "recording_support_preflight",
+    "run_ideal_schedule_control",
     "run_independent_recordings_pilot",
     "smoke_test",
 ]

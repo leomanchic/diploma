@@ -1,6 +1,12 @@
 # S8 independent-recording protocol
 
-This protocol was frozen before the independent-session evaluation run.
+This protocol was frozen before the historical independent-session evaluation
+run. Its `2.0 s`/stride-64 schedule was later shown to be insufficient even
+for exact retarded bearings: the last three confirmation events share one
+reception time and cannot meet the required temporal span. Keep its original
+CSV and notebook as historical bearing-level results; do not interpret their
+zero confirmed tracks as an audio-quality conclusion. The corrected protocol
+is [S8_TRACKING_FEASIBILITY_PROTOCOL.md](S8_TRACKING_FEASIBILITY_PROTOCOL.md).
 
 ## Scope and source-data unit
 
@@ -21,12 +27,13 @@ absolute SPL, detection range or field performance.
 - geometry: the existing informative three-tetrahedral-station ENU scene;
 - trajectory: existing `constant_velocity`, with deterministic session-index
   offset; the recorded and broadband member of a pair use the same trajectory;
-- duration: `2.0 s`, reception start `0.5 s`. A second pre-evaluation
+- historical duration: `2.0 s`, reception start `0.5 s`. A second pre-evaluation
   feasibility run showed that `3.0 s` low-SNR data could enter a prohibitive
   combinatorial search over unconfirmed initialization hypotheses before any
   CSV or error metric existed. The shortened stream leaves 9 causal tracker
   events (6 construction plus at most 3 confirmation events) and therefore
-  preserves an honest possibility of explicit initialization failure;
+  preserves explicit initialization failure reporting, but was later shown
+  not to permit confirmation under the unchanged reception-span criterion;
 - sampling/frame/hop: `48 kHz`, `1024/512` samples;
 - tracker stride: `64` (`1.46484375 Hz/station`); GCC/SRP bearing metrics
   still use every frame. A pre-evaluation feasibility run at stride `32` was

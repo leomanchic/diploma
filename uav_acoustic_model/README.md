@@ -821,8 +821,8 @@ sessions (`383904`, `321687`). Manifest schema 2 хранит `recording_id`,
 атрибуцией. Audit вычисляет независимость по фактическим IDs и не доверяет
 boolean-флагу; fragments/transcodes одного session считаются одной единицей.
 
-Recorded и random-broadband члены пары используют одинаковые CV-траекторию,
-`2.0 s` длительность, timestamps и standard-normal AWGN draws. Для них
+Исторические recorded и random-broadband члены пары использовали одинаковые
+CV-траекторию, `2.0 s` длительность, timestamps и standard-normal AWGN draws. Для них
 строятся отдельные calibration-only bias/R по двум calibration sessions.
 Ограниченный evaluation содержит 2 held-out sessions × 2 SNR × 2 source
 models; GCC/SRP оцениваются на всех кадрах, tracker получает frozen stride
@@ -834,16 +834,54 @@ models; GCC/SRP оцениваются на всех кадрах, tracker по�
 events: 3 `no_observable_hypothesis`, 13
 `tentative_initialization_unconfirmed`, 0 accepted updates. Поэтому position,
 velocity и posterior coverage здесь остаются недоступными, а не нулевыми.
-Это честный отрицательный integration result и не field/SPL/detection-range
-validation.
+Последующий точный контроль обнаружил недостаточное расписание даже для
+идеальных bearings: это исторический bearing-level result, а не evidence о
+невозможности сопровождения записанного звука. Исправленный заранее
+зафиксированный [S8 tracking-feasibility protocol](S8_TRACKING_FEASIBILITY_PROTOCOL.md)
+использует 4.5 с и явный бюджет четырёх batch-fit на поколение, оставляя
+`Qc`, NIS, алгоритмы, источники и split неизменными. Новые результаты
+сохраняются отдельно под `results/s8_tracking_feasibility_*.csv`, их notebook —
+[s8_tracking_feasibility_validation.ipynb](notebooks/s8_tracking_feasibility_validation.ipynb).
+Ни один из пилотов не является field/SPL/detection-range validation.
 
 ```powershell
-.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot --smoke
-.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot
-.\.venv\Scripts\python.exe -m pytest -q tests/test_recorded_source.py tests/test_recorded_source_pilot.py tests/test_independent_recordings_pilot.py
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/independent_recordings_validation.ipynb
 ```
+
+Историческое 2-секундное исследование пересоздаётся кодом commit
+`568ea8aeb18aec00a5945147215471c5f75aa766`; текущая команда
+`validation.independent_recordings_pilot` уже выполняет исправленный
+4.5-секундный протокол и не перезаписывает исторические CSV.
 
 Новые таблицы имеют prefix `results/independent_recordings_`; основная
 единица отчёта — исходный source session, не frame или SNR-run. Notebook:
 [independent_recordings_validation.ipynb](notebooks/independent_recordings_validation.ipynb).
+
+Корректирующий S8 gate с положительным контролем расписания, проверкой
+исходных интервалов и отдельным статусом вычислительного бюджета:
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.independent_recordings_cost_probe
+.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot
+.\.venv\Scripts\python.exe -m validation.s8_time_coverage
+.\.venv\Scripts\python.exe -m pytest -q tests/test_independent_recordings_pilot.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/s8_tracking_feasibility_validation.ipynb
+.\.venv\Scripts\python.exe -m pip check
+```
+
+Второй benchmark-проход обновляет только prefix
+`results/s8_tracking_feasibility_`; исторические `independent_recordings_`
+остаются читаемыми рядом. Временная доступность и покрытие пересчитываются
+из уже сохранённых causal-публикаций, без повторного аудиосинтеза.
+
+Контроль с точными bearings: исторические 2 с не подтверждаются, новые 4.5 с
+подтверждаются в `2.5793125 s` и дают 9 принятых corrections. В аудио pilot
+10/16 method-session запусков подтвердились, 6/16 исчерпали зафиксированный
+четырёх-fit бюджет; 90 последующих updates приняты, 20 отклонены как
+`emission_outside_history`. Один из budget failures — broadband/-6 dB с
+bearing RMSE около `0.48°`, поэтому этот лимит снижает доступность, несмотря
+на хорошее направление. У успешных запусков оценка доступна около 50.36%
+наблюдаемого временного интервала; условные ошибки и покрытие не подменяют
+долю времени без оценки. Два held-out исходных сеанса не дают узкой
+статистической оценки хвостов или полевой характеристики.

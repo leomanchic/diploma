@@ -15,6 +15,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import combinations
+from typing import Callable
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -81,6 +82,7 @@ class InitializationRecoveryConfig:
     maximum_hypotheses_per_generation: int = 8
     maximum_candidate_count: int = 16
     maximum_initialization_buffer_events: int = 18
+    maximum_batch_optimizations_per_generation: int | None = None
     inconsistency_rejection_count: int = 4
     inconsistency_station_count: int = 2
     inconsistency_reception_span_s: float = 0.5
@@ -115,6 +117,9 @@ class InitializationRecoveryConfig:
             self.construction_measurement_count + self.confirmation_measurement_count
         ):
             raise ValueError("initialization buffer is too short for confirmation")
+        if (self.maximum_batch_optimizations_per_generation is not None
+                and self.maximum_batch_optimizations_per_generation < 1):
+            raise ValueError("maximum_batch_optimizations_per_generation must be positive")
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +189,13 @@ class RecoveryPublication:
     first_confirmation_time_s: float
     last_recovery_duration_s: float
     total_runtime_s: float
+    batch_optimization_count: int
+    batch_optimization_runtime_s: float
+    batch_optimization_budget: int | None
+
+
+class _InitializationBudgetExceeded(RuntimeError):
+    """The explicitly enabled work budget is exhausted before another fit."""
 
 
 @dataclass(slots=True)
@@ -318,17 +330,19 @@ def _refine_consensus(
     sound_speed: float,
     threshold: float,
     criteria: RetardedEKFInitializationCriteria,
+    fit_batch: Callable[[Sequence[BearingMeasurement], float], RetardedBatchResult] | None = None,
 ) -> tuple[RetardedBatchResult | None, tuple[tuple[str, float], ...], tuple[BearingMeasurement, ...]]:
     current = tuple(measurements)
     last_ids: tuple[str, ...] | None = None
     for _ in range(6):
         if len(current) < criteria.minimum_measurement_count:
             return None, (), ()
-        batch = estimate_retarded_constant_velocity_batch(
-            stations,
-            current,
-            reference_time_s=reference_time_s,
-            sound_speed=sound_speed,
+        batch = (
+            estimate_retarded_constant_velocity_batch(
+                stations, current, reference_time_s=reference_time_s,
+                sound_speed=sound_speed,
+            )
+            if fit_batch is None else fit_batch(current, reference_time_s)
         )
         if not _batch_passes(batch, criteria) or batch.state is None:
             return None, (), ()
@@ -388,6 +402,9 @@ class CausalConfirmedRetardedTimeEKF:
         self._generation = 0
         self._generation_start_time = float("-inf")
         self._hypothesis_attempt_count = 0
+        self._batch_optimization_count = 0
+        self._batch_optimization_runtime_s = 0.0
+        self._budget_exhausted = False
         self._failed_signatures: set[tuple[str, ...]] = set()
         self._processed_ids: set[str] = set()
         self._initialization_ids: set[str] = set()
@@ -460,6 +477,25 @@ class CausalConfirmedRetardedTimeEKF:
 
         return tuple(measurements[-self._config.maximum_initialization_buffer_events :])
 
+    def _initialization_batch(
+        self, measurements: Sequence[BearingMeasurement], reference_time_s: float,
+    ) -> RetardedBatchResult:
+        """Count actual batch fits, including final consensus refits."""
+
+        limit = self._config.maximum_batch_optimizations_per_generation
+        if limit is not None and self._batch_optimization_count >= limit:
+            raise _InitializationBudgetExceeded
+        self._batch_optimization_count += 1
+        started = time.perf_counter()
+        try:
+            return estimate_retarded_constant_velocity_batch(
+                self._stations, measurements,
+                reference_time_s=reference_time_s, sound_speed=self._sound_speed,
+            )
+        finally:
+            elapsed = time.perf_counter() - started
+            self._batch_optimization_runtime_s += elapsed
+
     def _make_tentative(
         self,
         measurements: Sequence[BearingMeasurement],
@@ -492,12 +528,7 @@ class CausalConfirmedRetardedTimeEKF:
             if rank < self._criteria.required_local_rank:
                 self._failed_signatures.add(signature)
                 continue
-            batch = estimate_retarded_constant_velocity_batch(
-                self._stations,
-                subset,
-                reference_time_s=processing_time_s,
-                sound_speed=self._sound_speed,
-            )
+            batch = self._initialization_batch(subset, processing_time_s)
             if not _batch_passes(batch, self._criteria) or batch.state is None:
                 self._failed_signatures.add(signature)
                 continue
@@ -660,6 +691,7 @@ class CausalConfirmedRetardedTimeEKF:
                 sound_speed=self._sound_speed,
                 threshold=self._config.fit_nis_threshold,
                 criteria=self._criteria,
+                fit_batch=self._initialization_batch,
             )
             final_ids = {bearing_event_id(item) for item in final_inliers}
             confirmation_ids = tuple(
@@ -797,6 +829,9 @@ class CausalConfirmedRetardedTimeEKF:
         self._failure_reason = failure_reason or reason
         self._generation_start_time = float(processing_time_s)
         self._hypothesis_attempt_count = 0
+        self._batch_optimization_count = 0
+        self._batch_optimization_runtime_s = 0.0
+        self._budget_exhausted = False
         self._failed_signatures.clear()
         self._inconsistency_streak.clear()
         self._active_generation_ids.clear()
@@ -930,17 +965,29 @@ class CausalConfirmedRetardedTimeEKF:
         if state_invalidated:
             return updates, hypothesis_changes, lifecycle_changes
         if self._state is None:
-            measurements = self._eligible(prefix)
-            change, lifecycle = self._evaluate_tentative(measurements, processing_time_s)
-            if change is not None:
-                hypothesis_changes.append(change)
-            if lifecycle is not None:
-                lifecycle_changes.append(lifecycle)
+            if self._budget_exhausted:
                 return updates, hypothesis_changes, lifecycle_changes
-            if self._tentative is None:
-                created = self._make_tentative(measurements, processing_time_s)
-                if created is not None:
-                    hypothesis_changes.append(created)
+            measurements = self._eligible(prefix)
+            try:
+                change, lifecycle = self._evaluate_tentative(measurements, processing_time_s)
+                if change is not None:
+                    hypothesis_changes.append(change)
+                if lifecycle is not None:
+                    lifecycle_changes.append(lifecycle)
+                    return updates, hypothesis_changes, lifecycle_changes
+                if self._tentative is None:
+                    created = self._make_tentative(measurements, processing_time_s)
+                    if created is not None:
+                        hypothesis_changes.append(created)
+            except _InitializationBudgetExceeded:
+                self._tentative = None
+                self._budget_exhausted = True
+                self._status = "computational_budget_exceeded"
+                self._failure_reason = "computational_budget_exceeded"
+                lifecycle_changes.append(self._lifecycle(
+                    processing_time_s, "computational_budget_exceeded",
+                    f"batch_optimizations={self._batch_optimization_count}",
+                ))
             return updates, hypothesis_changes, lifecycle_changes
 
         assert self._covariance is not None
@@ -1072,6 +1119,9 @@ class CausalConfirmedRetardedTimeEKF:
             first_confirmation_time_s=self._first_confirmation_time,
             last_recovery_duration_s=self._last_recovery_duration,
             total_runtime_s=time.perf_counter() - started,
+            batch_optimization_count=self._batch_optimization_count,
+            batch_optimization_runtime_s=self._batch_optimization_runtime_s,
+            batch_optimization_budget=self._config.maximum_batch_optimizations_per_generation,
         )
         self._publications.append(publication)
         self._last_processing_time = processing_time
