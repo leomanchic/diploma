@@ -9,6 +9,44 @@
 квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
 `confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
 
+### S8 calibration transfer — повторная проверка двух диагностических пунктов
+
+- 2026-09-19 — отдельно перепроверены уже реализованные пункты из
+  `validation/s8_calibration_transfer_analysis.py` на **сохранённых
+  evaluation bearings**. Аудио evaluation не синтезировалось. Один и тот же
+  поток из 21 событий для каждой из 16 конфигураций подан в опубликованную
+  ветвь `pooled bias/R` и диагностическую `bias=0, same R`: всего 32 replay
+  строки. Направления, времена, `R`, `Qc`, статистические пороги и бюджет
+  совпадают; меняется только `calibration_bias_tangent_rad`. Во всех 16
+  парных конфигурациях совпадают final confirmed/valid, число принятых
+  updates и причина отказа. Опубликованный conditional position RMSE и
+  прежние final statuses воспроизведены с максимальной разницей **0 m**.
+  На recorded takeoff/hover `+10 dB` условный RMSE GCC `12.572→0.743 m`,
+  SRP `14.484→0.725 m` при неизменной R и 9 принятых updates в каждой
+  ветви. Это **post-hoc анализ просмотренной evaluation**, не выбор нового
+  рабочего bias; даже coverage=1 при широкой R не подтверждает
+  калиброванность posterior.
+- Причины broadband-отказа также сохранены **до** исчерпания бюджета в
+  `results/s8_calibration_transfer_hypothesis_diagnostics.csv` (208 строк
+  для всех replay). Для `random_broadband / n-audioman / -6 dB / GCC`
+  construction candidate `candidate_viable`, initial batch `batch_passed`,
+  статус `tentative`; три `confirmation_refit` имеют `batch_passed` при
+  fit-count 2/3/4, следующая попытка получает
+  `computational_budget_exceeded_before_fit` при лимите 4. Следовательно,
+  конкретный отказ — вычислительный бюджет подтверждения, а не доказанное
+  несогласие bearing-измерений. Truth не входит в tracker; оно используется
+  только при офлайн-метриках. Повторный saved-event replay оставил SHA-256
+  файлов `replay.csv`, `hypothesis_diagnostics.csv` и contract audit JSON
+  **побайтно неизменными** относительно предыдущего коммита.
+- Это проверка существующего диагностического анализа: алгоритмы, `Qc`,
+  bias/R и evaluation-критерии не подбирались. Новых independent source
+  sessions не появилось; S8 остаётся `In progress`. Приёмка перепроверки:
+  профильные тесты **9 passed**, полный `pytest -q` **498 passed in
+  172.46 s**, `pip check` без конфликтов; затронутый notebook исполнен через
+  nbconvert, nbformat valid, 8/8 code cells выполнены, error-output и
+  duplicate cell IDs равны нулю. Неизменённые тяжёлые исследования не
+  повторялись.
+
 ### S8 calibration-transfer analysis — calibration-only дополнение
 
 Первоначальный saved-only аудит ниже завершён отдельно. По последующему
