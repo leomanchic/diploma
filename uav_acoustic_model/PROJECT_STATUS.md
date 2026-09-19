@@ -9,6 +9,86 @@
 квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
 `confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
 
+### S8 calibration-transfer analysis — сохранённые данные, без повторного аудио
+
+- 2026-09-19 — ветка `analysis/s8-calibration-transfer` от `22ea123`.
+  Исходные S8 CSV и алгоритмы фильтра/пороги/`Qc` не меняются. Анализ читает
+  только сохранённые bearings, pooled calibration и опубликованные tracking
+  результаты; 16 evaluation-потоков причинно воспроизведены дважды с
+  идентичной R: опубликованный bias и диагностический `bias=0`. Последний
+  вариант — **post-hoc анализ уже просмотренной evaluation**, а не новая
+  рабочая калибровка.
+- Контракт residual проверен на 144 сохранённых строках из 48 групп:
+  `Log_prediction(measurement)` в локальном ортонормированном
+  azimuth/elevation tangent basis, единицы rad angular arc; трекер вычитает
+  calibration bias, R измеряется в rad². Maximum разница CSV residual с
+  независимым пересчётом `0`, с tracker residual при точном CV-состоянии
+  `2.22e-16 rad`; разница истинного локального направления `5.55e-17`.
+  Ошибка знака/единиц/базиса не обнаружена. Для физического состояния
+  session index восстановлен из frozen `configuration_index//2`: старый
+  exporter записал `sequence_index=0` для обеих независимых session.
+- Сохранены только **12 pooled calibration rows** (по station/method/source
+  model); per-frame/per-session calibration residual и sufficient statistics
+  отдельных исходных сеансов отсутствуют. Поэтому вклад каждого calibration
+  session, доля pooled bias/R из выбросов и cross-session
+  `train-one→diagnose-other` **не идентифицируются** из сохранённых данных.
+  Не подменять их evaluation-разложением и не считать 1680 зависимых кадров
+  независимыми испытаниями. Для этого нужен новый *только calibration*
+  acoustic run с сохранением session-grain residuals, но текущая задача
+  запрещает синтез аудио, поэтому он не выполнялся.
+- Доступная косвенная проверка pooled calibration: при смене длительности
+  исторического окна `2→4.5 s` recorded bias norm теперь `5.394–9.700°`,
+  максимальное изменение pooled bias `9.289°`, pooled covariance trace
+  увеличился в `7.672–25.281` раза. Для broadband bias norm
+  `0.011–0.030°`, изменение не больше `0.037°`, trace ratio
+  `0.988–1.116`. Это чувствительность объединённого fit к изменению окна,
+  **не** доказательство вклада конкретного calibration-сеанса.
+- Evaluation residual разложен по 2 исходным session × 2 SNR × 3 station ×
+  2 methods × 2 source models = **48 групп**; сохраняются среднее,
+  covariance trace, median/P95, `>30°` и изменение 95%-trimmed среднего.
+  Recorded takeoff/hover при `+10 dB`: mean of group medians `0.288°`,
+  pooled bias расходится с evaluation mean на `5.40–9.72°`; pooled R trace
+  больше эмпирической within-session trace в `5836–10703` раз.
+  Recorded mini-quadcopter при `+10 dB`: средняя по 6 группам доля
+  `>30°` равна `0.401`, изменение mean после удаления верхних 5% ошибок
+  порядка `3.85–5.82°`. Эти evaluation хвосты показывают неоднородность и
+  риск неприменимости pooled calibration, но не раскрывают отсутствующие
+  calibration-составляющие.
+- Replay опубликованной ветви точно воспроизводит 16 final statuses,
+  accepted-update counts и условные position RMSE (maximum difference
+  `0 m`). На recorded takeoff/hover при `+10 dB` одинаковых bearings:
+  GCC position RMSE `12.572→0.743 m`, SRP `14.484→0.725 m` при
+  post-hoc `bias=0`, R неизменна; coverage=1.0 у обеих ветвей, поэтому
+  высокая coverage при столь широкой R не означает хорошую калибровку.
+  На mini-quadcopter все 4 recorded arms остаются invalid/budget-exceeded;
+  conditional RMSE там **отсутствует**, а не нулевой. Этого малого,
+  просмотренного набора недостаточно для выбора новой политики bias.
+- Для broadband `n-audioman/-6 dB` с малой bearing RMSE сохранён
+  truth-free журнал попыток: исходный six-event construction fit valid,
+  rank 6, `tentative`; затем три `confirmation_refit` проходят batch gates,
+  пятый запуск блокируется фиксированным 4-fit budget. Отказ —
+  `computational_budget_exceeded` во время подтверждения, **не** доказанная
+  ошибка bearing или NIS-отклонение. Для recorded mini отдельно сохранены
+  `batch_invalid`/angular-residual rejection причины кандидатов до budget.
+  Новые candidate/batch-fit diagnostics только наблюдают прежний выбор,
+  не меняют порядок, критерии или состояние.
+- Артефакты: `validation/s8_calibration_transfer_analysis.py`,
+  `tests/test_s8_calibration_transfer_analysis.py`, выполненный
+  `notebooks/s8_calibration_transfer_validation.ipynb`, CSV
+  `results/s8_calibration_transfer_{evaluation_residuals,pool_comparison,replay,hypothesis_diagnostics}.csv`
+  и `results/s8_calibration_transfer_contract_audit.json`. Это диагностический
+  анализ transferability и недостатка calibration-grain данных; S8 остаётся
+  `In progress`, статистическая квалификация и полевая проверка впереди.
+- Приёмка анализа: целевые saved-data regressions **5 passed**; полный
+  `pytest -q`: **494 passed in 184.86 s**; `pip check` и `git diff --check`
+  проходят. Оба затронутых S8 notebooks выполнены через nbconvert без
+  error-output; новый notebook: 12 уникальных cell IDs, 5/5 code cells
+  выполнены, 2 PNG-фигуры проверены визуально. Структурный аудит всех
+  **24/24** committed notebooks: nbformat valid, duplicate cell IDs 0,
+  error-output 0, невыполненных непустых code cells 0. Неизменённые тяжёлые
+  GCC/SRP notebooks и audio/Monte Carlo не пересчитывались. На Windows
+  Jupyter выводит только нефатальные предупреждения ZMQ/локального kernel.
+
 ### S8 tracking-protocol feasibility correction — численные результаты
 
 - 2026-09-19 — ветка `fix/s8-tracking-protocol-feasibility` создана от
