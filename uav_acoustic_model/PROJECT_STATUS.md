@@ -1,6 +1,6 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-09-17
+Последнее обновление: 2026-09-19
 
 ## Текущий этап
 
@@ -8,6 +8,89 @@
 синтетический S7C pilot принят отдельно; он не является статистической
 квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
 `confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
+
+### S8 tracking-protocol feasibility correction — численные результаты
+
+- 2026-09-19 — ветка `fix/s8-tracking-protocol-feasibility` создана от
+  `568ea8a`. Исторические `results/independent_recordings_*.csv` оставлены
+  неизменными. Их 2-секундное расписание теперь классифицируется как
+  **недостаточное для проверки сопровождения**, не как свидетельство плохого
+  качества recorded audio.
+- Положительный контроль: точные направления из retarded-time модели при
+  идентичных приёмных/доступных timestamps, станциях и настройках трекера.
+  `2.0 s` → 3 временные группы, 9 событий, tentative/unconfirmed, 0 updates;
+  `4.5 s` → 7 групп, 21 событие, confirmation в `2.5793125 s`, 9 принятых
+  последующих updates на 3 разных временных группах (2 отклонены с
+  `emission_outside_history`, не NIS gate). Требование
+  confirmation reception span не ослаблялось.
+- Preflight выбранных 6-секундных записей: 288000 отсчётов каждая; для
+  `4.5 s` reception требуется максимум 222169 source samples, включая FIR
+  guard, остаётся минимум 65831. Повтора или padding записей нет.
+- Replay сохранённого проблемного `383904`/recorded/`-6 dB`/GCC потока:
+  12 нелинейных batch-fit заняли `71.4316 s` из `71.4356 s` tracker runtime;
+  исторический неограниченный runtime был `141.3119 s`. Причина затрат —
+  повторные оптимизации гипотезы, не акустический frontend. До нового
+  evaluation зафиксирован opt-in бюджет **4 batch-fit на поколение**; контроль
+  с точными направлениями требует 2. При исчерпании возвращается отдельный
+  `computational_budget_exceeded` и диагностируются число запусков/время.
+  Бюджет ограничивает число fit, но не wall time одного fit. C1/D2 и прежние
+  варианты по умолчанию не изменены.
+- Новый протокол: `S8_TRACKING_FEASIBILITY_PROTOCOL.md`; duration `4.5 s`,
+  stride `64`, прежние две calibration и две evaluation session, seed,
+  `Qc=I m²/s³`, NIS и калибровка только на calibration. Новый prefix результатов
+  `results/s8_tracking_feasibility_`, notebook отдельный; исторические файлы
+  не перезаписываются. Профильные тесты до повторного audio-run: **39 passed**.
+- Повторный ограниченный benchmark: 8 continuous calibration и 8 continuous
+  evaluation streams, 12 calibration rows, **20160/20160** valid dependent
+  frame bearings, 16 method-session rows (2 исходных evaluation-сеанса × 2 SNR
+  × 2 source models × 2 estimator methods), 21 публикация на метод/сеанс.
+  Все paired streams сохранили одинаковые траектории, timestamps и
+  стандартизованные добавленные noise draws; обе calibration families
+  построены только из двух calibration-сеансов на увеличенной длительности.
+  Все 12 calibration covariance остаются PD; eigenvalues в диапазоне
+  `1.50967e-5...0.335127 rad²`, maximum condition `1.50189`. Большая
+  recorded covariance — существенный контекст для интерпретации coverage.
+- Подтверждение **10/16**; первый confirmation для всех 10 в `2.5793125 s`.
+  После него **90 accepted / 20 rejected** updates; все 20 отклонений имеют
+  `emission_outside_history` для первых событий около инициализации, а не
+  NIS-gate. **6/16** отказов — `computational_budget_exceeded` при ровно 4
+  batch-fit, статистических/геометрических final failures в этом прогоне 0.
+  Важно: один broadband/-6 dB поток с bearing RMSE ~`0.48°` тоже исчерпал
+  бюджет; это потеря доступности от cost cap, а не ошибка направления.
+- При успешном подтверждении доступная оценка занимает `0.503635` временного
+  интервала между первой и последней публикацией (4.126 s), при отказе — 0.
+  Это time-weighted zero-order-hold доля, отдельная от доли публикаций.
+  `coverage_given_available_time` отсутствует (`NaN`) при нулевой
+  доступности. В других случаях оно равно `1.0`, кроме двух broadband/-6 dB
+  вариантов первого evaluation-сеанса (`0.992782`). Безусловная доля
+  `available_and_covered_time` сохраняется отдельно (не больше `0.503635`).
+- Для mini-quadcopter evaluation-сеанса recorded bearing RMSE `54.997–63.648°`:
+  все 4 recorded метода/SNR достигли бюджета, поэтому их position/velocity
+  errors и covariance coverage остаются отсутствующими. Для take-off/hover
+  recorded-сеанса 4/4 подтвердились, но conditional position RMSE
+  `12.572–17.960 m`, velocity RMSE `0.947–3.629 m/s`; все
+  available broadband варианты имеют position RMSE `0.108–0.892 m` в этом
+  малом pilot. Conditional coverage 1.0 у recorded successes не доказывает
+  точную калибровку: calibration R широкая, held-out исходных сеансов только 2.
+- Пиковый measured tracker runtime для 16 новых запусков `1.364 s`;
+  historical 12-fit probe `71.436 s` подтверждает нелинейную стоимость
+  поздних кандидатов. Отдельный replay того же сохранённого потока с
+  фиксированным 4-fit бюджетом занял `14.388 s` (`14.386 s` в fit). Это не
+  real-time гарантия: полный audio synthesis и
+  GCC/SRP frontend требуют десятков секунд на continuous stream. Бюджет не
+  ограничивает wall time одного fit и не настраивался после evaluation.
+- `s8_tracking_feasibility_time_coverage.csv` получен только из сохранённых
+  причинных публикаций; повторный аудиосинтез для него не выполнялся.
+  Целевые проверки **12 passed** (совместный ранний профильный gate **39
+  passed**), финальный полный `pytest -q`: **489 passed in 179.36 s**,
+  `pip check` PASS,
+  `git diff --check` PASS. Новый notebook выполнен top-to-bottom: 8 уникальных
+  cell IDs, 3 code cells executed, error-output 0; обе PNG-фигуры проверены
+  визуально. Структурный audit всех **23/23** committed notebooks: nbformat
+  valid, повторяющихся cell IDs 0, error-output 0, невыполненных непустых
+  code cells 0. Исторический notebook получил только поясняющую markdown
+  заметку в коде и также был повторно выполнен на неизменённых исторических
+  CSV; старые тяжёлые GCC/SRP исследования не перезапускались.
 
 ### S8 independent recording sessions — provenance gate
 
