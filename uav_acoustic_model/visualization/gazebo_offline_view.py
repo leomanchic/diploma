@@ -7,8 +7,8 @@ import csv
 import json
 from pathlib import Path
 
-from simulation.gazebo_offline import load_gazebo_recording, shared_stations
-from validation.three_station_audio_tracking_study import ESTIMATOR_VARIANTS
+from simulation.gazebo_offline import load_gazebo_recording
+from validation.gazebo_experiment import load_experiment, stations_from_experiment, verify_results
 
 
 def _number(text: str) -> float | None:
@@ -21,10 +21,11 @@ def _number(text: str) -> float | None:
 
 def create_viewer(directory: Path) -> Path:
     directory = Path(directory)
+    experiment = load_experiment(directory)
+    summary = verify_results(directory, experiment)
     recording = load_gazebo_recording(directory)
-    summary = json.loads((directory / "summary.json").read_text())
     methods = {}
-    for method in ESTIMATOR_VARIANTS:
+    for method in experiment["processing"]["frontend"]["methods"]:
         with (directory / f"tracking_{method}.csv").open(newline="") as file:
             rows = list(csv.DictReader(file))
         methods[method] = [{
@@ -38,15 +39,18 @@ def create_viewer(directory: Path) -> Path:
         } for row in rows]
     data = {
         "kind": summary["recording_kind"],
+        "run_id": experiment["run_id"],
         "stations": [{"id": station.station_id, "p": station.position_world_m.tolist()}
-                     for station in shared_stations()],
+                     for station in stations_from_experiment(experiment)],
         "truth": [[float(t), *map(float, p)] for t, p in zip(
             recording.trajectory.knot_times_s,
             recording.trajectory.knot_positions_m, strict=True)],
         "methods": methods,
         "metrics": summary["methods"],
         "export_rate": summary["gazebo_export_rate_hz"],
-        "audio_rate": summary["audio_sampling_rate_hz"],
+        "audio_rate": experiment["processing"]["audio"]["sampling_rate_hz"],
+        "snr_db": experiment["processing"]["audio"]["snr_db"],
+        "seed": experiment["processing"]["audio"]["base_seed"],
     }
     payload = json.dumps(data, separators=(",", ":")).replace("<", "\\u003c")
     html = HTML.replace("__DATA__", payload)
@@ -85,7 +89,7 @@ function drawError(rows){px.clearRect(0,0,plot.width,plot.height);let left=58,ri
 px.strokeStyle='#f5ad54';px.lineWidth=2;px.beginPath();let open=false;rows.forEach(r=>{if(r.valid&&r.error!==null){open?px.lineTo(X(r.t),Y(r.error)):px.moveTo(X(r.t),Y(r.error));open=true}else{if(open)px.stroke();px.beginPath();open=false}});px.stroke();px.strokeStyle='#69d8ef';px.beginPath();px.moveTo(X(rows[i].t),top);px.lineTo(X(rows[i].t),bottom);px.stroke()}
 methods.onchange=()=>{method=methods.value;i=Math.min(i,D.methods[method].length-1);draw()};range.oninput=()=>{i=+range.value;draw()};document.getElementById('play').onclick=()=>{if(timer){clearInterval(timer);timer=null;document.getElementById('play').textContent='▶ Воспроизвести'}else{timer=setInterval(()=>{i=(i+1)%D.methods[method].length;draw()},160);document.getElementById('play').textContent='⏸ Пауза'}};
 let dragging=false,last=null;scene.onpointerdown=e=>{dragging=true;last=[e.clientX,e.clientY];scene.setPointerCapture(e.pointerId)};scene.onpointerup=()=>dragging=false;scene.onpointermove=e=>{if(!dragging)return;yaw+=(e.clientX-last[0])*0.008;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-last[1])*0.008));last=[e.clientX,e.clientY];draw()};scene.onwheel=e=>{e.preventDefault();zoom=Math.max(1.2,Math.min(12,zoom*Math.exp(-e.deltaY*0.001)));draw()};plot.onmousemove=e=>{const rect=plot.getBoundingClientRect(),x=(e.clientX-rect.left)/rect.width*plot.width,rows=D.methods[method];let t=rows[0].t+(x-58)/(plot.width-78)*(rows.at(-1).t-rows[0].t);let j=rows.reduce((best,r,k)=>Math.abs(r.t-t)<Math.abs(rows[best].t-t)?k:best,0);plot.title=rows[j].valid?'t='+rows[j].t.toFixed(3)+' s; ошибка '+number(rows[j].error)+' м':'t='+rows[j].t.toFixed(3)+' s; оценки нет: '+rows[j].reason};
-document.getElementById('intro').textContent=D.kind+' · Gazebo '+D.export_rate+' Гц · аудио '+D.audio_rate+' Гц · ENU, метры, секунды';draw();</script></body></html>"""
+document.getElementById('intro').textContent=D.kind+' · '+D.run_id+' · Gazebo '+D.export_rate+' Гц · аудио '+D.audio_rate+' Гц · SNR '+D.snr_db+' dB · seed '+D.seed+' · ENU, метры, секунды';draw();</script></body></html>"""
 
 
 if __name__ == "__main__":

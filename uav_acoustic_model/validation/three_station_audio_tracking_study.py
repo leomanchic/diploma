@@ -184,10 +184,16 @@ def extract_audio_bearing_records(
     split: str,
     configuration_index: int,
     sequence_index: int,
+    frame_length: int = FRAME_LENGTH,
+    hop_length: int = HOP_LENGTH,
+    modeled_processing_delay_s: float = MODELED_PROCESSING_DELAY_S,
+    station_delivery_delay_s: dict[str, float] | None = None,
+    sequence_id: str | None = None,
 ) -> tuple[list[dict[str, object]], float]:
     """Estimate GCC/SRP bearings from views of continuous station streams."""
 
     station_map = {station.station_id: station for station in stations}
+    delivery_delay = STATION_DELIVERY_DELAY_S if station_delivery_delay_s is None else station_delivery_delay_s
     records: list[dict[str, object]] = []
     wall_started = time.perf_counter()
     for station_stream in stream.stations:
@@ -195,8 +201,8 @@ def extract_audio_bearing_records(
         frames = extract_overlapping_frames(
             station_stream.channels,
             stream.reception_times_s,
-            frame_length=FRAME_LENGTH,
-            hop_length=HOP_LENGTH,
+            frame_length=frame_length,
+            hop_length=hop_length,
         )
         for frame_index in range(frames.frame_count):
             frame = frames.frames[frame_index]
@@ -209,8 +215,8 @@ def extract_audio_bearing_records(
                 station, trajectory, center
             )
             available = (
-                end + MODELED_PROCESSING_DELAY_S
-                + STATION_DELIVERY_DELAY_S[station.station_id]
+                end + modeled_processing_delay_s
+                + delivery_delay[station.station_id]
             )
             for method in ESTIMATOR_VARIANTS:
                 result = estimates[method]
@@ -232,9 +238,7 @@ def extract_audio_bearing_records(
                         "configuration_index": configuration_index,
                         "sequence_index": sequence_index,
                         "sequence_seed": stream.base_seed,
-                        "sequence_id": (
-                            f"s7c-audio-{split}-{configuration_index}-{sequence_index}"
-                        ),
+                        "sequence_id": sequence_id or f"s7c-audio-{split}-{configuration_index}-{sequence_index}",
                         "trajectory_kind": trajectory.kind,
                         "snr_db": station_stream.nominal_snr_db,
                         "signal_model": stream.signal_model,
@@ -254,8 +258,8 @@ def extract_audio_bearing_records(
                         "frame_end_reception_time_s": end,
                         "true_emission_time_s_evaluator_only": emission,
                         "available_timestamp_s": available,
-                        "modeled_processing_delay_s": MODELED_PROCESSING_DELAY_S,
-                        "modeled_delivery_delay_s": STATION_DELIVERY_DELAY_S[station.station_id],
+                        "modeled_processing_delay_s": modeled_processing_delay_s,
+                        "modeled_delivery_delay_s": delivery_delay[station.station_id],
                         "measured_algorithm_runtime_s": float(result["total_runtime_s"]),
                         "effective_station_snr_db": station_stream.effective_snr_db,
                         "valid": valid,
@@ -481,8 +485,11 @@ def run_tracker(
     method: str,
     *,
     maximum_batch_optimizations_per_generation: int | None = None,
+    history_config: ManoeuvreHistoryConfig | None = None,
+    recovery_config: InitializationRecoveryConfig | None = None,
+    coverage_threshold: float = POSITION_COVERAGE_THRESHOLD,
 ) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]]]:
-    config = ManoeuvreHistoryConfig(
+    config = history_config or ManoeuvreHistoryConfig(
         np.eye(3) * QC_ALPHA_M2_S3,
         history_step_s=0.25,
         history_window_s=HISTORY_WINDOW_S,
@@ -494,7 +501,7 @@ def run_tracker(
         measurements,
         estimator_variant=method,
         history_config=config,
-        recovery_config=InitializationRecoveryConfig(
+        recovery_config=recovery_config or InitializationRecoveryConfig(
             confirmation_reception_span_s=0.05,
             maximum_confirmation_failures=20,
             maximum_confirmation_events=180,
@@ -571,7 +578,7 @@ def run_tracker(
             try:
                 np.linalg.cholesky(covariance)
                 state_nees = float(residual @ np.linalg.solve(covariance, residual))
-                covered = state_nees <= POSITION_COVERAGE_THRESHOLD
+                covered = state_nees <= coverage_threshold
             except np.linalg.LinAlgError:
                 valid = False
         rows.append(
