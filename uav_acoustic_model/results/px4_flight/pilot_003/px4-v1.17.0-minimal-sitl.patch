@@ -1,0 +1,36 @@
+diff --git a/boards/px4/sitl/default.px4board b/boards/px4/sitl/default.px4board
+index ebe4f4ca5b..e3f622fc26 100644
+--- a/boards/px4/sitl/default.px4board
++++ b/boards/px4/sitl/default.px4board
+@@ -59,7 +59,7 @@ CONFIG_MODULES_SIMULATION_SENSOR_AGP_SIM=y
+ CONFIG_MODULES_TEMPERATURE_COMPENSATION=y
+ CONFIG_MODULES_UUV_ATT_CONTROL=y
+ CONFIG_MODULES_UUV_POS_CONTROL=y
+-CONFIG_MODULES_UXRCE_DDS_CLIENT=y
++CONFIG_MODULES_UXRCE_DDS_CLIENT=n
+ CONFIG_MODULES_VTOL_ATT_CONTROL=y
+ CONFIG_SYSTEMCMDS_ACTUATOR_TEST=y
+ CONFIG_SYSTEMCMDS_BSONDUMP=y
+diff --git a/src/modules/simulation/gz_plugins/CMakeLists.txt b/src/modules/simulation/gz_plugins/CMakeLists.txt
+index 7fc65c8b5b..d02ee9088d 100644
+--- a/src/modules/simulation/gz_plugins/CMakeLists.txt
++++ b/src/modules/simulation/gz_plugins/CMakeLists.txt
+@@ -63,7 +63,6 @@ if (gz-transport_FOUND)
+     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PX4_GZ_PLUGIN_OUTPUT_DIR})
+ 
+     # Add our plugins as subdirectories
+-    add_subdirectory(optical_flow)
+     add_subdirectory(template_plugin)
+     add_subdirectory(gstreamer)
+     add_subdirectory(moving_platform_controller)
+@@ -73,8 +72,8 @@ if (gz-transport_FOUND)
+ 
+     # Add an alias target for each plugin
+     if (TARGET GstCameraSystem)
+-        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin GstCameraSystem SpacecraftThrusterModelPlugin)
++        add_custom_target(px4_gz_plugins ALL DEPENDS MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin GstCameraSystem SpacecraftThrusterModelPlugin)
+     else()
+-        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin SpacecraftThrusterModelPlugin)
++        add_custom_target(px4_gz_plugins ALL DEPENDS MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin SpacecraftThrusterModelPlugin)
+     endif()
+ endif()

@@ -23,6 +23,7 @@ from model.station import StationPose
 
 CONFIG_PATH = Path(__file__).resolve().parent / "gazebo_scene.json"
 REQUIRED_COLUMNS = ("sim_time_s", "x_m", "y_m", "z_m", "qw", "qx", "qy", "qz")
+PX4_COLUMNS = REQUIRED_COLUMNS + ("vx_mps", "vy_mps", "vz_mps", "flight_phase")
 
 
 def shared_scene_config(path: Path = CONFIG_PATH) -> dict:
@@ -119,18 +120,21 @@ class GazeboRecording:
     manifest: dict
     csv_sha256: str
     maximum_time_gap_s: float
+    world_velocities_mps: NDArray[np.float64] | None = None
+    flight_phases: tuple[str, ...] | None = None
 
 
 def load_gazebo_recording(directory: Path) -> GazeboRecording:
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
-    if manifest["schema_version"] != 1 or not manifest["frame"].startswith("ENU"):
+    if manifest["schema_version"] not in (1, 2) or not manifest["frame"].startswith("ENU"):
         raise ValueError("unsupported Gazebo recording frame/schema")
     path = directory / "gazebo_state.csv"
     raw = path.read_bytes()
     with path.open(newline="", encoding="utf-8") as file:
         reader = csv.DictReader(file)
-        if tuple(reader.fieldnames or ()) != REQUIRED_COLUMNS:
+        columns = tuple(reader.fieldnames or ())
+        if columns not in (REQUIRED_COLUMNS, PX4_COLUMNS):
             raise ValueError("unexpected Gazebo state columns")
         rows = list(reader)
     values = np.asarray([[float(row[key]) for key in REQUIRED_COLUMNS] for row in rows])
@@ -144,11 +148,32 @@ def load_gazebo_recording(directory: Path) -> GazeboRecording:
     # First sample may be at the first physics step rather than t=0.
     if np.any(gaps > 1.5 * period + 1e-8):
         raise ValueError("missing Gazebo export sample")
-    if times[0] > period + 1e-8 or times[-1] < float(manifest["duration_s"]) - period - 1e-8:
-        raise ValueError("Gazebo export does not cover declared scene duration")
+    if manifest["schema_version"] == 1:
+        if times[0] > period + 1e-8 or times[-1] < float(manifest["duration_s"]) - period - 1e-8:
+            raise ValueError("Gazebo export does not cover declared scene duration")
+    else:
+        if manifest["kind"] != "px4_flight" or columns != PX4_COLUMNS:
+            raise ValueError("unsupported Gazebo flight recording schema")
+        if (abs(times[0] - float(manifest["recording_start_s"])) > 1e-8
+                or abs(times[-1] - float(manifest["recording_end_s"])) > 1e-8):
+            raise ValueError("Gazebo export does not cover declared flight interval")
+        for name, expected in manifest["artifact_sha256"].items():
+            actual = hashlib.sha256((directory / name).read_bytes()).hexdigest()
+            if actual != expected:
+                raise ValueError(f"PX4 flight artifact SHA-256 mismatch: {name}")
     quaternions = values[:, 4:8]
     if np.max(np.abs(np.linalg.norm(quaternions, axis=1) - 1.0)) > 1e-5:
         raise ValueError("invalid Gazebo orientation quaternion")
     trajectory = SampledTrajectory(times, values[:, 1:4], kind=manifest["kind"])
+    velocities = None
+    phases = None
+    if columns == PX4_COLUMNS:
+        velocities = np.asarray([[float(row[key]) for key in PX4_COLUMNS[8:11]]
+                                 for row in rows], dtype=float)
+        if not np.all(np.isfinite(velocities)):
+            raise ValueError("nonfinite Gazebo world velocity")
+        phases = tuple(row["flight_phase"] for row in rows)
+        if any(not phase or not phase.replace("_", "").isalnum() for phase in phases):
+            raise ValueError("invalid Gazebo flight phase marker")
     return GazeboRecording(trajectory, quaternions, manifest,
-                           hashlib.sha256(raw).hexdigest(), float(gaps.max()))
+                           hashlib.sha256(raw).hexdigest(), float(gaps.max()), velocities, phases)

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "replay_directory": "different absolute path under /tmp",
+  "same_recording_sha256": "6f882b300b24c9204ffdd9b8a2df11e68954dfa02a36a59c8442ab1e8edf12ea",
+  "same_run_id": "gzrun-f0aa319adf342003c9d9f535",
+  "method_metrics_identical": true,
+  "tolerance_absolute": 1e-12,
+  "files": {
+    "bearing_results.csv": {
+      "rows": 9564,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0,
+      "runtime_fields_differ": 9564
+    },
+    "tracking_all_6_equal_gcc_wls.csv": {
+      "rows": 150,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0,
+      "runtime_fields_differ": 0
+    },
+    "tracking_equal_weight_srp_phat.csv": {
+      "rows": 150,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0,
+      "runtime_fields_differ": 0
+    },
+    "updates_all_6_equal_gcc_wls.csv": {
+      "rows": 140,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0,
+      "runtime_fields_differ": 0
+    },
+    "updates_equal_weight_srp_phat.csv": {
+      "rows": 140,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0,
+      "runtime_fields_differ": 0
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "reason": "The Gazebo CLI for this physical flight did not include --seed; the plan seed was requested but not applied.",
+  "recording_sha256_unchanged": "6f882b300b24c9204ffdd9b8a2df11e68954dfa02a36a59c8442ab1e8edf12ea",
+  "previous_manifest_sha256": "57daad94dedef1332ed417ae4d026849abd16b57cc6bc7e10378efc4f2557d1b",
+  "corrected_manifest_sha256": "18969eef11ee382e2676639a571eedade232fd5409a2c92c9d16cdd92eeb462a",
+  "previous_run_id": "gzrun-717a7dbf5ef9fcef201c066d",
+  "new_run_id": "gzrun-f0aa319adf342003c9d9f535"
+}

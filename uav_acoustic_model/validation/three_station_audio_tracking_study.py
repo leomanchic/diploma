@@ -488,7 +488,10 @@ def run_tracker(
     history_config: ManoeuvreHistoryConfig | None = None,
     recovery_config: InitializationRecoveryConfig | None = None,
     coverage_threshold: float = POSITION_COVERAGE_THRESHOLD,
+    phase_classifier=None,
+    manoeuvre_start_s: float = MANOEUVRE_START_S,
 ) -> tuple[list[dict[str, object]], dict[str, object], list[dict[str, object]]]:
+    phase_classifier = phase_classifier or _motion_phase
     config = history_config or ManoeuvreHistoryConfig(
         np.eye(3) * QC_ALPHA_M2_S3,
         history_step_s=0.25,
@@ -549,7 +552,7 @@ def run_tracker(
                         measurement.reception_center_timestamp_s
                     ),
                     "true_emission_time_s_evaluator_only": true_emission,
-                    "update_motion_phase_evaluator_only": _motion_phase(true_emission),
+                    "update_motion_phase_evaluator_only": phase_classifier(true_emission),
                     "update_applied": applied,
                     "failure_reason": diagnostic.failure_reason or "",
                     "pre_update_nis": float(
@@ -600,7 +603,7 @@ def run_tracker(
                 "state_nees": state_nees,
                 "valid_and_covered": bool(valid and covered),
                 "reset_count": int(publication.reset_count),
-                "publication_motion_phase_evaluator_only": _motion_phase(epoch),
+                "publication_motion_phase_evaluator_only": phase_classifier(epoch),
                 "last_accepted_update_processing_time_s": (
                     last_accepted_update_time
                 ),
@@ -637,7 +640,7 @@ def run_tracker(
         "first_confirmation_time_s": final.first_confirmation_time_s,
         "confirmed_before_manoeuvre": bool(
             np.isfinite(final.first_confirmation_time_s)
-            and final.first_confirmation_time_s < MANOEUVRE_START_S
+            and final.first_confirmation_time_s < manoeuvre_start_s
         ),
         "final_time_since_last_accepted_update_s": rows[-1][
             "time_since_last_accepted_update_s"

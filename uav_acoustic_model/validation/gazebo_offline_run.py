@@ -95,6 +95,15 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
     audio = processing["audio"]
     frontend = processing["frontend"]
     tracker_config = processing["tracker"]
+    evaluation_phases = processing.get("evaluation_phases")
+
+    def flight_phase(time_s: float) -> str:
+        if evaluation_phases is None:
+            raise AssertionError("flight phase requested for a legacy recording")
+        for item in evaluation_phases:
+            if item["start_s"] <= time_s < item["end_s"]:
+                return item["name"]
+        return "before_report" if time_s < evaluation_phases[0]["start_s"] else "after_report"
     reception_start = float(audio["reception_start_s"])
     duration = float(audio["duration_s"])
     reception_end = reception_start + duration
@@ -144,6 +153,8 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
             stations, trajectory, measurements, method,
             history_config=history, recovery_config=recovery,
             coverage_threshold=float(tracker_config["position_coverage_threshold"]),
+            phase_classifier=flight_phase if evaluation_phases is not None else None,
+            manoeuvre_start_s=float(tracker_config["manoeuvre_start_s"]),
         )
         for row in track + updates:
             row["run_id"] = experiment["run_id"]
@@ -200,6 +211,9 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
                                               if valid else None),
             "position_rmse_m_conditional": float(np.sqrt(np.mean(errors**2))) if len(errors) else None,
             "position_p95_m_conditional": float(np.percentile(errors, 95)) if len(errors) else None,
+            "maximum_observed_error_m": float(np.max(errors)) if len(errors) else None,
+            "track_loss_count": sum(bool(previous["valid"]) and not current["valid"]
+                                    for previous, current in zip(track, track[1:])),
             "first_confirmation_time_s": (
                 float(sequence["first_confirmation_time_s"])
                 if np.isfinite(sequence["first_confirmation_time_s"]) else None
@@ -211,6 +225,33 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
             "update_rejection_reasons": dict(update_reasons),
             "final_failure_reason": sequence["failure_reason"],
         }
+        if evaluation_phases is not None:
+            phase_table = {}
+            for phase in evaluation_phases:
+                name = phase["name"]
+                publications = [row for row in track
+                                if row["publication_motion_phase_evaluator_only"] == name]
+                phase_updates = [row for row in update_rows
+                                 if row["estimator_variant"] == method
+                                 and row["update_motion_phase_evaluator_only"] == name]
+                phase_valid = [row for row in publications if row["valid"]]
+                phase_errors = np.asarray([row["position_error_m"] for row in phase_valid], dtype=float)
+                phase_table[name] = {
+                    "start_s": phase["start_s"], "end_s": phase["end_s"],
+                    "publication_count": len(publications),
+                    "valid_publication_count": len(phase_valid),
+                    "availability_fraction": len(phase_valid) / len(publications) if publications else 0.0,
+                    "position_rmse_m_conditional": float(np.sqrt(np.mean(phase_errors**2))) if len(phase_errors) else None,
+                    "position_p95_m_conditional": float(np.percentile(phase_errors, 95)) if len(phase_errors) else None,
+                    "maximum_observed_error_m": float(np.max(phase_errors)) if len(phase_errors) else None,
+                    "accepted_update_count": sum(bool(row["update_applied"]) for row in phase_updates),
+                    "rejected_update_count": sum(not row["update_applied"] for row in phase_updates),
+                    "track_loss_count": sum(bool(previous["valid"]) and not current["valid"]
+                                            for previous, current in zip(publications, publications[1:])),
+                    "failure_reasons": dict(Counter(str(row["failure_reason"] or row["status"])
+                                                    for row in publications if not row["valid"])),
+                }
+            summary["methods"][method]["phase_metrics"] = phase_table
     # Publish all result files and their manifest only after successful calculation.
     with tempfile.TemporaryDirectory(prefix=".gazebo-process-", dir=directory) as temporary:
         staged = Path(temporary)

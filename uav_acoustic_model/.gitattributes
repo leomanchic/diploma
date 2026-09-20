@@ -1,6 +1,14 @@
-# Frozen experiment hashes must survive checkout on Windows and Linux.
+# Frozen SHA-256 inputs and Python source keep identical bytes on Windows.
 *.py text eol=lf
-results/gazebo_offline/** text eol=lf
-results/three_station_audio_calibration.csv text eol=lf
-simulation/gazebo_scene.json text eol=lf
-gazebo/processing_config.json text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
+*.sdf text eol=lf
+*.html text eol=lf
+*.patch text eol=lf
+*.log text eol=lf
+*.txt text eol=lf
+# A git-format patch contains a single-space context marker on blank lines.
+px4/*.patch whitespace=-blank-at-eol
+results/px4_flight/*/*.patch whitespace=-blank-at-eol
+# Keep PX4 console logs byte-for-byte; the program emits trailing tabs/spaces.
+results/px4_flight/*/*.log whitespace=-blank-at-eol

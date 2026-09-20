@@ -1,0 +1,118 @@
+{
+  "baseline_commit": "91a61e2b97fc1436abb4859de12f6300202f0cfc",
+  "runs": {
+    "constant_velocity": {
+      "methods": {
+        "all_6_equal_gcc_wls": {
+          "accepted_updates": 30,
+          "availability_fraction": 0.7857142857142857,
+          "bearing": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 1260,
+            "status_mismatches": 0
+          },
+          "first_confirmation_time_s": 1.5553125,
+          "maximum_metric_difference": 0.0,
+          "rejected_updates": 2,
+          "rmse_m": 0.13403005317102537,
+          "total_publications": 42,
+          "tracking": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 42,
+            "status_mismatches": 0
+          },
+          "updates": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 32,
+            "status_mismatches": 0
+          },
+          "valid_publications": 33
+        },
+        "equal_weight_srp_phat": {
+          "accepted_updates": 30,
+          "availability_fraction": 0.7857142857142857,
+          "bearing": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 1260,
+            "status_mismatches": 0
+          },
+          "first_confirmation_time_s": 1.5553125,
+          "maximum_metric_difference": 0.0,
+          "rejected_updates": 2,
+          "rmse_m": 0.13511632596929324,
+          "total_publications": 42,
+          "tracking": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 42,
+            "status_mismatches": 0
+          },
+          "updates": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 32,
+            "status_mismatches": 0
+          },
+          "valid_publications": 33
+        }
+      },
+      "recording_sha256": "4bb4a554a2abce964d3d2b1a476c4b266f80d215d0a3abec2ff76f63fc2f39fa",
+      "run_id": "gzrun-63dd13c2dbca89d929ce78a7"
+    },
+    "smooth_turn": {
+      "methods": {
+        "all_6_equal_gcc_wls": {
+          "accepted_updates": 30,
+          "availability_fraction": 0.7857142857142857,
+          "bearing": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 1260,
+            "status_mismatches": 0
+          },
+          "first_confirmation_time_s": 1.5553125,
+          "maximum_metric_difference": 0.0,
+          "rejected_updates": 2,
+          "rmse_m": 0.5889673519387111,
+          "total_publications": 42,
+          "tracking": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 42,
+            "status_mismatches": 0
+          },
+          "updates": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 32,
+            "status_mismatches": 0
+          },
+          "valid_publications": 33
+        },
+        "equal_weight_srp_phat": {
+          "accepted_updates": 30,
+          "availability_fraction": 0.7857142857142857,
+          "bearing": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 1260,
+            "status_mismatches": 0
+          },
+          "first_confirmation_time_s": 1.5553125,
+          "maximum_metric_difference": 0.0,
+          "rejected_updates": 2,
+          "rmse_m": 0.5883974164854895,
+          "total_publications": 42,
+          "tracking": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 42,
+            "status_mismatches": 0
+          },
+          "updates": {
+            "maximum_numeric_difference": 0.0,
+            "rows": 32,
+            "status_mismatches": 0
+          },
+          "valid_publications": 33
+        }
+      },
+      "recording_sha256": "f0801e86e4241112f79b19edaf59ef2c9b59381cc6e87ebbaf806605af688a34",
+      "run_id": "gzrun-6f26e90bcb518a36cd3e2d9e"
+    }
+  },
+  "tolerance_absolute": 1e-12
+}

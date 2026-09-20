@@ -42,6 +42,7 @@ bearing-измерениям определяет и затем причинно
 | S8 | In progress | Проверить тракт с записанным приближением source signal | versioned manifest/loader, independent-session paired recorded/broadband pilot, source/session/origin split audit | воспроизводимый provenance, calibration-only uncertainty, session-level denominators и явная граница held-out source benchmark vs field validation | S4, S7A, synthetic S7C pilot |
 | S8-GZ | Done (integration pilot) | Записать две заданные траектории одного видимого источника в Gazebo и обработать офлайн тремя станциями | общая ENU-сцена, post-step pose CSV, finite-support адаптер, фиксированный GCC/SRP/tracker, 3D viewer | Gazebo→CSV доказан, прямая/поворот и 50→100 Гц сравнены численно, отказы показаны | S6, synthetic S7C pilot |
 | S8-GZ-R | Done (replay contract) | Сделать повторную обработку Gazebo независимой от текущего scene JSON и разделить event IDs опытов | версия `experiment.json`, SHA записи/кода/результатов, переносимый `run_id`, явные init/migration/new, проверяемый viewer | новый каталог проходит запись→init→обработку→viewer без старых результатов; два исходных CSV сохранены, bearing/tracking/RMSE совпали с `03dc7d7` и `b6a20f8` в `1e-12`; Linux/Windows CI | S8-GZ |
+| S8-GZ-PX4 | Done (one-flight integration pilot) | Записать один полёт X500 под PX4 SITL и обработать его прежней акустической системой | read-only Gazebo observer, MAVSDK actions/telemetry, MAVLink Offboard setpoints, flight manifest, phases, offline replay и viewer | `pilot_003`: фактические взлёт/прямая/поворот/посадка, 3954 отсчёта без пропусков, 17.02 с аудио, 141/150 валидных публикаций каждого метода, прежние два контроля численно совпали | S8-GZ-R |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -54,6 +55,9 @@ S8-GZ подтверждает только подключение уже при
 акустического конвейера к кинематическому движению Gazebo. Он не меняет статус
 S8 recorded-source validation, S7C-C/D или уровень полевой зрелости. Динамика
 полёта, автопилот, ROS 2, PX4, ветер и отражения в этот pilot не входят.
+S8-GZ-PX4 отдельно добавляет динамический полёт X500 под PX4 и фактическую
+запись Gazebo. Его акустический источник остаётся синтетическим broadband;
+один полёт не меняет статус S8 или уровень полевой зрелости.
 
 | Уровень | Определение |
 |---|---|

@@ -1,0 +1,14 @@
+{
+  "config_sha256": "f0aa319adf342003c9d9f53599b0ecdf93c6f1a7149f2eacdb1914717c63a2a3",
+  "files": {
+    "bearing_results.csv": "7c6e1eca26bc91e4f5d644bd0f80f54a615cd1b5206a8178e901ae9b41993891",
+    "summary.json": "c5f2e0c6123483cf4e9526e8de85cbf096bfa55a3a9298316503651d3b1d6aa5",
+    "tracking_all_6_equal_gcc_wls.csv": "82fef8d1180d51bef4fc57e85595612bf0dacad01c5c00cfedd0617246fc104d",
+    "tracking_equal_weight_srp_phat.csv": "ef139eaee5bbdb9d38b9b5ebfe9bf3c573cc7149e11a3da27cb1ce076e88dc04",
+    "updates_all_6_equal_gcc_wls.csv": "d90fd1c424ce022fbae992be9bd07ab6a16dadf4f2520a7c562d50dfa3683cc0",
+    "updates_equal_weight_srp_phat.csv": "1cbdf6a3a7209818927b00b07db38a540b508be9b40015fdcf142439b8d62a07"
+  },
+  "recording_sha256": "6f882b300b24c9204ffdd9b8a2df11e68954dfa02a36a59c8442ab1e8edf12ea",
+  "run_id": "gzrun-f0aa319adf342003c9d9f535",
+  "schema_version": 2
+}

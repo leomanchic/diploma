@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(gazebo_px4_observer LANGUAGES CXX)
+find_package(gz-sim8 REQUIRED)
+add_library(gazebo_px4_observer SHARED observe_x500.cc)
+target_compile_features(gazebo_px4_observer PRIVATE cxx_std_17)
+target_link_libraries(gazebo_px4_observer PRIVATE gz-sim8::gz-sim8)

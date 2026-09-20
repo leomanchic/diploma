@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "comparison": "same Gazebo CSV; metadata seed correction changed run_id, not acoustic inputs",
+  "old_run_id": "gzrun-717a7dbf5ef9fcef201c066d",
+  "new_run_id": "gzrun-f0aa319adf342003c9d9f535",
+  "files": {
+    "bearing_results.csv": {
+      "rows": 9564,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0
+    },
+    "tracking_all_6_equal_gcc_wls.csv": {
+      "rows": 150,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0
+    },
+    "tracking_equal_weight_srp_phat.csv": {
+      "rows": 150,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0
+    },
+    "updates_all_6_equal_gcc_wls.csv": {
+      "rows": 140,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0
+    },
+    "updates_equal_weight_srp_phat.csv": {
+      "rows": 140,
+      "maximum_numeric_difference": 0.0,
+      "status_mismatches": 0
+    }
+  },
+  "method_metrics_identical": true
+}

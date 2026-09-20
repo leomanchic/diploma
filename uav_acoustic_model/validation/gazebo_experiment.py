@@ -120,8 +120,23 @@ def check_processing_compatibility(experiment: dict) -> None:
     if audio["source_seed"] != source_seed or audio["station_noise_seeds"] != expected_noise:
         raise ValueError("stored audio seeds disagree with base seed")
     tracker = experiment["processing"]["tracker"]
-    if tracker["manoeuvre_start_s"] != MANOEUVRE_START_S or tracker["manoeuvre_end_s"] != MANOEUVRE_END_S:
-        raise ValueError("frozen evaluation phase settings are incompatible with this code")
+    phases = experiment["processing"].get("evaluation_phases")
+    if phases is None:
+        if tracker["manoeuvre_start_s"] != MANOEUVRE_START_S or tracker["manoeuvre_end_s"] != MANOEUVRE_END_S:
+            raise ValueError("frozen evaluation phase settings are incompatible with this code")
+    else:
+        if ([item["name"] for item in phases]
+                != ["hover_before", "straight", "turn", "hover_after"]):
+            raise ValueError("PX4 evaluation phases are incomplete or out of order")
+        if any(not np.isfinite([item["start_s"], item["end_s"]]).all()
+               or item["end_s"] <= item["start_s"] for item in phases):
+            raise ValueError("invalid PX4 phase times")
+        if any(left["end_s"] > right["start_s"]
+               for left, right in zip(phases, phases[1:])):
+            raise ValueError("overlapping PX4 evaluation phases")
+        if (tracker["manoeuvre_start_s"], tracker["manoeuvre_end_s"]) != (
+                phases[2]["start_s"], phases[2]["end_s"]):
+            raise ValueError("PX4 turn interval disagrees with frozen tracker metadata")
 
 
 def _calibration_snapshot(path: Path, stations: list[dict]) -> dict:
@@ -273,6 +288,14 @@ def initialize_experiment(directory: Path, processing_config_path: Path,
                       for item in stations]
     if station_config != recording.manifest["station_config"]:
         raise ValueError("processing stations differ from recorded Gazebo geometry")
+    phases = processing.get("evaluation_phases")
+    if recording.manifest["kind"] == "px4_flight":
+        expected_phases = [item for item in recording.manifest["phase_intervals"]
+                           if item["name"] in ("hover_before", "straight", "turn", "hover_after")]
+        if phases != expected_phases:
+            raise ValueError("processing flight phases differ from Gazebo phase markers")
+    elif phases is not None:
+        raise ValueError("flight phases belong only to a PX4 flight recording")
     # Child seeds are deterministic outputs of the explicitly supplied base seed.
     audio = processing["audio"]
     source_seed, noise_seeds = multistation_audio_seeds(int(audio["base_seed"]), len(stations))
@@ -383,7 +406,8 @@ def create_experiment(source: Path, destination: Path, *, snr_db: float | None =
     if experiment["run_id"] == base["run_id"]:
         raise ValueError("new experiment settings are unchanged; replay the original directory")
     destination.mkdir(parents=True)
-    for name in ("gazebo_state.csv", "manifest.json"):
+    artifact_files = tuple(base["recording"]["manifest"].get("artifact_sha256", {}))
+    for name in ("gazebo_state.csv", "manifest.json", *artifact_files):
         shutil.copy2(source / name, destination / name)
     _write_json(destination / EXPERIMENT_FILE, experiment)
     return experiment
