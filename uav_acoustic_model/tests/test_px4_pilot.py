@@ -220,8 +220,8 @@ def test_flight_time_validation_and_full_short_offline_path(tmp_path: Path,
         "hover_before", "straight", "turn", "hover_after"}
     assert verify_results(directory)["run_id"] == experiment["run_id"]
     viewer = create_viewer(directory)
-    assert "заданный маршрут" in viewer.read_text()
-    assert "Фазы записанного полёта" in viewer.read_text()
+    assert "заданный маршрут" in viewer.read_text(encoding="utf-8")
+    assert "Фазы записанного полёта" in viewer.read_text(encoding="utf-8")
     variant = create_experiment(directory, tmp_path / "variant", snr_db=5.0)
     assert variant["run_id"] != experiment["run_id"]
     assert load_gazebo_recording(tmp_path / "variant").csv_sha256 == recording.csv_sha256
