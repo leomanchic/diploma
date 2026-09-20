@@ -51,7 +51,7 @@ def code_sha256() -> str:
     digest = hashlib.sha256()
     for folder in ("model", "simulation", "estimators", "validation"):
         for path in sorted((ROOT / folder).glob("*.py")):
-            digest.update(str(path.relative_to(ROOT)).encode())
+            digest.update(path.relative_to(ROOT).as_posix().encode())
             digest.update(b"\0")
             digest.update(bytes.fromhex(sha256(path)))
     return digest.hexdigest()
