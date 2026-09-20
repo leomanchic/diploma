@@ -47,7 +47,11 @@ def launch(directory: Path, *, px4_root: Path, headless: bool = False) -> int:
         "headless": headless,
     }, indent=2) + "\n")
     print("Starting:", " ".join(argv), flush=True)
-    result = subprocess.run(argv, env=environment, check=False)
+    try:
+        result = subprocess.run(argv, env=environment, check=False)
+    except KeyboardInterrupt:
+        print("Gazebo stopped by Ctrl+C", flush=True)
+        return 130
     if result.returncode not in (0, -2, 130):
         raise RuntimeError(f"Gazebo exited with status {result.returncode}")
     return result.returncode
@@ -59,4 +63,5 @@ if __name__ == "__main__":
     parser.add_argument("--px4-root", type=Path, default=Path.home() / "projects/PX4-Autopilot")
     parser.add_argument("--headless", action="store_true")
     args = parser.parse_args()
-    launch(args.recording_directory, px4_root=args.px4_root, headless=args.headless)
+    raise SystemExit(launch(args.recording_directory, px4_root=args.px4_root,
+                            headless=args.headless))

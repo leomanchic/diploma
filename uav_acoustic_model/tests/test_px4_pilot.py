@@ -104,6 +104,14 @@ def test_gazebo_launcher_records_applied_seed_and_protects_recording(
         px4_root / "Tools/simulation/gz/models")
     with pytest.raises(FileExistsError, match="already started"):
         launch(directory, px4_root=px4_root)
+    interrupted = tmp_path / "interrupted_recording"
+    interrupted.mkdir()
+    (interrupted / "scene.sdf").write_text("<sdf/>")
+    (interrupted / "flight_plan.json").write_text(json.dumps({"gazebo": {"seed": 20260920}}))
+    def raise_interrupt(argv, **kwargs):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(module.subprocess, "run", raise_interrupt)
+    assert launch(interrupted, px4_root=px4_root, headless=True) == 130
 
 
 def test_scene_has_separate_observer_and_protects_new_directory(
