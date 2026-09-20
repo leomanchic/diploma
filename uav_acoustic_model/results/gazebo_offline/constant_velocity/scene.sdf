@@ -1,0 +1,130 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <world name="gazebo_offline">
+    <physics name="fixed_step" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics" />
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands" />
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster" />
+    <light type="directional" name="sun">
+      <pose>0 0 100 0 0 0</pose>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    <model name="ground">
+      <static>true</static>
+      <pose>50 45 -3.2 0 0 0</pose>
+      <link name="body">
+        <visual name="visible">
+          <geometry>
+            <box>
+              <size>160 160 0.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.5 0.55 0.5 1</ambient>
+            <diffuse>0.5 0.55 0.5 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="S0">
+      <static>true</static>
+      <pose>0.0 0.0 0.0 0.0 0.0 0.0</pose>
+      <link name="body">
+        <visual name="visible">
+          <geometry>
+            <box>
+              <size>1 1 0.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.25 0.9 1</ambient>
+            <diffuse>0.1 0.25 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="S1">
+      <static>true</static>
+      <pose>100.0 0.0 5.0 0.0 0.0 0.0</pose>
+      <link name="body">
+        <visual name="visible">
+          <geometry>
+            <box>
+              <size>1 1 0.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.25 0.9 1</ambient>
+            <diffuse>0.1 0.25 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="S2">
+      <static>true</static>
+      <pose>10.0 90.0 -2.0 0.0 0.0 0.0</pose>
+      <link name="body">
+        <visual name="visible">
+          <geometry>
+            <box>
+              <size>1 1 0.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.1 0.25 0.9 1</ambient>
+            <diffuse>0.1 0.25 0.9 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="sound_source">
+      <static>false</static>
+      <pose>70.0 55.0 40.0 0 0 0</pose>
+      <link name="body">
+        <gravity>false</gravity>
+        <inertial>
+          <mass>1</mass>
+          <inertia>
+            <ixx>0.4</ixx>
+            <iyy>0.4</iyy>
+            <izz>0.4</izz>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyz>0</iyz>
+          </inertia>
+        </inertial>
+        <visual name="visual">
+          <geometry>
+            <sphere>
+              <radius>1.0</radius>
+            </sphere>
+          </geometry>
+          <material>
+            <ambient>1 0.35 0.05 1</ambient>
+            <diffuse>1 0.35 0.05 1</diffuse>
+          </material>
+        </visual>
+        <collision name="collision">
+          <geometry>
+            <sphere>
+              <radius>1.0</radius>
+            </sphere>
+          </geometry>
+        </collision>
+      </link>
+      <plugin filename="libgazebo_offline_motion.so" name="offline::MotionExport">
+        <kind>constant_velocity</kind>
+        <initial_position_m>70.0 55.0 40.0</initial_position_m>
+        <initial_velocity_mps>7.0 -3.0 1.5</initial_velocity_mps>
+        <turn_start_s>2.5</turn_start_s>
+        <turn_end_s>3.5</turn_end_s>
+        <turn_angle_rad>0.45</turn_angle_rad>
+        <export_period_s>0.02</export_period_s>
+        <output_csv>/home/leo/projects/diploma-gazebo/uav_acoustic_model/results/gazebo_offline/constant_velocity/gazebo_state.csv</output_csv>
+      </plugin>
+    </model>
+  </world>
+</sdf>

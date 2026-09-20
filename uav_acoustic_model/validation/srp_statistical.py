@@ -21,7 +21,7 @@ from scipy.optimize import minimize
 
 from estimators.cycle_projection import project_tdoa_cycles
 from estimators.gcc_phat import GCCPHATResult, estimate_tdoas_gcc_phat
-from estimators.srp_phat import SRPPHATResult, srp_phat
+from estimators.srp_phat import SRPPHATResult, _local_score_curvature, srp_phat
 from estimators.wls_doa import estimate_doa_wls
 from model.geometry import (
     DEFAULT_SOUND_SPEED,
@@ -175,6 +175,7 @@ def _srp_from_gcc_diagnostics(
     elevations = _grid(0.0, np.pi / 2.0, steps[0], False)
     phi_grid, elevation_grid, vectors = _directions(azimuths, elevations)
     values = score(vectors)
+    coarse_values = values.copy()
     best = int(np.argmax(values))
     best_phi = float(phi_grid[best])
     best_elevation = float(elevation_grid[best])
@@ -223,6 +224,14 @@ def _srp_from_gcc_diagnostics(
     best_phi, best_elevation = direction_angles(vector)
     best_phi %= 2.0 * np.pi
     tolerance = float(steps[-1]) * 0.51
+    second_score = (
+        float(np.partition(coarse_values, -2)[-2])
+        if coarse_values.size >= 2
+        else float("nan")
+    )
+    local_hessian, curvature_eigenvalues = _local_score_curvature(
+        score, best_phi, best_elevation
+    )
     return SRPPHATResult(
         phi=best_phi,
         elevation=best_elevation,
@@ -249,6 +258,9 @@ def _srp_from_gcc_diagnostics(
         else (0, diagnostics[0].correlation.size),
         search_azimuth_bounds_rad=(0.0, 2.0 * np.pi),
         search_elevation_bounds_rad=(0.0, np.pi / 2.0),
+        score_margin=float(best_score - second_score),
+        local_negative_score_hessian=local_hessian,
+        local_curvature_eigenvalues=curvature_eigenvalues,
     )
 
 

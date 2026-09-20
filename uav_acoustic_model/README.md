@@ -1,6 +1,222 @@
-# Модель акустического определения направления на БПЛА
+# Многопозиционная акустическая модель локализации БПЛА
 
-Воспроизводимая геометрическая TDOA-модель для четырёхмикрофонных решёток. Реализация охватывает точную сферическую модель, приближение плоской волны, аналитический Якобиан, условную CRLB согласованной гауссовской TDOA-модели и ограниченный взвешенный МНК для направления прихода.
+План развития и зависимости этапов: [ROADMAP.md](ROADMAP.md). Численные
+результаты выполненных проверок ведутся отдельно в [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
+Воспроизводимый офлайн-пример с двумя траекториями, записью позы источника
+из Gazebo, обработкой существующим GCC/SRP/tracker и интерактивным 3D-просмотром:
+[gazebo/README.md](gazebo/README.md). В нём приведены точные команды запуска.
+
+Конечная цель — воспроизводимая система из трёх пространственно разнесённых
+микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
+фундамент S7B, retarded-time measurement model S7C-A, причинный event stream
+S7C-B и ограниченный strict-CV EKF baseline S7C-C1 завершены. S7C-D1
+завершён как количественная проверка неизменённого C1 при потерях, паузах
+станций, задержках и выбросах; опубликованный D2 добавляет opt-in consensus и
+NIS gate. Tentative initialization confirmation и bounded causal recovery
+сохраняют C1/D2 как отдельные воспроизводимые варианты. Сквозной synthetic
+pilot S7C соединил continuous audio трёх станций, GCC/SRP, калиброванные
+`BearingMeasurement` и явно включаемый `Q>0` stochastic-history tracker.
+Текущий S8 проверяет тот же тракт с manifest-backed записанным приближением
+source signal. После исторической single-session демонстрации добавлен
+held-out split из двух calibration и двух evaluation recording sessions;
+source/session/origin lineage проверяется программно. Общий S7C-C/S7C-D и
+полевая валидация не объявлены завершёнными.
+
+Одностанционная часть проекта по-прежнему охватывает точную сферическую и
+плосковолновую TDOA-модели, fractional delay, GCC/WLS, SRP-PHAT,
+retarded-time синтез движения, continuous frames и калибровку tangent
+bearing covariance. Одна станция не измеряет акустическую дальность.
+
+## Статическая многопозиционная модель S7B
+
+Мировая система — правая ENU: `x=East`, `y=North`, `z=Up`. Поза станции
+состоит из centroid `p_k`, proper rotation `Q_k` из локальной системы в ENU и
+centroid-relative координат микрофонов:
+
+```text
+r_world = p_k + Q_k r_local
+d_k = Q_k u_hat_local,k
+u_pred_local,k(q) = Q_k.T (q-p_k) / ||q-p_k||
+r_k(q) = tangent_residual(u_pred_local,k(q), u_hat_local,k) - mu_cal,k
+R_k = U_{+,k} Lambda_{+,k} U_{+,k}.T + U_{0,k} 0 U_{0,k}.T
+min_q sum_k ||Lambda_{+,k}^(-1/2) U_{+,k}.T r_k(q)||^2
+subject to U_{0,k}.T r_k(q) = 0
+```
+
+Closed-form closest-rays baseline использует
+`pinv(sum w_k(I-d_k d_k.T))`; основной результат получает spherical weighted
+nonlinear least squares. Initial point и online measurement не содержат true
+position/range. Проверяются forward rays, analytic/numeric Jacobian, rank,
+eigenvalues и condition position information. Без exact constraints и при
+полном ранге `C_q≈I_q^-1`. В constrained случае для базиса `Z` nullspace
+constraint Jacobian используется `C_q=Z(Z^T I_+ Z)^-1 Z^T`; это только
+**local Gaussian covariance benchmark** на допустимом manifold. Если
+combined local observability rank неполон, finite covariance не возвращается,
+ground/`z>=0` constraint скрыто не вводится.
+
+Нулевые собственные значения tangent covariance не означают нулевой вес:
+они задают точные детерминированные ограничения. Стохастическая information
+вычисляется только из положительно-дисперсионного подпространства, а position
+covariance — в nullspace Якобиана точных ограничений. Несовместимые точные
+ограничения возвращают explicit invalid result; eigenvalues не заменяются
+произвольным epsilon.
+
+Preliminary feasibility `least_squares` используется только как initial point,
+если остаётся stochastic free direction. Совместимость определяется по
+финальному constraint residual после `trust-constr`. Оптимальность отдельно
+проверяется в допустимом подпространстве. Для `g_Z=Z.T @ grad(J)` и
+`I_Z=Z.T @ I @ Z` сохраняются raw diagnostic `||g_Z||` и dimensionless
+residual `rho_KKT=0.5*sqrt(g_Z.T @ solve(I_Z, g_Z))`. Последний оценивает
+остаточную Newton-коррекцию в единицах локального standard deviation; default
+acceptance tolerance равен `1e-6`. Статус/сообщение SciPy сохраняются как
+diagnostics, но `optimizer.success=False` сам по себе не отклоняет конечную,
+feasible, forward-ray, полнонаблюдаемую и KKT-согласованную позицию.
+Exact-constraint tolerance остаётся `1e-10 rad`.
+
+В constrained `trust-constr` SciPy SR1 иногда вычисляет обратную величину для
+практически нулевого update denominator и выдаёт узкий `RuntimeWarning:
+overflow encountered in scalar divide`. Вызов подавляет только это сообщение
+из `scipy.optimize._hessian_update_strategy`: формула SR1 не меняется, а
+результат по-прежнему обязан независимо пройти final exact-constraint,
+forward-ray, observability и scaled-KKT gates. Остальные numerical warnings не
+подавляются.
+
+`BearingMeasurement` содержит station/sequence/frame IDs, reception/available
+timestamps, local unit direction, calibration-only tangent `R,mu_cal`,
+estimator/quality/valid metadata. В нём намеренно нет truth direction,
+position, angular error, future estimates или true emission time.
+
+Статический S7B принимает только measurements одного source state/time.
+Будущая динамическая модель S7C должна учитывать
+`t_receive,k=t_emit,k+||q(t_emit,k)-p_k||/c`: одинаковое reception time разных
+станций может соответствовать разным emission times. Простое пересечение
+асинхронных лучей движущегося источника не считается корректной dynamic
+localization.
+
+## Retarded-time bearing model S7C-A
+
+Для `x(t0)=[q0,v]`, синхронизированного reception time `t_r` и centroid
+станции `p_k` модель решает
+
+```text
+t_r = t_e + ||q0 + v(t_e-t0) - p_k||/c
+Delta = t_e-t0
+u = (q(t_e)-p_k)/||q(t_e)-p_k||
+gamma = 1 + u.T v/c
+dt_e/dx = -[u.T, Delta u.T]/(c gamma)
+dq(t_e)/dx = [I, Delta I] + v (dt_e/dx)
+du_world/dx = (I-u u.T)/range * dq(t_e)/dx
+du_local/dx = Q_k.T du_world/dx
+```
+
+Residual остаётся общей со статическим S7B сферической моделью:
+`tangent_residual(u_pred_local,u_measured_local)-mu_cal`; сырая разность
+azimuth/elevation не используется. Closed-form constant-velocity emission
+time независимо сверяется с общим Newton/Brent solver из moving-source
+генератора. `reception_center_timestamp_s` входит в физическое уравнение;
+`available_timestamp_s` задаёт только причинный порядок. `StationPose.clock_*`
+не применяется повторно, поскольку timestamps уже находятся в общей шкале.
+
+`stack_retarded_bearing_observability` складывает residual/Jacobian для одного
+переданного candidate state и сообщает singular values/rank/condition и IDs.
+Он не оптимизирует состояние, не использует будущие измерения и не является
+tracker или covariance/CRLB расчётом.
+
+Вывод о single-station observability зависит от модели и движения. Одно
+мгновенное bearing-измерение не содержит дальности. Несколько измерений при
+чисто радиальном constant-velocity движении оставляют две локально
+ненаблюдаемые компоненты 6D state. Однако в идеализированной точной
+retarded-time модели при нерaдиальном движении, строго постоянной скорости,
+известном конечном `c` и точных timestamps одна неподвижная станция может
+формально дать local rank 6. Последнее направление информации крайне слабое,
+а condition number зависит от SI-масштаба position/velocity columns; это не
+означает практически устойчивого определения дальности. В независимом
+мгновенном пределе `c→∞` возвращается масштабная неоднозначность и rank 5.
+Архитектура из трёх разнесённых станций сохраняется ради устойчивой геометрии,
+а не на основании категорического запрета идеализированной one-station
+наблюдаемости.
+
+## Causal event stream и retarded-time batch S7C-B
+
+Каждое truth-free `BearingMeasurement` имеет физическое время центра приёмного
+кадра `reception_center_timestamp_s` и время появления на центральном узле
+`available_timestamp_s`. Первое входит в retarded-time equation, второе только
+ограничивает причинный доступ. `CausalBearingEventStream.advance_to(T)` строит
+неизменяемый cumulative prefix из событий с `available_timestamp_s <= T`.
+Равновременные события имеют канонический порядок; exact duplicate не получает
+повторный вес, conflicting payload с тем же ID карантинирует обе версии, а
+invalid/drop/wrong-estimator события явно остаются в journal. В одном опыте
+выбирается один estimator variant, поэтому несколько оценивателей одного
+audio frame не считаются независимыми измерениями.
+
+Offline и causal-prefix оценки вызывают один objective и один optimizer:
+
+```text
+x = [q0, v],  q(te) = q0 + v (te - t0)
+tr = te + ||q(te)-pk||/c
+r_k(x) = tangent_residual(u_pred_local,k(x), u_measured_local,k) - mu_cal,k
+min_x 1/2 sum_k ||Lambda_{+,k}^(-1/2) U_{+,k}.T r_k(x)||^2
+subject to U_{0,k}.T r_k(x) = 0,  ||v|| < c
+```
+
+Emission time пересчитывается для каждого candidate state. Положительные
+eigenvalues covariance задают whitening, нулевые eigenvalues — точные equality
+constraints без epsilon. Дозвуковость обеспечивается гладкой открытой
+параметризацией скорости. Initial point строится только из station poses,
+timestamps и измеренных rays. Приёмка результата независимо проверяет exact
+constraints, forward rays, local rank и dimensionless projected-KKT residual;
+`optimizer_success` сохраняется как diagnostic, но сам по себе не является
+математическим gate. Конечная 6x6 covariance — только local Gaussian
+linearization benchmark и не возвращается при неполной наблюдаемости.
+
+Optimizer использует безразмерную открытую параметризацию скорости только для
+поиска. Observability, condition, exact-constraint nullspace, projected-KKT и
+covariance вычисляются отдельно по физическому Jacobian состояния `[q0,v]` с
+масштабами в метрах и м/с. Поэтому смена requested reference epoch не меняет
+физический rank; covariance между эпохами преобразуется как
+`P1=F P0 F.T`, `F=[[I,dt I],[0,I]]`. Внутренняя эпоха по будущей записи не
+выбирается: causal запуск использует только переданный доступный prefix.
+
+Validation использует 96 независимых целых sequences: две геометрии, три
+скорости, два уровня прямого tangent-angular noise, два delivery schedule и
+четыре seeds. Пять causal prefixes одной sequence статистически зависимы и не
+называются независимыми trials. Full offline и последний causal prefix обязаны
+совпадать, поскольку содержат один и тот же окончательный набор событий.
+Identity физической конфигурации не включает `base_seed`; смена seed меняет
+только воспроизводимую случайную реализацию и не ломает lookup конфигурации.
+Noise и delivery streams строятся через
+`SeedSequence([base_seed, configuration_index, sequence_index, stream_id])`;
+run-aware provenance входит в sequence/event IDs и CSV. Это исключает
+арифметические коллизии соседних base seeds и индексов больше 1000, сохраняя
+common random realization для сравниваемых методов внутри сценария.
+
+## Corrective mathematical audit текущей реализации
+
+Far-field TDOA-WLS решается как квадратичная задача по единичному вектору
+направления. Положительный спектр PSD covariance задаёт whitening, её
+nullspace — точные линейные constraints. Реализация детерминированно
+перечисляет внутренние stationary/hard-case кандидаты и обе границы elevation,
+после чего выбирает минимальную допустимую стоимость. Поле
+`global_optimality="algebraic_quadratic_candidate_enumeration"` описывает этот
+численный контракт и не является символическим доказательством глобальности.
+Exact spherical WLS остаётся явно помеченным
+`deterministic_multistart_approximation`.
+
+Для вырожденной Gaussian support-aware NIS равен квадратичной форме только в
+положительно-дисперсионном подпространстве; нарушение zero-variance component
+даёт `inf`. Gaussian chi-square benchmark использует число степеней свободы,
+равное положительному рангу covariance; rank zero обрабатывается отдельно.
+Система калибровки теперь фиксируется в `BearingMeasurement.tangent_frame`.
+`prediction` (совместимое значение по умолчанию) использует исторический
+остаток в азимутально-угломестном базисе кандидата и явно исключает его
+локальный полюс. `measurement` использует `-B_y Log_y(u)` в фиксированном
+базисе измерения и согласованный Jacobian, в том числе при прохождении
+кандидата через зенит. Ковариация и bias должны быть откалиброваны в выбранной
+системе. Переключение системы во время оптимизации запрещено: при
+анизотропной ковариации оно создавало разрыв критерия. Изменение одной метки
+у старого измерения не является пересчётом калибровки. Подробности и
+воспроизводимый контрпример: [MODEL_REVIEW.md](MODEL_REVIEW.md).
 
 ## Соглашения
 
@@ -48,7 +264,12 @@ TDOA оценивается на 32-кратно интерполированн�
 причину invalid и использованную спектральную энергию. Тишина и недостаточная
 энергия дают `delay=NaN`, а не произвольную задержку. Независимый медленный
 эталон напрямую вычисляет `sum_k Psi[k] exp(j 2 pi f_k tau)` на произвольной
-сетке задержек.
+сетке задержек. Поиск всегда остаётся внутри точного непрерывного интервала
+`[-maximum_delay_seconds,+maximum_delay_seconds]`: дробные endpoints
+вычисляются прямой спектральной суммой, а не постфактум clipping. При
+oversampled `irfft` исходный единственный Nyquist coefficient делится пополам
+до дополнения спектра; FFT и direct reference совпадают при включённом и
+исключённом Nyquist.
 
 Отдельный signal-level Monte Carlo добавляет только независимый Gaussian
 noise по каналам/отсчётам. SNR задаётся как
@@ -78,7 +299,7 @@ boundary flag и runtime diagnostics.
 calibration и `1000` evaluation реализаций в каждой из 198 конфигураций
 (297000 реализаций). Первые три evaluation trials каждой конфигурации
 проверяются exact vectorized SRP; максимум по этим **594 sampled exact trials**
-составил `0.031365°`. Он не относится ко всем 198000 evaluation trials.
+составил `0.0313428471°`. Он не относится ко всем 198000 evaluation trials.
 Runtime CSV хранит unique-count contribution только в exact-component строке,
 поэтому сумма `exact_reference_trial_count` равна 594, а не тройному счёту.
 Эти counts относятся к SRP study; полный GCC reporting
@@ -91,7 +312,14 @@ in a homogeneous stationary medium** с запаздывающим времен�
 `d/dt_e = 1+v_r/c>0` при `|v|<c`, корень единственен и причинен; естественный
 Doppler появляется через `dt_e/dt=1/(1+v_r/c)`. Fractional Kaiser-sinc time
 warp вычисляет `s(t_e)` без округления. Отдельный `frozen_delay` служит только
-диагностическим baseline.
+диагностическим baseline. API различает
+`reception_synchronous_delay_difference_seconds=d_i(t_r)-d_j(t_r)` и
+`same_emission_tdoa_seconds=(R_i(t_e)-R_j(t_e))/c` на общей сетке
+`same_emission_times_s`; первое не является разностью времён прихода одного
+излучённого события. Для конечной `PiecewiseLinearTrajectory` emission solver
+не экстраполирует траекторию. Если верхняя граница emitted band известна,
+генератор требует `f_max,emit * max(dt_e/dt_r) < fs/2`; для произвольного audio
+неизвестная полоса автоматически не угадывается.
 
 Покадровый paired study использует base seed `20260830`, 2160 конфигураций и
 20 moving/static пар на конфигурацию (43200 пар, 86400 кадров). Истинный DOA
@@ -104,6 +332,46 @@ operational quantile. Clean-signal seed общий для одинаковых �
 и mean realized effective moving/static SNR. Общий frontend всегда вычисляет
 все шесть GCC-пар; runtime отдельно хранит его стоимость и backend оценивателя,
 а reference-3 boundary и backend используют только три опорные пары.
+
+Continuous-stream этап синтезирует один source waveform, один непрерывный
+набор микрофонных каналов и одну noise matrix на всю последовательность.
+Перекрывающиеся frames являются views этого общего массива: общие 768
+отсчётов при `frame_length=1024`, `hop_length=256` совпадают точно и не
+синтезируются повторно. Chunked Kaiser-sinc режим с блоком 4096 ограничивает
+интерполяционный working set величиной `4096*129=528384` коэффициента и
+совпадает с monolithic режимом до `3e-12` по channels и `2e-15 s` по
+emission times/delays.
+
+Основной sequential study использует `fs=48000 Hz`, duration `0.25 s`, 12000
+reception samples и 43 frame на каждую из семи последовательностей. Истина
+каждого frame вычисляется в centroid emission time, соответствующем
+геометрическому центру reception frame. Отдельно сохраняются physical
+propagation delay, center-to-end acquisition latency, shared GCC frontend,
+estimator backend, available timestamp и total latency. Estimator получает
+только текущий frame, геометрию и `fs`; truth и будущие bearing-оценки ему не
+передаются. Это **sequential independent bearings, not tracking**. Число
+перекрывающихся frames не называется числом независимых trials.
+
+S7A калибрует неопределённость этих bearing-измерений на сфере. Ошибка
+определяется через `Log_u(u_hat)` и проецируется на ортонормированный
+azimuth/elevation tangent basis; обе компоненты имеют единицы радиан дуги.
+Почти антиподальное направление отклоняется явно, поскольку log-map там не
+единственен. Матрица `R` и bias `mu_cal` строятся только по calibration
+sequences без произвольной диагональной регуляризации. Centered NIS равен
+`(r-mu_cal)^T R^+ (r-mu_cal)` для обоих split; evaluation mean не используется.
+Нецентрированная величина `r^T R^+ r` сохраняется отдельно как
+`raw_normalized_squared_error`. Только centered NIS сравнивается с
+`chi-square(rank(R))`, и это сравнение является лишь Gaussian benchmark. Для
+опубликованных calibration covariance ранг остаётся 2, поэтому прежний
+`chi-square(2)` вывод для этих конкретных строк не меняется.
+
+Основная сетка S7A: tetrahedral/square, SNR `-6/5/20 dB`, stationary/
+transverse/piecewise, random broadband/deterministic multisine, `L=1024`,
+`H=256`, `fs=48 kHz`. На каждую из 36 групп используются 3 независимые
+calibration и 3 evaluation continuous sequences; 20 overlap frames каждой
+sequence являются зависимыми samples. Observable GCC/SRP quality metadata не
+использует truth и не называется вероятностью. Итог этапа — **calibrated
+bearing measurement benchmark, not tracking and not a signal-level CRLB**.
 
 Вырожденная матрица Фишера не обращается: `conditional_crlb` поднимает `DegenerateInformationError`, а `conditional_angular_crlb` возвращает собственные значения и ненаблюдаемые локальные направления без конечной общей angular CRLB. Для полного ранга используется метрически корректная величина `sqrt(cos(elevation)² C_phi_phi + C_elevation_elevation)` одновременно в радианах и градусах.
 
@@ -127,11 +395,33 @@ operational quantile. Clean-signal seed общий для одинаковых �
 - `model/tdoa.py` — времена прихода, сферические и плосковолновые TDOA, распространение ковариации;
 - `model/jacobian.py` — аналитический и центрально-разностный Якобианы;
 - `model/statistics.py` — матрица Фишера, ранг, обусловленность и условная CRLB;
+- `model/bearing_statistics.py` — spherical log-map residual, tangent covariance и NIS;
+- `model/station.py` — immutable ENU station poses и local/world transforms;
+- `model/measurements.py` — truth-free calibrated bearing measurement contract;
+- `model/dynamic_state.py` — immutable constant-velocity 6D state, rebasing и exact transition;
+- `model/retarded_bearing.py` — retarded bearing prediction, spherical residual,
+  analytic 6D Jacobian, causal availability и local observability diagnostics;
+- `model/bearing_events.py` — truth-free asynchronous event identity, causal
+  replay, deduplication/conflict/drop rules и immutable audit prefixes;
 - `estimators/wls_doa.py` — WLS на единичной верхней полусфере;
 - `estimators/gcc_phat.py` — ориентированный sub-sample GCC-PHAT;
 - `estimators/srp_phat.py` — direct/vectorized equal-pair far-field SRP-PHAT;
 - `estimators/cycle_projection.py` — weighted projection всех пар на пространство
   физически согласованных TDOA;
+- `estimators/bearing_triangulation.py` — closest-rays baseline, spherical
+  weighted static 3D triangulation, Jacobian и position observability;
+- `estimators/retarded_state_batch.py` — exact retarded-time offline и
+  causal-prefix batch constant-velocity state estimate с constrained WLS;
+- `estimators/retarded_ekf.py` — причинный EKF baseline при строгой
+  constant-velocity модели, `Q=0`, batch-инициализации по доступному префиксу,
+  residual-sign update и Joseph covariance form; явно включаемый S7C-D2
+  добавляет deterministic consensus initialization и pre-update NIS gate,
+  не изменяя default C1;
+- `estimators/retarded_ekf_recovery.py` — отдельный opt-in lifecycle
+  `tentative/confirmed/questionable/recovering`, независимое подтверждение
+  initial hypothesis и bounded causal reinitialization без covariance inflation;
+  event quarantine различает active/historical generations, а лимит 18 событий
+  применяется только к построению гипотезы, не к confirmed EKF updates;
 - `simulation/fractional_delay.py` — frequency-domain и windowed-sinc дробные задержки;
 - `simulation/propagation.py` — детерминированный plane/spherical многоканальный генератор;
 - `simulation/signals.py` — deterministic multisine, независимый random broadband
@@ -141,6 +431,8 @@ operational quantile. Clean-signal seed общий для одинаковых �
 - `simulation/moving_source.py` — exact retarded-time kinematics in a
   homogeneous stationary medium, analytic/frozen cross-checks,
   Doppler time warp, causality и moving multi-channel synthesis;
+- `simulation/continuous_stream.py` — chunked continuous source/channel/noise
+  synthesis и точные overlap frame views;
 - `validation/far_field.py` — сеточный `E_tau(R)` и численный поиск границы;
 - `validation/propagation_study.py` — итоговые CSV-исследования;
 - `validation/gcc_study.py` — benchmark задержек и cross-generator GCC-аудит;
@@ -151,8 +443,29 @@ operational quantile. Clean-signal seed общий для одинаковых �
   раздельными calibration/evaluation seeds и exact/accelerated SRP-аудитом;
 - `validation/moving_source_study.py` — paired frame-wise moving/static
   GCC/WLS/SRP study с emission-time truth;
+- `validation/sequential_doa_study.py` — хронологические независимые
+  frame-wise bearings, latency metadata и frame/sequence CSV;
+- `validation/bearing_uncertainty_study.py` — independent-sequence
+  calibration/evaluation covariance, NIS и observable-quality benchmark;
+- `validation/multistation_static_study.py` — direct-bearing three-station
+  calibration/evaluation Monte Carlo, pose/covariance mismatch и station loss;
+- `validation/retarded_bearing_validation.py` — 1000-scene analytic/numeric
+  emission-time/Jacobian audit и 6D rank/conditioning examples без tracking;
+- `validation/retarded_batch_study.py` — independent-sequence direct-bearing
+  Monte Carlo, asynchronous delivery journal и matched offline/causal prefixes;
+- `validation/retarded_ekf_study.py` — 96-sequence matched benchmark EKF,
+  causal-prefix batch и common-initial-batch/no-update baseline с NIS/NEES,
+  coverage intervals и runtime diagnostics;
+- `validation/retarded_ekf_robust_study.py` — frozen held-out four-way
+  ablation C1/consensus/NIS/combined на одних потоках событий с whole-sequence
+  paired bootstrap и evaluator-only outlier labels;
+- `validation/initialization_recovery_study.py` — frozen three-way
+  C1/published-D2/recovery evaluation, whole-sequence bootstrap, availability,
+  reset/recovery и compact failure-journal diagnostics;
 - `visualization/moving_scene.py` — интерактивная 3D-сцена bearing rays без
   фиктивной оценённой дальности;
+- `visualization/multistation_scene.py` — ENU station axes, bearing rays,
+  static 3D estimate, ray residuals и local covariance ellipsoid;
 - `notebooks/array_comparison.ipynb` — карты CRLB, ранга, обусловленности и вырождения;
 - `notebooks/monte_carlo_crlb_validation.ipynb` — статистическая проверка WLS относительно CRLB;
 - `notebooks/far_field_fractional_delay_validation.ipynb` — дальняя зона, задержки и каналы;
@@ -166,6 +479,27 @@ operational quantile. Clean-signal seed общий для одинаковых �
   motion excess, within-frame DOA/TDOA change и Doppler;
 - `notebooks/moving_source_3d.ipynb` — Play/Pause и вращаемая сцена истинной
   траектории и независимых GCC/SRP bearing rays;
+- `notebooks/sequential_doa_validation.ipynb` — continuous-stream overlap,
+  causality, invalid, azimuth-wrap, error и latency validation;
+- `notebooks/bearing_uncertainty_validation.ipynb` — spherical residual,
+  covariance conditioning, evaluation NIS и quality/error associations;
+- `notebooks/multistation_static_validation.ipynb` — geometry/observability,
+  position tails, covariance benchmark и good/poor 3D scenes;
+- `notebooks/retarded_bearing_model_validation.ipynb` — ENU retarded rays,
+  reception/emission timing, 6D singular values и static/infinite-`c` limits;
+- `notebooks/retarded_batch_validation.ipynb` — S7C-B position/speed errors,
+  causal coverage, failure modes, conditioning, KKT и runtime diagnostics;
+- `notebooks/retarded_ekf_validation.ipynb` — S7C-C1 position/velocity errors,
+  NIS/NEES, sequence-level coverage, trajectory and marginal intervals;
+- `notebooks/retarded_ekf_robust_validation.ipynb` — S7C-D2 initialization,
+  validity, conditional errors, coverage и outlier/false-rejection trade-off;
+- `notebooks/initialization_recovery_validation.ipynb` — held-out accuracy,
+  tails, availability/coverage и воспроизведение двух D2 reject-lock failures;
+- `notebooks/three_station_audio_tracking_validation.ipynb` — полный synthetic
+  audio-to-bearing-to-track pilot, correlations, failures, runtime и 3D path;
+- `notebooks/independent_recordings_validation.ipynb` — S8 source-session
+  audit, paired recorded/broadband bearing errors, initialization failures,
+  runtime и calibration scale;
 - `validation/monte_carlo.py` — воспроизводимый Monte Carlo-движок и CSV-метрики;
 - `tests/` — автоматические проверки соглашений и обратной задачи.
 
@@ -197,6 +531,15 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -c "from validation.srp_statistical import run_srp_statistical_validation; run_srp_statistical_validation()"
 .\.venv\Scripts\python.exe -c "from validation.moving_source_study import run_moving_source_study; run_moving_source_study()"
+.\.venv\Scripts\python.exe -c "from validation.sequential_doa_study import run_sequential_doa_study; run_sequential_doa_study()"
+.\.venv\Scripts\python.exe -c "from validation.bearing_uncertainty_study import run_bearing_uncertainty_study; run_bearing_uncertainty_study()"
+.\.venv\Scripts\python.exe -c "from validation.multistation_static_study import run_multistation_static_study; run_multistation_static_study()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
+.\.venv\Scripts\python.exe -c "from validation.retarded_ekf_study import run_retarded_ekf_study; run_retarded_ekf_study()"
+.\.venv\Scripts\python.exe -m validation.retarded_ekf_robust_study --sequence-count 100 --base-seed 20260912 --workers 8 --output-directory results
+.\.venv\Scripts\python.exe validation\initialization_recovery_study.py --sequence-count 100 --base-seed 20260914 --workers 8 --output-directory results --progress
+.\.venv\Scripts\python.exe -m validation.three_station_audio_tracking_study
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\array_comparison.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\monte_carlo_crlb_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\far_field_fractional_delay_validation.ipynb
@@ -206,6 +549,15 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=3600 notebooks\srp_phat_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_validation.ipynb
 .\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\moving_source_3d.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\sequential_doa_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1800 notebooks\bearing_uncertainty_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\multistation_static_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_ekf_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=1200 notebooks\retarded_ekf_robust_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\initialization_recovery_validation.ipynb
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks\three_station_audio_tracking_validation.ipynb
 .\.venv\Scripts\python.exe -m pip check
 ```
 
@@ -215,7 +567,325 @@ Notebook выполняется из корня проекта и сохраня
 
 CRLB здесь условна относительно уже полученных гауссовских TDOA. Она не является границей по исходным микрофонным отсчётам и пока не включает неизвестный акустический сигнал, зависимость ошибок TDOA от SNR/спектра, калибровочные ошибки, ветер/температурный профиль, отражения, коррелированный акустический шум или дополнительные источники. Реализована **exact retarded-time kinematic model in a homogeneous stationary medium**; это точная кинематическая модель запаздывающего времени при её допущениях, а не полная модель акустической среды, и её paired AWGN study не является signal-level CRLB. Дальнепольность количественно вычисляется для заданных `fs`, `f_max`, временного/фазового допуска и угловой сетки; диагностические значения 48 кГц, 2–12 кГц, 0.1 sample и 0.1 rad не являются измеренными характеристиками реального БПЛА.
 
-Целочисленные сдвиги отсчётов в проекте не используются. Реализованы только
-независимые покадровые far-field equal-weight SRP-PHAT/GCC bearings.
-SRP-Harmonics, отражения, ветер, коррелированный фон и EKF/UKF tracking пока
-не реализованы.
+Целочисленные сдвиги отсчётов в проекте не используются. S7C-C1 добавляет
+первый причинный retarded-time EKF baseline только для строгой
+constant-velocity модели, `Q=0` и direct bearing-level наблюдений. Это не
+поддержка манёвров, не signal-level трёхстанционный frontend и не завершённый
+общий tracking pipeline. UKF, SRP-Harmonics, отражения, ветер и
+коррелированный фон не реализованы.
+
+Статическая 3D-триангуляция S7B проверена сначала на непосредственных
+bearing-измерениях, поэтому её ошибки не смешаны с GCC/SRP. S7C-A реализует
+retarded-time prediction/Jacobian для уже синхронизированных timestamps, но
+не оценивает clock offset/drift. S7C-B задаёт причинный asynchronous event
+stream и независимый batch reference; ограниченный S7C-C1 выполняет
+recursive update при тех же строгих CV-допущениях. Математический вывод и
+границы применимости: [RETARDED_EKF_MODEL.md](RETARDED_EKF_MODEL.md).
+
+В S7C-C1 вызов `advance_to(T)` внутренне обрабатывает каждую полную группу
+одинакового `available_timestamp_s` до `T`. Поэтому частота внешних публикаций
+не выбирает batch-префикс и не меняет порядок EKF updates. Неизвестная станция
+и неподдерживаемая сингулярная tangent covariance отклоняются как отдельные
+события с сохранёнными ID/причинами; остальные пригодные данные продолжают
+использоваться. Валидная публикация может содержать диагностику отклонённых
+наблюдений. Conflict ранее использованного ID, напротив, временно инвалидирует
+состояние до следующей availability group, на которой возможно восстановление.
+
+Все P95 в C1 используют явный `method="linear"`. Итоговый P95 строится по
+одной final error на каждую независимую whole sequence; temporal P95 по
+зависимым публикациям внутри sequence хранится отдельно. Таблица исправлений
+review: [S7C_C1_REVIEW_FIXES.md](S7C_C1_REVIEW_FIXES.md).
+
+Зафиксированный S7C-C1 benchmark использует 96 независимых whole sequences
+(24 конфигурации × 4 sequence, `base_seed=20260908`). EKF успешно
+инициализирован и valid в `96/96` sequences; final position/velocity RMSE
+равны `0.424889 m` и `0.186865 m/s`, final-state 95% coverage — `93/96`.
+Эти результаты относятся только к синтетическим direct bearing-level
+наблюдениям строгой constant-velocity модели и не доказывают качество на
+манёврах или реальном многоканальном аудио.
+
+## Strict-CV EKF stress benchmark S7C-D1
+
+Протокол до просмотра финальных результатов зафиксирован в
+[S7C_D1_PROTOCOL.md](S7C_D1_PROTOCOL.md). Он использует informative и
+poorly-conditioned геометрии, 100 независимых whole sequences на геометрию и
+девять парных профилей: nominal, dropout 20/50%, пауза одной/всех станций,
+long delay, mild/strong outliers и mixed. Итого независимы 200 base blocks;
+1800 profile-runs внутри них являются зависимыми парными сравнениями.
+
+Сравниваются неизменённый retarded-time EKF, causal-prefix batch и прогноз от
+той же первой принятой batch-инициализации без updates. Full-record batch
+сохраняется отдельно как непричинный reference. Пропущенные события не
+передаются оценивателю, а outlier mask/direction остаются только у evaluator.
+Truth, nominal noise, loss, delay, outlier mask и outlier direction имеют
+раздельные `SeedSequence`-потоки. Выброс нарушает номинальную Gaussian-модель,
+но переданная фильтру `R` намеренно не увеличивается.
+
+Полный воспроизводимый запуск:
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.retarded_ekf_stress_study --sequence-count 100 --workers 8 --output-directory results
+```
+
+Результаты разделены на epoch-, whole-sequence-, profile- и seed-provenance
+CSV. P95 использует `method="linear"`; доли и Wilson intervals считают whole
+sequences, а paired bootstrap сохраняет общий base block. Acceptance D1
+означает корректность эксперимента, а не требование хорошего поведения
+неизменённого фильтра при выбросах.
+
+Epoch CSV различает full-profile `delivered/lost` и доступный к данной эпохе
+causal prefix. Для каждого метода он хранит min/mean/max event counts по whole
+sequences: used, initialization, update, rejected, quarantined и remaining
+unprocessed. Это позволяет проверить отсутствие future access и не смешивать
+исторические lifecycle counters с разбиением текущего доступного prefix.
+
+В зафиксированном запуске nominal/dropout/gap/long-delay профили сохранили
+final EKF valid fraction 1.0 в обеих геометриях. Однако mild 5° outliers уже
+снизили unconditional 95% coverage до 0.25/0.27. Strong 20° outliers снизили
+valid fraction до 0.57/0.53, coverage до 0.00/0.02 и дали conditional position
+RMSE 7.79/5.09 m; mixed дал valid 0.75/0.77 и RMSE 5.87/4.23 m. Это прямой
+предел применимости C1 без outlier handling, а не отрицательный acceptance
+result D1. Имена геометрий описывают заранее заданные station layouts; более
+низкая ошибка одной layout в этой конкретной truth/noise сетке не является
+универсальным утверждением о превосходстве геометрии.
+
+## Подтверждение и восстановление инициализации S7C-D
+
+Frozen-протокол находится в
+[S7C_INITIALIZATION_RECOVERY_PROTOCOL.md](S7C_INITIALIZATION_RECOVERY_PROTOCOL.md).
+Новый вариант строит six-event hypothesis, публикует её только как
+`tentative`, требует три позже поступивших согласованных bearing от минимум
+двух станций и после подтверждения выполняет final batch-refit с повторным
+расчётом residual scores. Четыре последовательных multi-station NIS-отказа
+переводят состояние в `questionable`, удаляют старые state/P и запускают
+ограниченную реинициализацию только по свежим событиям. Пауза без пакетов не
+является противоречием. Ни одно событие не используется статистически дважды.
+
+Held-out evaluation использует seed `20260914`, 100 независимых whole
+sequences на каждую из двух геометрий, девять D1-профилей и общий поток для
+трёх вариантов. В `outlier_mild` recovery снизил conditional position RMSE с
+D2 `16.668/21.840 m` до `0.781/0.593 m`, а maximum — с
+`156.282/207.317 m` до `2.122/1.095 m` для informative/poorly-conditioned.
+Цена: mean confirmed-epoch fraction снизилась с D2 `0.830/0.827` до
+`0.707/0.684`, а mean first-confirmation time выросло с `2.087/2.084 s` до
+`3.672/3.972 s`. Recovery дал final-valid `0.99/1.00`; один informative mild
+run закончил censored recovery. Поэтому conditional error всегда читается
+вместе с availability и unconditional valid-and-covered fraction.
+
+Результаты хранятся в
+`results/initialization_recovery_sequence_results.csv`,
+`results/initialization_recovery_summary.csv`,
+`results/initialization_recovery_seed_provenance.csv` и
+`results/initialization_recovery_failure_journal.csv`. Truth/outlier labels в
+журнале являются только внешней evaluator-аннотацией. Это не поддержка
+манёвров, не adaptive `Q/R` и не signal-level acoustic frontend.
+
+## Opt-in stochastic-history manoeuvre-bearing filter S7C-C
+
+Модель и все допущения зафиксированы в
+[MANOEUVRE_TRACKING_MODEL.md](MANOEUVRE_TRACKING_MODEL.md), а development/evaluation
+split, seeds, физические границы истории и метрики — в
+[S7C_MANOEUVRE_PROTOCOL.md](S7C_MANOEUVRE_PROTOCOL.md). Состояние `[q,v]`
+переходит с точными `F,Qd` для интегрированного Wiener-ускорения (`Qc` в
+м²/с³). После причинного подтверждения начального CV-префикса фильтр хранит
+полный joint posterior узлов траектории с cross-covariance; запоздалое
+bearing-событие получает emission time из retarded equation, вставляет
+Gaussian bridge и обновляет текущий узел через совместную covariance.
+Никакая истинная дальность или emission time фильтру не передаётся.
+Во время длинного event-free промежутка устаревшие узлы маргинализируются
+после каждого шага прогнозирования, поэтому временный размер propagation-
+истории не растёт с длиной паузы. Bridge-узлы внутри окна зависят от частоты
+измерений и также учитываются. `maximum_history_memory_bytes` — пик числовых
+массивов mean/joint-covariance и 8 bytes на epoch до очистки; это не RSS и не
+память временных матричных операций.
+
+`estimators/retarded_ekf_manoeuvre.py` включается **явно**. C1, опубликованный
+D2 и `confirmed_recovery` не меняют поведения. Истина задаётся независимым
+детерминированным `simulation/manoeuvre_trajectory.py`: CV control, участок
+ускорения и плавный поворот, начинающиеся после CV-префикса. Это прямые
+bearing-level наблюдения трёх станций, не audio frontend. Запуск сразу в
+манёвре здесь не проверен.
+
+Ограниченный paired benchmark и визуальный audit:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_stochastic_motion.py tests/test_retarded_ekf_manoeuvre.py
+.\.venv\Scripts\python.exe -m validation.manoeuvre_tracking_study --smoke
+.\.venv\Scripts\python.exe -m validation.manoeuvre_tracking_study
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/manoeuvre_tracking_validation.ipynb
+```
+
+CSV разделены на development selection, зависимые публикации, целые
+последовательности, phase summaries и whole-sequence paired intervals в
+`results/manoeuvre_*.csv`; notebook —
+[manoeuvre_tracking_validation.ipynb](notebooks/manoeuvre_tracking_validation.ipynb).
+При сравнении conditional error необходимо смотреть valid fraction.
+Posterior coverage — эмпирическая диагностика, не signal-level CRLB и не
+доказательство калибровки реальной системы. Реальные аудиоданные,
+коррелированные ошибки bearing, физическая калибровка источника, свойства
+среды и полевые испытания остаются будущей работой.
+
+## Continuous audio трёх станций → causal 3D tracking
+
+Зафиксированный integration pilot описан в
+[THREE_STATION_AUDIO_PROTOCOL.md](THREE_STATION_AUDIO_PROTOCOL.md). Один общий
+random-broadband source непрерывно распространяется к 12 реальным мировым
+координатам микрофонов трёх tetrahedral-станций. Для каждой станции шум
+создаётся один раз на полный channel array; overlapping frames являются views
+этого массива. Один и тот же frame поступает all-six GCC/WLS и equal-weight
+SRP-PHAT, после чего локальное направление переводится в ENU через
+`StationPose` и превращается в truth-free `BearingMeasurement`.
+
+Время bearing — центр приёмного кадра. Availability равно концу кадра плюс
+моделируемая processing/delivery задержка; измеренный wall runtime хранится
+отдельно. Tracker не получает true range, velocity или emission time. Bias/R
+строятся только по отдельным calibration sequences: все шесть объявленных
+физических calibration-сценариев объединяются с одинаковым весом кадров в одну
+заранее зафиксированную таблицу на `(station_id, estimator_variant)`. Метки
+trajectory и SNR не участвуют в evaluation-time lookup; их изменение при
+неизменных наблюдениях не меняет `BearingMeasurement`. Evaluation seeds и
+фактические source/noise seeds не пересекаются. GCC/SRP выполняются на всех
+кадрах, а dense-history tracker в этом вычислительно ограниченном pilot
+получает deterministic indices `0,32,64,...` (`2.9296875 Hz/station`).
+
+Исправленный набор использует записи `4.5 s`, фиксированный source-time манёвр
+`[2.5,3.5) s` и известную emitted band edge `10 kHz`, переданную существующему
+Doppler/Nyquist guard. Получено 6 calibration + 6 evaluation continuous
+sequences, по одной на каждую `(trajectory, SNR)` cell; это integration pilot,
+не квалификация редких хвостов. Из 12 method-sequences 10 подтвердились до
+манёвра и завершились valid; каждый из них имеет 9 принятых updates с emission
+time внутри манёвра. Два acceleration/−6 dB потока остались явными
+`tentative_initialization_unconfirmed` и `prediction_without_correction`.
+
+Bearing RMSE равен `0.476--0.487 deg` при `-6 dB` и `0.0815--0.0830 deg` при
+`10 dB`. Для valid cells conditional position RMSE `0.113--0.991 m`, velocity
+RMSE `0.125--1.533 m/s`, coverage `0.806--1.0`. Lag-1 measurement-error
+correlation достигает `0.355`, inter-station — `0.067`; текущий EKF их
+игнорирует. Event-level и sequence-level учёт совпал: 286 accepted и 30
+rejected update-attempts. Это offline synthetic chain, не real-time/field
+readiness и не signal-level CRLB.
+
+```powershell
+.\.venv\Scripts\python.exe -c "from validation.three_station_audio_tracking_study import smoke_test; print(smoke_test())"
+.\.venv\Scripts\python.exe -m validation.three_station_audio_tracking_study
+.\.venv\Scripts\python.exe -m pytest -q tests/test_three_station_audio_tracking.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/three_station_audio_tracking_validation.ipynb
+```
+
+Результаты: `results/three_station_audio_*.csv`; визуальный audit —
+[three_station_audio_tracking_validation.ipynb](notebooks/three_station_audio_tracking_validation.ipynb).
+
+## S8: recorded-source integration demonstration
+
+Протокол [S8_RECORDED_SOURCE_PROTOCOL.md](S8_RECORDED_SOURCE_PROTOCOL.md)
+переиспользует неизменённые propagation, GCC/SRP, calibration и tracker с
+одной CC0-записью DJI Mavic Mini 2. Provenance, разрешение, исходное
+`96 kHz/24 bit/stereo`, условия Zoom H5 indoor-записи, SHA-256 и выбранные
+интервалы находятся в
+[`data/recorded_sources/manifest.json`](data/recorded_sources/manifest.json).
+Loader `simulation/recorded_source.py` проверяет hash, декодирует OGG, усредняет
+каналы, resample-ит в `48 kHz`, удаляет DC, ограничивает emitted band до
+`10 kHz` и нормирует peak до `0.95`.
+
+Это **приближение исходного сигнала**, уже содержащее исходный микрофон,
+помещение/фон и возможное движение. Нормировка исключает абсолютную
+амплитудную калибровку: результат не подтверждает SPL или дальность
+обнаружения. Calibration `[2,8) s` и evaluation `[12,18) s` не пересекаются,
+но принадлежат одной recording session. Поэтому четыре matched GCC/SRP cells
+являются single-session integration demonstration, а не независимой held-out
+валидацией записей.
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.recorded_source_pilot --smoke
+.\.venv\Scripts\python.exe -m validation.recorded_source_pilot
+.\.venv\Scripts\python.exe -m pytest -q tests/test_recorded_source.py tests/test_recorded_source_pilot.py
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/recorded_source_pilot.ipynb
+```
+
+Численные таблицы: `results/recorded_source_*.csv`; сравнение с frozen
+broadband pilot находится в `recorded_source_broadband_comparison.csv`, а
+графики и ограничения — в
+[recorded_source_pilot.ipynb](notebooks/recorded_source_pilot.ipynb).
+
+Отчёт различает фактическое
+`first_post_onset_accepted_update_processing_time_s` из update diagnostic и
+`first_post_onset_accepted_update_first_publication_time_s`. Первое не зависит
+от частоты внешних публикаций, второе закономерно может зависеть.
+
+### S8 independent-session held-out pilot
+
+Новый протокол
+[S8_INDEPENDENT_RECORDINGS_PROTOCOL.md](S8_INDEPENDENT_RECORDINGS_PROTOCOL.md)
+сохраняет исторические `results/recorded_source_*.csv` и добавляет четыре
+origin assets: два calibration sessions (`683298`, `263022`) и два evaluation
+sessions (`383904`, `321687`). Manifest schema 2 хранит `recording_id`,
+`session_id`, `origin_asset_id`, источник, лицензию, условия, разрешение,
+выбранный интервал и SHA-256. Три assets имеют CC0, `321687` — CC BY 4.0 с
+атрибуцией. Audit вычисляет независимость по фактическим IDs и не доверяет
+boolean-флагу; fragments/transcodes одного session считаются одной единицей.
+
+Исторические recorded и random-broadband члены пары использовали одинаковые
+CV-траекторию, `2.0 s` длительность, timestamps и standard-normal AWGN draws. Для них
+строятся отдельные calibration-only bias/R по двум calibration sessions.
+Ограниченный evaluation содержит 2 held-out sessions × 2 SNR × 2 source
+models; GCC/SRP оцениваются на всех кадрах, tracker получает frozen stride
+`64`. `Qc=I m²/s³`, NIS gates и estimator algorithms не менялись.
+
+Все `8928/8928` frame bearings valid, но session-level recorded RMSE меняется
+от `0.341°` до `84.642°`, тогда как paired broadband — `0.080–0.480°`.
+Ни один из 16 method-session tracker runs не подтвердился за короткие 9
+events: 3 `no_observable_hypothesis`, 13
+`tentative_initialization_unconfirmed`, 0 accepted updates. Поэтому position,
+velocity и posterior coverage здесь остаются недоступными, а не нулевыми.
+Последующий точный контроль обнаружил недостаточное расписание даже для
+идеальных bearings: это исторический bearing-level result, а не evidence о
+невозможности сопровождения записанного звука. Исправленный заранее
+зафиксированный [S8 tracking-feasibility protocol](S8_TRACKING_FEASIBILITY_PROTOCOL.md)
+использует 4.5 с и явный бюджет четырёх batch-fit на поколение, оставляя
+`Qc`, NIS, алгоритмы, источники и split неизменными. Новые результаты
+сохраняются отдельно под `results/s8_tracking_feasibility_*.csv`, их notebook —
+[s8_tracking_feasibility_validation.ipynb](notebooks/s8_tracking_feasibility_validation.ipynb).
+Ни один из пилотов не является field/SPL/detection-range validation.
+
+```powershell
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/independent_recordings_validation.ipynb
+```
+
+Историческое 2-секундное исследование пересоздаётся кодом commit
+`568ea8aeb18aec00a5945147215471c5f75aa766`; текущая команда
+`validation.independent_recordings_pilot` уже выполняет исправленный
+4.5-секундный протокол и не перезаписывает исторические CSV.
+
+Новые таблицы имеют prefix `results/independent_recordings_`; основная
+единица отчёта — исходный source session, не frame или SNR-run. Notebook:
+[independent_recordings_validation.ipynb](notebooks/independent_recordings_validation.ipynb).
+
+Корректирующий S8 gate с положительным контролем расписания, проверкой
+исходных интервалов и отдельным статусом вычислительного бюджета:
+
+```powershell
+.\.venv\Scripts\python.exe -m validation.independent_recordings_cost_probe
+.\.venv\Scripts\python.exe -m validation.independent_recordings_pilot
+.\.venv\Scripts\python.exe -m validation.s8_time_coverage
+.\.venv\Scripts\python.exe -m pytest -q tests/test_independent_recordings_pilot.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=300 notebooks/s8_tracking_feasibility_validation.ipynb
+.\.venv\Scripts\python.exe -m pip check
+```
+
+Второй benchmark-проход обновляет только prefix
+`results/s8_tracking_feasibility_`; исторические `independent_recordings_`
+остаются читаемыми рядом. Временная доступность и покрытие пересчитываются
+из уже сохранённых causal-публикаций, без повторного аудиосинтеза.
+
+Контроль с точными bearings: исторические 2 с не подтверждаются, новые 4.5 с
+подтверждаются в `2.5793125 s` и дают 9 принятых corrections. В аудио pilot
+10/16 method-session запусков подтвердились, 6/16 исчерпали зафиксированный
+четырёх-fit бюджет; 90 последующих updates приняты, 20 отклонены как
+`emission_outside_history`. Один из budget failures — broadband/-6 dB с
+bearing RMSE около `0.48°`, поэтому этот лимит снижает доступность, несмотря
+на хорошее направление. У успешных запусков оценка доступна около 50.36%
+наблюдаемого временного интервала; условные ошибки и покрытие не подменяют
+долю времени без оценки. Два held-out исходных сеанса не дают узкой
+статистической оценки хвостов или полевой характеристики.

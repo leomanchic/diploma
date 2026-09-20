@@ -5,7 +5,11 @@ import csv
 import numpy as np
 import pytest
 
-from estimators.gcc_phat import estimate_tdoas_gcc_phat, gcc_phat
+from estimators.gcc_phat import (
+    direct_gcc_phat_correlation,
+    estimate_tdoas_gcc_phat,
+    gcc_phat,
+)
 from model.geometry import DEFAULT_SOUND_SPEED, all_pairs, comparison_arrays
 from simulation.fractional_delay import frequency_domain_delay, windowed_sinc_delay
 from simulation.propagation import simulate_propagation
@@ -166,3 +170,55 @@ def test_benchmark_records_both_methods_without_brittle_speed_assertion(tmp_path
 def test_gcc_rejects_invalid_parameters(gcc_signal, kwargs):
     with pytest.raises(ValueError):
         gcc_phat(gcc_signal, gcc_signal, FS, **kwargs)
+
+
+@pytest.mark.parametrize("sign", [-1.0, 1.0])
+def test_fractional_search_bound_is_a_true_continuous_bound(gcc_signal, sign):
+    delayed = frequency_domain_delay(
+        gcc_signal, 8.0 + sign * 2.5, output_length=gcc_signal.size + 16
+    )
+    reference = frequency_domain_delay(gcc_signal, 8.0, output_length=gcc_signal.size + 16)
+    first, second = delayed, reference
+    bound_samples = 2.4
+    result = gcc_phat(
+        first,
+        second,
+        FS,
+        maximum_delay_seconds=bound_samples / FS,
+        interpolation_factor=2,
+        minimum_frequency_hz=LOW_HZ,
+        maximum_frequency_hz=HIGH_HZ,
+    )
+    assert abs(result.delay_samples) <= bound_samples + 1e-12
+    assert result.boundary_hit
+    assert result.delay_samples == pytest.approx(sign * bound_samples, abs=2e-6)
+
+
+@pytest.mark.parametrize("interpolation", [1, 2, 5])
+@pytest.mark.parametrize("include_nyquist", [False, True])
+def test_fft_and_direct_gcc_agree_with_nyquist_weight(interpolation, include_nyquist):
+    count = 128
+    index = np.arange(count)
+    first = (-1.0) ** index + 0.4 * np.cos(2 * np.pi * 13 * index / count)
+    second = np.roll(first, 1)
+    maximum = 4.0 / FS
+    result = gcc_phat(
+        first,
+        second,
+        FS,
+        maximum_delay_seconds=maximum,
+        interpolation_factor=interpolation,
+        maximum_frequency_hz=FS / 2.0 if include_nyquist else FS / 2.0 - 1.0,
+        minimum_signal_rms=0.0,
+        minimum_spectral_energy_fraction=0.0,
+    )
+    direct = direct_gcc_phat_correlation(
+        first,
+        second,
+        FS,
+        result.lags_samples / FS,
+        maximum_frequency_hz=FS / 2.0 if include_nyquist else FS / 2.0 - 1.0,
+        minimum_signal_rms=0.0,
+        minimum_spectral_energy_fraction=0.0,
+    )
+    np.testing.assert_allclose(result.correlation, direct.correlation, rtol=0.0, atol=2e-14)

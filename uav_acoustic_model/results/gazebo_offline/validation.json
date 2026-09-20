@@ -1,0 +1,21 @@
+{
+  "straight_max_position_error_m": 2.929642751054232e-14,
+  "straight_max_delay_error_s": 3.3306690738754696e-16,
+  "straight_audio_rms_difference": 3.4683210841579655e-12,
+  "straight_audio_rms_reference": 1.0118624902020112,
+  "turn_50hz_max_position_error_m": 2.993400803611641e-08,
+  "turn_100hz_max_position_error_m": 6.815305416095198e-09,
+  "turn_50hz_max_velocity_error_mps": 4.651386062870312e-06,
+  "turn_100hz_max_velocity_error_mps": 5.846701744712791e-07,
+  "turn_position_convergence_ratio": 4.392174115252927,
+  "turn_velocity_convergence_ratio": 7.9555726732197165,
+  "export_rates_hz": [
+    50,
+    100
+  ],
+  "audio_rate_hz": 48000,
+  "comparison_reception_interval_s": [
+    1.0,
+    1.1999791666666666
+  ]
+}

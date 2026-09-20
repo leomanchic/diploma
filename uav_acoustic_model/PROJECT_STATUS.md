@@ -1,19 +1,2224 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-08-29
+Последнее обновление: 2026-09-20
+
+## Gazebo offline integration pilot (S8-GZ)
+
+- Начальное состояние ветки `feature/gazebo-offline-integration`: SHA
+  `8cc2499a310dfd8a8de16bb762feb0c9beb997b0`, дерево чистое. Ubuntu
+  24.04.5, `gz sim 8.15.0`. Работа выполнена в той же ветке, без merge и
+  force-push; системные зависимости Gazebo вынесены в `gazebo/CMakeLists.txt`
+  и инструкцию, основной Python-пакет их не требует.
+- Две фактические post-step записи позы `sound_source` из Gazebo:
+  `results/gazebo_offline/constant_velocity/gazebo_state.csv` и
+  `results/gazebo_offline/smooth_turn/gazebo_state.csv`, по 301 отсчёту за
+  `[0.001,6.0]` с при 50 Гц; дополнительно 601 отсчёт поворота при 100 Гц.
+  Станции S0/S1/S2 и ориентации читаются из единого `simulation/gazebo_scene.json` в
+  Gazebo и Python. ENU, метры, секунды, кватернион `w,x,y,z` задокументированы.
+  Скорость в CSV не предоставляется; `q/v/a` берутся из одного кубического
+  сплайна с конечной областью определения.
+- Сравнение прямой с аналитикой: максимум `2.93e-14 м`; задержки
+  `3.33e-16 с`; RMS-разница аудио с общим исходным сигналом `3.47e-12`
+  при RMS reference `1.012`. Поворот на плотной 1-мс проверочной сетке:
+  ошибка позиции `2.99e-8 → 6.82e-9 м` и скорости
+  `4.65e-6 → 5.85e-7 м/с` при экспорте 50→100 Гц. Основной экспорт —
+  50 Гц, аудио — 48 кГц отдельно. Протокол и допуски в `gazebo/README.md`,
+  измерения в `results/gazebo_offline/validation.json`.
+- Зафиксированы seed `20260920`, AWGN `+10 dB`, прежняя calibration bias/R
+  (`results/three_station_audio_calibration.csv`), оба прежних метода
+  GCC/SRP, frame stride 32 и неизменённый tracker. Каждая траектория дала
+  1260/1260 валидных bearing-кадров на метод. Подтверждение в `1.5553125 с`;
+  33/42 публикации валидны. Первые 9 невалидных публикаций и два отказа
+  обновления `emission_outside_history` на метод сохранены, а не скрыты.
+  Conditional RMSE: прямая GCC/SRP `0.134/0.135 м`, поворот
+  `0.589/0.588 м`; conditional coverage `33/33` для каждого метода/запуска.
+  Это один seed, не статистический вывод о покрытии или полевой точности.
+- Интерактивные самостоятельные HTML в двух основных каталогах показывают
+  3D-станции, истину, оценку, текущий источник, интервалы без оценки,
+  временную ошибку, подтверждение/покрытие и причины отказов. Отрезки
+  оценки обрываются на невалидных публикациях. Точные команды запуска,
+  записи, обработки и просмотра: `gazebo/README.md`.
+- Динамика полёта и автопилот не моделируются. ROS 2, PX4, новый фильтр,
+  ветер, отражения и массовый Monte Carlo не добавлены. S8 recorded-source
+  остаётся `In progress`.
+- Приёмка: целевые тесты `28 passed`, полный `pytest -q` — **508 passed in
+  157.19 s**, `pip check` без конфликтов. Пакетный wheel проверен: общий
+  `simulation/gazebo_scene.json` включён в package data. Старые тяжёлые
+  исследования и notebook не перевыполнялись.
 
 ## Текущий этап
 
-Текущий этап: приёмочные исправления moving-source reporting для независимой
-покадровой GCC/WLS и equal-weight far-field SRP-PHAT локализации. Tracking,
-отражения, ветер, коррелированный фон и SRP-Harmonics не добавляются.
+Текущая работа: **S8 recorded-source integration pilot**. Сквозной
+синтетический S7C pilot принят отдельно; он не является статистической
+квалификацией редких хвостов или полевой валидацией. C1, опубликованный D2,
+`confirmed_recovery`, `Qc`, NIS-пороги и алгоритмы сопровождения сохранены.
 
-Статус: **этап завершён**. Method-specific boundary reporting, раздельный
-runtime и SNR/seed metadata реализованы; полный CSV пересчитан, pytest и все
-notebook прошли итоговую проверку. Tracking не добавлялся.
+### S8 calibration transfer — повторная проверка двух диагностических пунктов
+
+- 2026-09-19 — отдельно перепроверены уже реализованные пункты из
+  `validation/s8_calibration_transfer_analysis.py` на **сохранённых
+  evaluation bearings**. Аудио evaluation не синтезировалось. Один и тот же
+  поток из 21 событий для каждой из 16 конфигураций подан в опубликованную
+  ветвь `pooled bias/R` и диагностическую `bias=0, same R`: всего 32 replay
+  строки. Направления, времена, `R`, `Qc`, статистические пороги и бюджет
+  совпадают; меняется только `calibration_bias_tangent_rad`. Во всех 16
+  парных конфигурациях совпадают final confirmed/valid, число принятых
+  updates и причина отказа. Опубликованный conditional position RMSE и
+  прежние final statuses воспроизведены с максимальной разницей **0 m**.
+  На recorded takeoff/hover `+10 dB` условный RMSE GCC `12.572→0.743 m`,
+  SRP `14.484→0.725 m` при неизменной R и 9 принятых updates в каждой
+  ветви. Это **post-hoc анализ просмотренной evaluation**, не выбор нового
+  рабочего bias; даже coverage=1 при широкой R не подтверждает
+  калиброванность posterior.
+- Причины broadband-отказа также сохранены **до** исчерпания бюджета в
+  `results/s8_calibration_transfer_hypothesis_diagnostics.csv` (208 строк
+  для всех replay). Для `random_broadband / n-audioman / -6 dB / GCC`
+  construction candidate `candidate_viable`, initial batch `batch_passed`,
+  статус `tentative`; три `confirmation_refit` имеют `batch_passed` при
+  fit-count 2/3/4, следующая попытка получает
+  `computational_budget_exceeded_before_fit` при лимите 4. Следовательно,
+  конкретный отказ — вычислительный бюджет подтверждения, а не доказанное
+  несогласие bearing-измерений. Truth не входит в tracker; оно используется
+  только при офлайн-метриках. Повторный saved-event replay оставил SHA-256
+  файлов `replay.csv`, `hypothesis_diagnostics.csv` и contract audit JSON
+  **побайтно неизменными** относительно предыдущего коммита.
+- Это проверка существующего диагностического анализа: алгоритмы, `Qc`,
+  bias/R и evaluation-критерии не подбирались. Новых independent source
+  sessions не появилось; S8 остаётся `In progress`. Приёмка перепроверки:
+  профильные тесты **9 passed**, полный `pytest -q` **498 passed in
+  172.46 s**, `pip check` без конфликтов; затронутый notebook исполнен через
+  nbconvert, nbformat valid, 8/8 code cells выполнены, error-output и
+  duplicate cell IDs равны нулю. Неизменённые тяжёлые исследования не
+  повторялись.
+
+### S8 calibration-transfer analysis — calibration-only дополнение
+
+Первоначальный saved-only аудит ниже завершён отдельно. По последующему
+разрешению пользователя выполнена **однократная повторная обработка только
+двух исходных calibration-сеансов**, чьи покадровые residuals отсутствовали
+в прежних артефактах и Git. Протокол `S8_CALIBRATION_TRANSFER_PROTOCOL.md`
+зафиксировал расчёты до запуска. Исходное evaluation-аудио, tracker и старые
+Monte Carlo не повторялись; опубликованные pooled bias/R и результаты S8
+остались неизменными. Все выводы ниже — диагностические, не новый выбор
+рабочей калибровки.
+
+- Обработаны **2 исходных сеанса**, по `-6/+10 dB`, recorded и paired
+  broadband: 8 continuous calibration streams и **20160 перекрывающихся,
+  статистически зависимых кадров**. Для 3 станций × 2 методов × 2 моделей
+  источника сохранены 48 session/SNR групп, 12 pooled-decomposition групп и
+  48 направленных leave-one-session-out проверок. ID сеанса, записи и origin,
+  а также sequence/source/noise seeds не пересекаются с evaluation;
+  повторяющихся ключей calibration frame нет. У всех 12 исходных pooled
+  bias/R максимальные абсолютные расхождения с повторным fit равны **0 rad**
+  и **0 rad²** (предзаданный допуск `1e-10`).
+- Residual — двумерный spherical log-map в локальном tangent basis, единицы
+  rad angular arc; `R` в rad². Для каждого набора сессий выполнено точное
+  sample-scatter разложение
+  `(n−1)R_pool = Σ_s(n_s−1)R_s + Σ_s n_s(μ_s−μ)(μ_s−μ)^T`.
+  Максимальная ошибка реконструкции `7.39e-13 rad²`. Среди recorded групп
+  разделение средних двух сеансов `11.299–19.460°`, broadband
+  `0.0033–0.0216°`. Межсеансовое слагаемое составляет `1.95–7.05%`
+  recorded scatter; **92.74–96.22% общего pooled scatter** приходится на
+  within-session scatter Phantom-сеанса. Поэтому широкое pooled `R` вызвано
+  не только различием средних между двумя сеансами.
+- Recorded Phantom при `-6/+10 dB`: описательные средние по шести зависимым
+  station/method группам median error `43.86/9.90°`, P95 `133.40/91.03°`,
+  доля `>30°` `0.596/0.245`; Mavic соответственно `2.24/0.195°`,
+  `14.70/0.405°`, `0.0175/0`. В recorded pooled-группах доля `>30°`
+  `0.170–0.266`; удаление верхних 5% по geodesic error сдвигает среднее
+  на `4.25–4.42°`, полный covariance trace в `1.78–2.16` раза выше
+  trimmed-варианта. Trim здесь только sensitivity diagnostic, не
+  применённая калибровка. Ошибка не сводится к нескольким редким выбросам:
+  один исходный сеанс содержит широкий режим грубых bearing-ошибок.
+- В directed leave-one-session-out fit использует **оба SNR одного
+  calibration-сеанса**, test — другой сеанс при одном SNR; центрированный
+  `NIS=(r−μ_train)^T R_train⁻¹(r−μ_train)` и `χ²₂` — только Gaussian benchmark.
+  При train на точном Mavic и test на Phantom `-6/+10 dB` среднее по шести
+  зависимым группам несовпадение bias `23.81/6.24°`, P95 NIS около
+  `3460/1345`, доля выше `χ²₂` P95 `0.822/0.526`. Обратный перенос даёт
+  bias mismatch около `15°`, но долю выше порога `0` из-за широкого `R`
+  Phantom; его covariance trace в `52.5–432.7` раза больше Mavic train.
+  Broadband cross-session mismatch всего `0.003–0.046°`. Два исходных
+  сеанса и зависимые кадры не дают надёжной статистической квалификации
+  переноса или доверительных интервалов по популяции записей.
+- Артефакты: `validation/s8_calibration_session_recovery.py`,
+  `tests/test_s8_calibration_session_recovery.py`, сохранённые покадровые
+  calibration residuals/seed provenance, session/SNR, scatter attribution и
+  directed LOSO CSV в `results/s8_calibration_transfer_calibration_*.csv`,
+  audit JSON и дополненный notebook. `--reanalyze-saved` пересчитывает
+  диагностические таблицы из сохранённых residuals **без синтеза аудио**.
+  Изначальный анализ только по 12 pooled строкам действительно не мог
+  восстановить эти величины; он оставлен ниже как исторический результат.
+  Причина не в знаке/единицах реализации, а в неоднородных исходных
+  записанных сеансах и недостатке независимых сеансов для generalization.
+- Проверка дополнения: 9/9 целевых тестов; полный `pytest -q` — **498 passed
+  in 186.81 s**; `pip check` — `No broken requirements found`;
+  `git diff --check` — без ошибок (Git предупредил только о LF→CRLF в
+  рабочей копии). Затронутый notebook выполнен через nbconvert: nbformat
+  valid, **8/8** code cells выполнены, 4 PNG, error-output 0, cell IDs
+  уникальны. Структурный аудит всех 24 notebooks: 149 выполненных code
+  cells, error-output 0, невыполненных code cells 0, дубликатов IDs 0.
+  Неизменённые тяжёлые GCC/SRP notebooks не исполнялись повторно по
+  ограничению пользователя. Нефатальные Windows ZMQ/kernel warnings
+  при nbconvert не влияли на выходы.
+
+- 2026-09-19 — ветка `analysis/s8-calibration-transfer` от `22ea123`.
+  Исходные S8 CSV и алгоритмы фильтра/пороги/`Qc` не меняются. Анализ читает
+  только сохранённые bearings, pooled calibration и опубликованные tracking
+  результаты; 16 evaluation-потоков причинно воспроизведены дважды с
+  идентичной R: опубликованный bias и диагностический `bias=0`. Последний
+  вариант — **post-hoc анализ уже просмотренной evaluation**, а не новая
+  рабочая калибровка.
+- Контракт residual проверен на 144 сохранённых строках из 48 групп:
+  `Log_prediction(measurement)` в локальном ортонормированном
+  azimuth/elevation tangent basis, единицы rad angular arc; трекер вычитает
+  calibration bias, R измеряется в rad². Maximum разница CSV residual с
+  независимым пересчётом `0`, с tracker residual при точном CV-состоянии
+  `2.22e-16 rad`; разница истинного локального направления `5.55e-17`.
+  Ошибка знака/единиц/базиса не обнаружена. Для физического состояния
+  session index восстановлен из frozen `configuration_index//2`: старый
+  exporter записал `sequence_index=0` для обеих независимых session.
+- Сохранены только **12 pooled calibration rows** (по station/method/source
+  model); per-frame/per-session calibration residual и sufficient statistics
+  отдельных исходных сеансов отсутствуют. Поэтому вклад каждого calibration
+  session, доля pooled bias/R из выбросов и cross-session
+  `train-one→diagnose-other` **не идентифицируются** из сохранённых данных.
+  Не подменять их evaluation-разложением и не считать 1680 зависимых кадров
+  независимыми испытаниями. Для этого нужен новый *только calibration*
+  acoustic run с сохранением session-grain residuals, но текущая задача
+  запрещает синтез аудио, поэтому он не выполнялся.
+- Доступная косвенная проверка pooled calibration: при смене длительности
+  исторического окна `2→4.5 s` recorded bias norm теперь `5.394–9.700°`,
+  максимальное изменение pooled bias `9.289°`, pooled covariance trace
+  увеличился в `7.672–25.281` раза. Для broadband bias norm
+  `0.011–0.030°`, изменение не больше `0.037°`, trace ratio
+  `0.988–1.116`. Это чувствительность объединённого fit к изменению окна,
+  **не** доказательство вклада конкретного calibration-сеанса.
+- Evaluation residual разложен по 2 исходным session × 2 SNR × 3 station ×
+  2 methods × 2 source models = **48 групп**; сохраняются среднее,
+  covariance trace, median/P95, `>30°` и изменение 95%-trimmed среднего.
+  Recorded takeoff/hover при `+10 dB`: mean of group medians `0.288°`,
+  pooled bias расходится с evaluation mean на `5.40–9.72°`; pooled R trace
+  больше эмпирической within-session trace в `5836–10703` раз.
+  Recorded mini-quadcopter при `+10 dB`: средняя по 6 группам доля
+  `>30°` равна `0.401`, изменение mean после удаления верхних 5% ошибок
+  порядка `3.85–5.82°`. Эти evaluation хвосты показывают неоднородность и
+  риск неприменимости pooled calibration, но не раскрывают отсутствующие
+  calibration-составляющие.
+- Replay опубликованной ветви точно воспроизводит 16 final statuses,
+  accepted-update counts и условные position RMSE (maximum difference
+  `0 m`). На recorded takeoff/hover при `+10 dB` одинаковых bearings:
+  GCC position RMSE `12.572→0.743 m`, SRP `14.484→0.725 m` при
+  post-hoc `bias=0`, R неизменна; coverage=1.0 у обеих ветвей, поэтому
+  высокая coverage при столь широкой R не означает хорошую калибровку.
+  На mini-quadcopter все 4 recorded arms остаются invalid/budget-exceeded;
+  conditional RMSE там **отсутствует**, а не нулевой. Этого малого,
+  просмотренного набора недостаточно для выбора новой политики bias.
+- Для broadband `n-audioman/-6 dB` с малой bearing RMSE сохранён
+  truth-free журнал попыток: исходный six-event construction fit valid,
+  rank 6, `tentative`; затем три `confirmation_refit` проходят batch gates,
+  пятый запуск блокируется фиксированным 4-fit budget. Отказ —
+  `computational_budget_exceeded` во время подтверждения, **не** доказанная
+  ошибка bearing или NIS-отклонение. Для recorded mini отдельно сохранены
+  `batch_invalid`/angular-residual rejection причины кандидатов до budget.
+  Новые candidate/batch-fit diagnostics только наблюдают прежний выбор,
+  не меняют порядок, критерии или состояние.
+- Артефакты: `validation/s8_calibration_transfer_analysis.py`,
+  `tests/test_s8_calibration_transfer_analysis.py`, выполненный
+  `notebooks/s8_calibration_transfer_validation.ipynb`, CSV
+  `results/s8_calibration_transfer_{evaluation_residuals,pool_comparison,replay,hypothesis_diagnostics}.csv`
+  и `results/s8_calibration_transfer_contract_audit.json`. Это диагностический
+  анализ transferability и недостатка calibration-grain данных; S8 остаётся
+  `In progress`, статистическая квалификация и полевая проверка впереди.
+- Приёмка анализа: целевые saved-data regressions **5 passed**; полный
+  `pytest -q`: **494 passed in 184.86 s**; `pip check` и `git diff --check`
+  проходят. Оба затронутых S8 notebooks выполнены через nbconvert без
+  error-output; новый notebook: 12 уникальных cell IDs, 5/5 code cells
+  выполнены, 2 PNG-фигуры проверены визуально. Структурный аудит всех
+  **24/24** committed notebooks: nbformat valid, duplicate cell IDs 0,
+  error-output 0, невыполненных непустых code cells 0. Неизменённые тяжёлые
+  GCC/SRP notebooks и audio/Monte Carlo не пересчитывались. На Windows
+  Jupyter выводит только нефатальные предупреждения ZMQ/локального kernel.
+
+### S8 tracking-protocol feasibility correction — численные результаты
+
+- 2026-09-19 — ветка `fix/s8-tracking-protocol-feasibility` создана от
+  `568ea8a`. Исторические `results/independent_recordings_*.csv` оставлены
+  неизменными. Их 2-секундное расписание теперь классифицируется как
+  **недостаточное для проверки сопровождения**, не как свидетельство плохого
+  качества recorded audio.
+- Положительный контроль: точные направления из retarded-time модели при
+  идентичных приёмных/доступных timestamps, станциях и настройках трекера.
+  `2.0 s` → 3 временные группы, 9 событий, tentative/unconfirmed, 0 updates;
+  `4.5 s` → 7 групп, 21 событие, confirmation в `2.5793125 s`, 9 принятых
+  последующих updates на 3 разных временных группах (2 отклонены с
+  `emission_outside_history`, не NIS gate). Требование
+  confirmation reception span не ослаблялось.
+- Preflight выбранных 6-секундных записей: 288000 отсчётов каждая; для
+  `4.5 s` reception требуется максимум 222169 source samples, включая FIR
+  guard, остаётся минимум 65831. Повтора или padding записей нет.
+- Replay сохранённого проблемного `383904`/recorded/`-6 dB`/GCC потока:
+  12 нелинейных batch-fit заняли `71.4316 s` из `71.4356 s` tracker runtime;
+  исторический неограниченный runtime был `141.3119 s`. Причина затрат —
+  повторные оптимизации гипотезы, не акустический frontend. До нового
+  evaluation зафиксирован opt-in бюджет **4 batch-fit на поколение**; контроль
+  с точными направлениями требует 2. При исчерпании возвращается отдельный
+  `computational_budget_exceeded` и диагностируются число запусков/время.
+  Бюджет ограничивает число fit, но не wall time одного fit. C1/D2 и прежние
+  варианты по умолчанию не изменены.
+- Новый протокол: `S8_TRACKING_FEASIBILITY_PROTOCOL.md`; duration `4.5 s`,
+  stride `64`, прежние две calibration и две evaluation session, seed,
+  `Qc=I m²/s³`, NIS и калибровка только на calibration. Новый prefix результатов
+  `results/s8_tracking_feasibility_`, notebook отдельный; исторические файлы
+  не перезаписываются. Профильные тесты до повторного audio-run: **39 passed**.
+- Повторный ограниченный benchmark: 8 continuous calibration и 8 continuous
+  evaluation streams, 12 calibration rows, **20160/20160** valid dependent
+  frame bearings, 16 method-session rows (2 исходных evaluation-сеанса × 2 SNR
+  × 2 source models × 2 estimator methods), 21 публикация на метод/сеанс.
+  Все paired streams сохранили одинаковые траектории, timestamps и
+  стандартизованные добавленные noise draws; обе calibration families
+  построены только из двух calibration-сеансов на увеличенной длительности.
+  Все 12 calibration covariance остаются PD; eigenvalues в диапазоне
+  `1.50967e-5...0.335127 rad²`, maximum condition `1.50189`. Большая
+  recorded covariance — существенный контекст для интерпретации coverage.
+- Подтверждение **10/16**; первый confirmation для всех 10 в `2.5793125 s`.
+  После него **90 accepted / 20 rejected** updates; все 20 отклонений имеют
+  `emission_outside_history` для первых событий около инициализации, а не
+  NIS-gate. **6/16** отказов — `computational_budget_exceeded` при ровно 4
+  batch-fit, статистических/геометрических final failures в этом прогоне 0.
+  Важно: один broadband/-6 dB поток с bearing RMSE ~`0.48°` тоже исчерпал
+  бюджет; это потеря доступности от cost cap, а не ошибка направления.
+- При успешном подтверждении доступная оценка занимает `0.503635` временного
+  интервала между первой и последней публикацией (4.126 s), при отказе — 0.
+  Это time-weighted zero-order-hold доля, отдельная от доли публикаций.
+  `coverage_given_available_time` отсутствует (`NaN`) при нулевой
+  доступности. В других случаях оно равно `1.0`, кроме двух broadband/-6 dB
+  вариантов первого evaluation-сеанса (`0.992782`). Безусловная доля
+  `available_and_covered_time` сохраняется отдельно (не больше `0.503635`).
+- Для mini-quadcopter evaluation-сеанса recorded bearing RMSE `54.997–63.648°`:
+  все 4 recorded метода/SNR достигли бюджета, поэтому их position/velocity
+  errors и covariance coverage остаются отсутствующими. Для take-off/hover
+  recorded-сеанса 4/4 подтвердились, но conditional position RMSE
+  `12.572–17.960 m`, velocity RMSE `0.947–3.629 m/s`; все
+  available broadband варианты имеют position RMSE `0.108–0.892 m` в этом
+  малом pilot. Conditional coverage 1.0 у recorded successes не доказывает
+  точную калибровку: calibration R широкая, held-out исходных сеансов только 2.
+- Пиковый measured tracker runtime для 16 новых запусков `1.364 s`;
+  historical 12-fit probe `71.436 s` подтверждает нелинейную стоимость
+  поздних кандидатов. Отдельный replay того же сохранённого потока с
+  фиксированным 4-fit бюджетом занял `14.388 s` (`14.386 s` в fit). Это не
+  real-time гарантия: полный audio synthesis и
+  GCC/SRP frontend требуют десятков секунд на continuous stream. Бюджет не
+  ограничивает wall time одного fit и не настраивался после evaluation.
+- `s8_tracking_feasibility_time_coverage.csv` получен только из сохранённых
+  причинных публикаций; повторный аудиосинтез для него не выполнялся.
+  Целевые проверки **12 passed** (совместный ранний профильный gate **39
+  passed**), финальный полный `pytest -q`: **489 passed in 179.36 s**,
+  `pip check` PASS,
+  `git diff --check` PASS. Новый notebook выполнен top-to-bottom: 8 уникальных
+  cell IDs, 3 code cells executed, error-output 0; обе PNG-фигуры проверены
+  визуально. Структурный audit всех **23/23** committed notebooks: nbformat
+  valid, повторяющихся cell IDs 0, error-output 0, невыполненных непустых
+  code cells 0. Исторический notebook получил только поясняющую markdown
+  заметку в коде и также был повторно выполнен на неизменённых исторических
+  CSV; старые тяжёлые GCC/SRP исследования не перезапускались.
+
+### S8 independent recording sessions — provenance gate
+
+- 2026-09-17 — создана ветка `feature/s8-independent-recordings` от
+  `df1c029`. До evaluation найден и зафиксирован состав нового split:
+  calibration использует Freesound assets `683298` (Mavic Mini 2, Sadiquecat)
+  и `263022` (Phantom 2, Alcappuccino), evaluation — `383904` (mini
+  quadcopter, simeonradivoev) и `321687` (quadcopter take-off/hover,
+  n_audioman). Это четыре разных `recording_id`, `session_id` и
+  `origin_asset_id`; первые три записи CC0, последняя CC BY 4.0 с явной
+  атрибуцией.
+- Manifest обновлён до schema 2 и содержит origin/license, условия записи,
+  исходное разрешение, выбранный интервал, HQ-preview размер и проверенный
+  SHA-256. Три новых preview-файла декодируются как заявлено. Записи остаются
+  только приближением emitted waveform и не подтверждают absolute SPL или
+  detection range.
+- `recorded_source_split_audit()` больше не доверяет
+  `independent_source_split`: независимость выводится из фактического состава
+  split по recording/session/origin IDs, минимум два сеанса на split и нулевое
+  пересечение lineage. Отдельная regression показывает, что флаг `true` не
+  делает один сеанс независимым. Предварительный профильный gate: **16 passed**.
+- До evaluation заморожен `S8_INDEPENDENT_RECORDINGS_PROTOCOL.md`: отдельные
+  recorded/broadband калибровки по двум calibration sessions, два held-out
+  evaluation sessions, SNR `-6/10 dB`, CV-траектория,
+  frame/hop `1024/512`. Pre-evaluation feasibility-run со stride `32` был
+  остановлен до записи CSV и до появления error metrics из-за чрезмерной
+  стоимости первого held-out low-SNR recovery; окончательно зафиксирован
+  stride `64` (`1.46484375 Hz/station`), при этом all-frame bearing-метрики
+  сохранены. Второй feasibility-run показал prohibitive combinatorial
+  initialization search при `duration=3.0 s`; он также остановлен до CSV/error
+  metrics. Окончательная длительность ограниченного пилота — `2.0 s`, что
+  оставляет 9 causal events (6 construction + до 3 confirmation) и допускает
+  явный initialization failure. Прежние `Qc=I m²/s³`, NIS-пороги и алгоритмы
+  не менялись.
+  Внутри пары совпадают траектория, длительность, reception/frame timestamps и
+  standard-normal AWGN draws; меняется только clean source и масштаб шума.
+  Calibration lookup использует только station/method/source-model, не truth
+  scenario labels. Расширенный pre-evaluation gate: **22 passed in 19.73 s**.
+- Ограниченный benchmark завершён: **8** calibration и **8** evaluation
+  continuous streams (2 sessions × 2 SNR × 2 source models в каждом split),
+  **12** calibration rows, **8928** dependent evaluation bearing rows,
+  **144** dependent publications и **16** method-session rows. Исторические
+  `results/recorded_source_*.csv` не изменялись. Все 12 calibration covariance
+  PD: eigenvalue range `1.37464e-5...4.10247e-2 rad²`, maximum condition
+  `2.64261`.
+- Все **8928/8928** bearings valid. Session-level conditional recorded RMSE:
+  mini-quadcopter session GCC/SRP `84.642/76.379°` при `-6 dB` и
+  `48.026/34.855°` при `10 dB`; take-off/hover session `9.260/4.725°` и
+  `0.341/0.344°`. Paired broadband range `0.0802...0.4798°`. Это сильная
+  session dependence при всего двух held-out sessions, не общий ranking.
+- Ни один из **16/16** method-session tracker runs не подтвердился:
+  `3` завершились `initialization_failed:no_observable_hypothesis`, `13` —
+  `tentative_initialization_unconfirmed`; accepted/rejected post-initialization
+  updates `0/0`. Поэтому position/velocity errors и posterior coverage
+  остаются `NaN`/unavailable, а не нулевыми. Recorded initialization runtime
+  mean GCC/SRP `55.24/39.09 s`, maxima `141.31/146.05 s`; broadband mean
+  `0.0384/0.0376 s`. Короткий frozen protocol проверяет failure reporting, но
+  не валидирует tracking accuracy.
+- Новый notebook выполнен top-to-bottom: **12/12** unique cell IDs, **5/5**
+  code cells executed, error-output `0`. Три PNG-фигуры просмотрены в исходном
+  разрешении; labels, log scales и failure denominators читаемы. S8 остаётся
+  **In progress**: independent-session bearing benchmark воспроизводим, но
+  tracking, полевая среда, hardware synchronization, absolute calibration и
+  ground truth не подтверждены.
+- Финальный gate: targeted **23 passed in 18.73 s**, полный pytest **484 passed
+  in 177.48 s**, `pip check` PASS, `git diff --check` PASS. Структурный audit
+  всех **22/22** committed notebooks: nbformat valid, unique cell IDs,
+  error-output `0`, невыполненных непустых code cells `0`. По явному scope
+  задачи выполнен только новый notebook; неизменённые тяжёлые GCC/SRP
+  исследования не перезапускались.
+
+### S8 recorded-source integration pilot
+
+- 2026-09-17 — создана ветка `feature/s8-recorded-source-pilot` от
+  `cf6e6c9`. Добавлен manifest-backed loader и одна CC0-запись DJI Mavic Mini 2
+  (Freesound 683298, автор Sadiquecat, Zoom H5, indoor): исходно WAV
+  `96 kHz/24 bit/stereo`, в репозитории хранится публичный HQ OGG preview
+  `663525 bytes`, SHA-256
+  `88e6c54548d98197ddf987c828e563a1afb35601246423354c2b4a707c5ec747`.
+- Запись явно трактуется только как **приближение исходного сигнала**: она уже
+  содержит АЧХ исходного микрофона, среду записи, фон и возможное движение.
+  Амплитуда нормируется, поэтому эксперимент не подтверждает абсолютный SPL
+  или дальность обнаружения.
+- Предобработка: channel mean, `96→48 kHz` polyphase resampling, DC removal,
+  FFT band-limit `10 kHz`, peak normalization `0.95`. Интервалы calibration
+  `[2,8) s` и evaluation `[12,18) s` не пересекаются, но относятся к одному
+  session; `independent_source_split=false`, поэтому итог ограничен
+  integration demonstration и не называется held-out source evaluation.
+- Первый профильный gate: **18 passed in 10.70 s**. Проверены provenance,
+  hash, разрешение, interval/session semantics, детерминированность,
+  band-limit, непрерывное распространение и отсутствие независимого синтеза
+  перекрывающихся кадров.
+- Frozen pilot использует одну CV-траекторию, `duration=3.0 s`, SNR `-6/10
+  dB`, calibration/evaluation seeds `20260920/20260921`, прежние `Qc=I
+  m²/s³`, NIS gates, frame/hop `1024/512` и tracker stride `32`. GCC/WLS и
+  SRP-PHAT получают одинаковые frame keys. Первый запуск полностью вычислил
+  данные, но экспорт до записи CSV остановился из-за жёстко заданной
+  six-configuration broadband-сетки в `summarize_pilot`; API исправлен на
+  явный configuration subset с прежним default, добавлена regression и
+  повторён только этот небольшой S8 pilot без перенастройки параметров.
+- Итоговые артефакты: **6** calibration rows, **3360** зависимых all-frame
+  bearing rows, **108** зависимых publications, **63** update attempts,
+  **12** phase rows, **4** method-sequence rows и **4** matched comparison
+  rows. Все 3360 bearings valid; update accounting — **54 accepted / 9
+  rejected**. Все четыре method-sequence завершились confirmed/valid;
+  first confirmation `1.5553--1.8966 s`.
+- Recorded-source conditional bearing RMSE: GCC/SRP `12.469/3.478 deg` при
+  `-6 dB` и `0.2355/0.2361 deg` при `10 dB`. Frozen broadband RMSE для тех же
+  cells равен `0.4867/0.4847 deg` и `0.08154/0.08158 deg`; recorded-minus-
+  broadband difference соответственно `+11.983/+2.993 deg` и
+  `+0.1539/+0.1545 deg`. Это описательное наблюдение одной session, не общий
+  ranking GCC против SRP.
+- Conditional position RMSE GCC/SRP: `4.760/6.046 m` при `-6 dB` и
+  `0.538/0.588 m` при `10 dB`; velocity RMSE `2.617/4.220 m/s` и
+  `0.287/0.302 m/s`; conditional coverage `1.0/0.75` и `1.0/1.0`.
+  Calibration `R` во всех шести группах PD: minimum eigenvalue
+  `5.7979066e-4 rad²`, maximum condition number `3.4414`. Максимальные
+  абсолютные lag-1/inter-station residual correlations `0.2880/0.1226`;
+  фильтр их по-прежнему игнорирует.
+- Финальный gate: новый notebook выполнен top-to-bottom, `nbformat` valid,
+  **9/9** cell IDs уникальны, **4/4** code cells выполнены, error-output **0**.
+  Две PNG-фигуры просмотрены в исходном разрешении; после исправления коротких
+  labels обрезки и перекрытия отсутствуют. Структурный audit всех **21/21**
+  committed notebooks не нашёл missing/duplicate IDs, error outputs или
+  невыполненных непустых code cells. Полный `pytest`: **472 passed in 166.52
+  s**; `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  Прежние тяжёлые GCC/SRP Monte Carlo не пересчитывались.
+- Recorded-source pilot принят в ограниченном scope, но общий S8 остаётся **In
+  progress** до появления как минимум независимых recording sessions для
+  настоящего calibration/evaluation split. Следующие ограничения не закрыты:
+  field ground truth, hardware/clock synchronization, absolute acoustic
+  calibration, source directivity, environment, temporal/inter-station error
+  correlation и редкие хвосты.
+
+### Three-station continuous-audio integration pilot
+
+- 2026-09-16 — corrective validation-contract gate opened on
+  `fix/audio-tracking-validation-contract` from `2e9701f`. Before the new
+  evaluation run, the protocol was frozen as follows: one pooled calibration
+  per `(station_id, estimator_variant)` over all six calibration scenarios;
+  evaluation trajectory/SNR labels are not calibration lookup inputs;
+  duration `4.5 s`; source-time manoeuvre interval `[2.5,3.5) s`; unchanged
+  `Qc=I m^2/s^3`, NIS gates, frame/hop and tracker stride. The known emitted
+  band edge `10 kHz` is now passed to the existing Doppler/Nyquist guard.
+- Targeted pre-evaluation gate: **13 passed**. It includes an invariance test
+  showing that relabelling trajectory/SNR with unchanged observations leaves
+  every `BearingMeasurement` unchanged, a valid `10 kHz` band check, explicit
+  rejection of a Doppler-shifted aliasing case, and phase-reporting coverage.
+  The smoke chain also passed for both GCC/WLS and SRP-PHAT with 12/12 valid
+  events and a final confirmed state.
+- Corrected held-out pilot: 6 calibration + 6 evaluation continuous sequences,
+  **6 pooled calibration rows**, **15120** all-frame bearing rows, **504**
+  causal publications, **316** attempted update rows, **36** per-sequence phase
+  rows, 12 sequence rows and 12 aggregate rows. Calibration/event tables
+  reconcile exactly: **286 accepted + 30 rejected** update attempts.
+- **10/12** method-sequences confirmed by `1.5853125 s`, before the fixed
+  manoeuvre at `2.5 s`, and each received **9 accepted updates** with
+  evaluator-only emission time inside `[2.5,3.5) s`. Both acceleration/−6 dB
+  streams remained `tentative_initialization_unconfirmed`; they have zero
+  updates and explicit `prediction_without_correction` status rather than
+  invented state-error or coverage values. Maximum elapsed processing time
+  since an accepted update among confirmed streams was `0.3113333333 s`.
+- Conditional all-frame bearing RMSE is `0.4759--0.4867 deg` at `-6 dB` and
+  `0.08154--0.08300 deg` at `10 dB`. Across valid aggregate cells, conditional
+  position RMSE is `0.1134--0.9909 m`, velocity RMSE
+  `0.1251--1.5326 m/s`, and empirical coverage `0.8065--1.0`. These are
+  dependent-publication diagnostics from one evaluation sequence per cell,
+  not rare-tail qualification.
+- All six pooled tangent covariances are PD: minimum eigenvalue
+  `1.6102696526e-5 rad^2`, maximum condition number `1.199173683`. Maximum
+  absolute lag-1/inter-station residual correlations are `0.354840357` and
+  `0.066897522`; the filter still ignores both. The known source band edge is
+  present and checked in all 15120 bearing rows.
+- Corrected local gate: targeted **13 passed**, final full pytest **461 passed
+  in 173.74 s**, affected notebook executed without error-output, `pip check`
+  PASS and `git diff --check` PASS. Notebook gate: affected notebook has 10/10
+  unique cell IDs, no error output and no unexecuted code; structural audit of
+  all **20/20** committed notebooks is clean. All four rendered figures were
+  inspected at original size: axes/units/denominators are readable, invalid
+  gaps remain visible, and the phase plot labels evaluator-only emission-time
+  scoring explicitly. GitHub CI is recorded below after completion.
+  Historical numbers from the superseded 2.0 s pilot are retained later in
+  this journal only as provenance and must not be read as the current result.
+
+- В ветке `feature/three-station-audio-tracking` от `f1f1785` начата следующая
+  интеграционная работа внутри существующего S7C: один общий непрерывный
+  broadband source распространяется к реальным координатам 12 микрофонов трёх
+  tetrahedral-станций; шум создаётся один раз на полный station stream, а
+  перекрывающиеся кадры являются views общего массива.
+- До evaluation зафиксирован `THREE_STATION_AUDIO_PROTOCOL.md`: `fs=48 kHz`,
+  frame/hop `1024/512`, duration `2.0 s`, SNR `-6/10 dB`, три trajectory kinds,
+  по 1 независимой calibration/evaluation sequence на cell, seeds
+  `20260918/20260919`, random broadband signal и прежний `Qc=I m²/s³`.
+- Availability определяется как `frame_end + 0.010 s modeled processing +
+  station delivery`; измеренный runtime хранится отдельно. Физика bearing
+  использует reception-frame centre, а true emission time остаётся только у
+  evaluator. Calibration bias/R строятся только по calibration sequences.
+- Окончательный smoke всего тракта **PASS** для all-six GCC/WLS и equal-weight
+  SRP-PHAT: по 12/12 valid tracker events, 12 causal publications и final
+  confirmed/valid state. GCC/SRP при этом исполняются на всех кадрах.
+- Наблюдаемая особенность cadence: прежние D2 event-count limits не могли
+  представить confirmation span при hop `10.667 ms`. Для этого пилота заранее
+  зафиксированы schedule-derived capacity settings в протоколе; per-event NIS,
+  consensus, recovery и `Qc` thresholds не подбирались по evaluation errors.
+- Pre-evaluation feasibility run с history window `2 s` был остановлен без
+  созданных CSV и до просмотра evaluation errors: при плотном audio cadence он
+  выполнялся более часа и достиг наблюдаемого process peak RSS около `2.05 GB`.
+  До повторного evaluation в протоколе зафиксировано физически достаточное
+  окно `0.85 s`: `R_max=150 m`, transport bound `0.10 s`, history step
+  `0.25 s`, требуемый implementation span `150/343+0.10+0.25=0.7873 s`; все
+  pilot ranges меньше `110 m`. `Qc`, NIS gates и
+  математика estimator не изменялись. Второй feasibility run подтвердил
+  bounded memory, но updates на каждом перекрывающемся кадре оставались дольше
+  часа. До появления CSV/error metrics зафиксирован deterministic truth-free
+  tracker decimation. Strides `4` и `16` также оставались дольше часа без
+  созданных CSV, поэтому окончательно зафиксированы `1 calibration + 1
+  evaluation sequence/cell` и stride `32`: GCC/SRP всё ещё оцениваются на
+  каждом кадре, tracker получает кадры `0,32,64,...` каждой станции
+  (`2.9296875 Hz/station`, около `8.79 events/s` суммарно). Это 6 независимых
+  sequences в каждом split; rare tails/sequence-level CI не квалифицируются.
+  Ни в одной feasibility-попытке evaluation errors не были доступны.
+- Обнаруженный performance defect smooth-turn устранён без изменения модели:
+  вместо трёх `quad` на каждый отсчёт используется векторизованная 32-точечная
+  Gauss--Legendre quadrature того же интеграла скорости. На 121 точке позиция
+  совпала с независимым scalar-`quad` до `2e-12 m`, скорость до `2e-14 m/s`;
+  одна 2-секундная smooth-turn sequence теперь занимает `16.45 s` wall вместо
+  многих минут.
+- Завершённый pilot содержит 6 calibration и 6 evaluation continuous
+  sequences, 36 calibration rows, 6696 all-frame evaluation bearing rows, 216
+  causal publications, 12 method-sequence rows и 12 summary rows. Все 12
+  tracker streams получили по 18 событий; 10/12 завершились confirmed/valid.
+  Два CV/10 dB stream (GCC и SRP на одном audio) остались
+  `tentative_initialization_unconfirmed`, что сохраняется как отказ.
+- All-frame conditional bearing RMSE: `0.457--0.491 deg` при `-6 dB` и
+  `0.0813--0.0834 deg` при `10 dB`. Для подтверждённых публикаций conditional
+  position RMSE равен `0.939--2.319 m`, velocity RMSE `0.728--3.287 m/s`;
+  confirmed-publication fraction `0.5`. Empirical state-covariance coverage
+  равен `1.0` для CV/-6 dB, `2/3` для acceleration/-6 dB и `0` в остальных
+  valid manoeuvre cells, то есть covariance calibration на манёврах не
+  подтверждена.
+- Calibration covariance во всех 36 группах PD: minimum eigenvalue
+  `7.777e-7 rad²`. Максимальная абсолютная lag-1 correlation `0.456`,
+  inter-station correlation `0.202`; текущий EKF обе корреляции игнорирует.
+  Calibration/evaluation overlap равен нулю для sequence и фактических
+  source/noise seeds. Peak history: 17 узлов и 84,184 bytes owned arrays;
+  максимальные измеренные synthesis/frame-bearing/total-audio/tracker wall
+  runtimes на evaluation sequence: `51.371/5.108/56.151/0.529 s`. Эти
+  measured runtimes не входят в simulated availability.
+- Timing/provenance audit проверил все 6696 evaluation bearing rows:
+  `true emission < reception centre < frame end < availability`, exact
+  `availability=frame_end+processing+delivery`, 186 кадров на каждую
+  station/method/sequence, один source stream и три раздельных station-noise
+  streams. Truth-use flags ложны во всех bearing/tracker rows.
+- Приёмка локально: профильные **48 passed**, отдельный integration-файл
+  **9 passed**, полный pytest **457 passed за 159.45 s**, `pip check` PASS,
+  `git diff --check` PASS. Новый
+  `three_station_audio_tracking_validation.ipynb` выполнен без error-output;
+  audit всех **20/20** notebooks: nbformat 4, все code cells выполнены, error
+  outputs отсутствуют, cell IDs присутствуют и уникальны. Прежние тяжёлые
+  GCC/SRP notebooks не пересчитывались по явному ограничению задачи; их
+  сохранённые outputs прошли структурный audit. Implementation commit
+  `3c7c19e2a9b070c07a201e93bc2fdf7da3778165` прошёл GitHub Actions run
+  `35111815954`: Ubuntu/Python 3.12 и Windows/Python 3.12 — `success`.
+- После audit подписи runtime устранена неоднозначность: synthesis, frame
+  GCC/SRP frontend, total audio pipeline и tracker backend измеряются и
+  сохраняются раздельно; accuracy/coverage/failure rows не изменились.
+  Финальный повтор полного pytest после этой поправки: **457 passed**.
+
+### Corrective gate: bounded history и causal timestamp reporting
+
+- В ветке `fix/s7c-history-memory-reporting` от `5644338` исправлено
+  transient-разрастание `AugmentedMotionHistory.propagate_to`: после каждого
+  добавленного propagation-узла устаревшие блоки joint Gaussian
+  маргинализируются выбором оставшейся mean/covariance submatrix. Сохраняются
+  все cross-covariance оставшихся узлов и один граничный узел для bridge-
+  интерполяции.
+- Для `history_window=2 s`, `history_step=0.25 s` измеренный peak node count
+  при паузах `2/10/30/300 s` равен **9/11/11/11**, final node count не больше
+  10. До исправления `10/30 s` давали 41/121 узел. Короткий bounded результат
+  совпадает с независимым `full growth → marginalization` reference до и после
+  bearing-update; covariance остаётся symmetric/PSD.
+- Peak storage теперь фиксируется внутри history немедленно после добавления
+  propagation- и bridge-узлов, до последующей очистки. Определение:
+  `mean.nbytes + joint_covariance.nbytes + 8 bytes × epoch_count`. Это owned
+  numerical history payload, не RSS процесса, Python overhead или память
+  временных матричных вычислений. Bridge-узлы внутри окна зависят от частоты
+  измерений, поэтому независимость памяти от event rate не заявляется.
+- Метрика первого принятого post-onset bearing разделена на фактический
+  `...update_processing_time_s` из update diagnostic и отдельный
+  `...first_publication_time_s`. Regression для
+  `smooth_turn/informative/sequence=0`, seed `20260916`: фактическое время
+  **5.447551467380961 s** одинаково для двух publication schedules, первое
+  отображение меняется с **5.5 s** на **5.75 s**.
+- Targeted command: `.\.venv\Scripts\python.exe -m pytest -q
+  tests/test_retarded_ekf_manoeuvre.py tests/test_stochastic_motion.py` —
+  **26 passed**. Qc не перенастраивался; GCC/SRP Monte Carlo не запускались.
+  Повторный fixed-`Qc` evaluation сохранил **2592 frame rows, 96 sequence rows,
+  36 summary rows**. Относительно `5644338` максимальное абсолютное изменение
+  `valid/confirmed fraction`, position/velocity RMSE/P95/max, coverage,
+  `valid AND covered` и reset count равно **0.0**. Runtime и память измерены
+  заново: средний runtime на sequence равен **0.560329 s** для
+  `confirmed_recovery` и **0.462413 s** для `manoeuvre_history`; исправленный
+  maximum owned history storage равен **167232 bytes / 24 nodes** для
+  `informative` и **181400 bytes / 25 nodes** для `poorly_conditioned`.
+- Выполненный `notebooks/manoeuvre_tracking_validation.ipynb` подтверждает
+  новые timestamp/storage поля без error output. Общий notebook audit:
+  **19/19** valid, без error output, невыполненных code cells и повторяющихся
+  cell IDs. Финальный локальный gate: **448 passed in 146.42 s**; `pip check` и
+  `git diff --check` — **PASS**. Windows/Linux CI должен быть зелёным перед
+  закрытием этой корректировки.
+- Первый Ubuntu CI run выявил только известную межплатформенную вариативность
+  исторического optimizer-history fixture: `9.322126e-7 m` при масштабе
+  ошибки `221.430492 m`. Для poorly-conditioned fixture абсолютный допуск
+  изменён с `5e-7` на `1e-6 m` при сохранении `rtol=0` и отдельных проверок
+  большого исходного срыва (`>100 m`/`>200 m`) и последующего recovery.
+  Математические gates фильтра и новые history/timestamp проверки не ослаблены.
+
+### Журнал S7C-C: математический и deterministic gate
+
+- Зафиксирована модель `x=[q,v]`, `dq=v dt`, `dv=L dW`, `Qc=LLᵀ` в м²/с³.
+  `F(h)=[[I,hI],[0,I]]`,
+  `Qd(h)=[[h³Qc/3,h²Qc/2],[h²Qc/2,hQc]]`. Process noise описывает
+  неопределённость фильтра; ускорение и поворот synthetic truth заданы
+  отдельно и детерминированно.
+- Новый opt-in `CausalManoeuvreRetardedTimeEKF` хранит полный joint posterior
+  узлов истории, включая cross-covariance; emission time решает
+  `t_receive=t_emit+||q(t_emit)-p||/c` только по доступной истории.
+  Промежуточное состояние вставляется как Gaussian integrated-Wiener bridge,
+  затем запоздалое bearing обновляет также текущий узел через cross-covariance.
+  Retarded Jacobian включает implicit `dt_emit/dX`; joint covariance
+  обновляется Joseph-формулой. Для `Qc>0` stochastic reverse-CV projection
+  запрещена. Точный `Qc=0` limit допускает детерминированное rebase.
+- Физические ограничения тестового протокола: `maximum_range=250 m`,
+  `maximum_transport_delay=0.6 s`, `history_step=0.25 s`,
+  `history_window=2.0 s`; `250/343+0.6+0.25<2.0 s`.
+  Наблюдение за пределами истории получает `emission_outside_history`.
+- Файлы стадии: `model/stochastic_motion.py`,
+  `estimators/retarded_ekf_manoeuvre.py`,
+  `simulation/manoeuvre_trajectory.py`,
+  `MANOEUVRE_TRACKING_MODEL.md`, `S7C_MANOEUVRE_PROTOCOL.md`,
+  `tests/test_stochastic_motion.py`, `tests/test_retarded_ekf_manoeuvre.py`.
+- Gate: `.\.venv\Scripts\python.exe -m pytest -q
+  tests/test_stochastic_motion.py tests/test_retarded_ekf_manoeuvre.py`:
+  **18 passed** после добавления event-contract, seed, Joseph-joint,
+  PSD/small-negative-`Qc` и rejected-prior regressions. Smoke
+  matched direct-bearing stream на трёх типах truth:
+  **PASS**, 45 events/config. Точный `Qc=0` matched CV check:
+  `confirmed_recovery` и новый вариант дали **34/34** accepted updates и
+  final position error `0.6182630704890123/0.6182630704891471 m`.
+- До evaluation зафиксированы split/seeds/selection/metrics в
+  `S7C_MANOEUVRE_PROTOCOL.md`; число зависимых публикаций не называется
+  числом независимых sequences.
+
+### Журнал S7C-C: статистический gate и ограничения
+
+- Development seed `20260915`, evaluation seed `20260916`, bootstrap seed
+  `20260917`. Три заранее заданных кандидата `Qc=alpha I`, `alpha=0.05,
+  0.25, 1.0 м²/с³`. Development score (с явным 50 m penalty за invalid):
+  `10.7595, 2.6271, 2.1224 m`; выбрано `alpha=1.0` **до** evaluation.
+  Это тестовые, а не физически откалиброванные параметры.
+- Evaluation: 8 независимых base blocks на геометрию, 2 геометрии = **16
+  независимых base blocks**. Каждый блок имеет три matched truth modes:
+  **48 зависимых trajectory-runs**, `48 × 2 variants × 27` зависимых
+  публикаций. Разные truth modes одного блока разделяют source jitter и
+  bearing noise; их нельзя называть 48 независимыми trials. В каждой
+  geometry/mode группе paired bootstrap resamples целые 8 sequences,
+  `500` повторов. Programmatic provenance audit: 24 development generator
+  seeds и 96 evaluation generator seeds, overlap **0**; в пределах каждого
+  split повторяющихся mechanism-seeds также **0**. Изменённые файлы:
+  `validation/manoeuvre_tracking_study.py`,
+  `notebooks/manoeuvre_tracking_validation.ipynb`,
+  `results/manoeuvre_development_selection.csv`,
+  `results/manoeuvre_tracking_frames.csv`,
+  `results/manoeuvre_tracking_sequences.csv`,
+  `results/manoeuvre_tracking_summary.csv`, `results/manoeuvre_paired_ci.csv`,
+  `README.md`, `ROADMAP.md`, `AGENTS.md`, `PROJECT_STATUS.md`.
+- Conditional position RMSE во время acceleration segment:
+  informative `4.01 → 2.10 m`, poorly-conditioned `3.18 → 1.89 m`;
+  smooth turn `3.26 → 1.96 m` и `3.29 → 1.57 m`
+  (`confirmed_recovery → manoeuvre_history`). Valid fraction соответственно
+  `0.889 → 1.000`, `0.708 → 0.903`, `0.903 → 1.000`, `0.833 → 0.972`.
+  Paired matched-valid during-position-RMSE differences, new minus old,
+  95% sequence-bootstrap CI: acceleration `-1.94 [-2.30,-1.55] m` и
+  `-1.47 [-2.02,-0.93] m`; turn `-1.31 [-1.63,-0.91] m` и
+  `-1.83 [-2.39,-1.04] m`.
+- **Чистый CV control ухудшился:** during position RMSE
+  informative `0.67 → 1.47 m`, poorly-conditioned `0.66 → 1.26 m`;
+  paired differences `+0.80 [+0.53,+1.13] m` и
+  `+0.60 [+0.40,+0.78] m`. Это цена выбранного process noise,
+  а не улучшение от сопровождения на любом режиме.
+- Описательное pooled сравнение acceleration+turn, где разные truth modes
+  одного base block зависимы (без отдельного pooled CI): `pre` conditional
+  q/v RMSE `1.07/0.42 → 1.56/0.58`, valid `64/320` у обоих; `during`
+  `3.47/2.81 → 1.90/2.00`, valid `240/288 → 279/288`; `post`
+  `1.89/0.71 → 2.00/0.99`, valid `123/256 → 255/256`.
+  Следовательно, post conditional error **не улучшился**, но доступность
+  существенно выше. Нельзя сообщать только post conditional RMSE без
+  этих знаменателей.
+- Во время манёвра false NIS rejection чистых bearings на sequence
+  informative acceleration/turn `4.6/4.3 → 0.1/0.1`, poorly-conditioned
+  `4.3/4.9 → 0.6/0.1`; mean resets примерно `1 → 0` (при poorly-conditioned
+  acceleration `1 → 0.1`). Conditional 95% covariance coverage нового
+  варианта `0.95–1.00`, baseline на манёврах `0.10–0.13`;
+  near-100% указывает на вероятную консервативность stochastic covariance,
+  **не** доказывает её калибровку. Maximum history memory в этих группах
+  `153640–167232 B`; runtime/sequence и first accepted post-onset bearing
+  latency отдельно в CSV. Последняя величина — реакция на поступившее
+  событие, не время сходимости ошибки.
+- Notebook `manoeuvre_tracking_validation.ipynb` повторно выполнен через
+  `nbconvert` **PASS** после исправления первого запуска: первоначальный
+  `ModuleNotFoundError: pandas` устранён использованием standard-library
+  `csv`, без новой зависимости. Windows kernel выдаёт прежние нефатальные
+  ZMQ/TCP warnings. Генератор и estimator audio frontend не включают.
+  Полный local pytest: `.\.venv\Scripts\python.exe -m pytest -q` —
+  **440 passed in 162.22 s** в pinned local environment
+  `numpy=2.4.6, scipy=1.17.1, pytest=9.1.1`. On-disk notebook audit:
+  **19 notebooks,
+  204 cells/204 unique cell IDs, 0 error outputs, 0 unexecuted code cells**;
+  затронутый notebook выполнен повторно, неизменённые тяжёлые GCC/SRP
+  исследования не пересчитывались. `.\.venv\Scripts\python.exe -m pip check`:
+  `No broken requirements found`; `git diff --check`: exit 0.
+  Cross-platform CI ещё ожидает опубликованный commit;
+  S7C-C и общий S7C остаются **In progress**.
+
+### Предыдущий журнал S7C-D robustness и corrective recovery
+
+Статус S7C-D1: **Done**. S7C-D2: **Done**. S7C-C1 остаётся **Done** после corrective
+review gate. Первый рекурсивный центральный оцениватель по
+асинхронным bearing-событиям трёх станций принят при `Q=0`, известном
+постоянном `c` и прямых bearing-level наблюдениях. Общий S7C-C остаётся
+**In progress**: process noise, манёвры, outlier/dropout robustness и
+signal-level multi-station frontend не входят в C1 и не заявлены. D1 только
+измеряет поведение неизменённого baseline при нарушениях потока и Gaussian
+observation model; он не добавляет robustness-алгоритм. S7C-B
+сохраняет статус **Done** после повторного входного gate на ветке
+`feature/s7c-c1-retarded-ekf`.
+
+- 2026-09-13 — corrective event-contract gate начат от принятого commit
+  `a53d12958436e81ba344787f66f9caaaf5f24cde` в ветке
+  `fix/s7c-recovery-event-contract`. Recovery processor теперь проверяет
+  stream quarantine перед каждой availability group: конфликт construction
+  event отклоняет tentative hypothesis, конфликт initialization/update event
+  активного поколения немедленно прекращает `confirmed/valid` и начинает
+  fresh causal recovery, а конфликт исторического поколения не переписывает
+  старые публикации и не сбрасывает текущий state. Exact duplicate безопасен.
+  Добавлены отдельные cumulative conflict diagnostics и явные множества
+  active/historical event IDs.
+- 2026-09-13 — `maximum_initialization_buffer_events=18` ограничивает только
+  candidate pool построения hypothesis. Confirmed EKF обрабатывает все новые
+  допустимые события availability group в детерминированном порядке. При
+  reset внутри группы остаток явно получает причину
+  `recovery_group_excluded_after_reset`; он не остаётся необъяснённо pending и
+  не попадает в новое поколение, которое принимает только строго более поздние
+  события. Targeted gate conflict/batch/C1-D2: **43 passed in 64.94 s**;
+  расширенный recovery gate: **17 passed in 19.33 s**.
+- 2026-09-13 — прежний абсолютный `2e-10 m` допуск исторического D2 optimizer
+  diagnostic оказался уже измеренного межплатформенного разброса: pinned
+  GitHub Actions показал `1.64242124e-7 m` на Windows и `1.46424384e-9 m` на
+  Linux при масштабе ошибки `114.5200646 m`. Regression использует `rtol=0`,
+  `atol=5e-7 m` (менее 5 частей на миллиард масштаба) и отдельно требует сам
+  крупный D2-срыв `>100/>200 m`, существенное recovery-уменьшение `<1/<2 m`
+  и отсутствие truth в online estimator. Математические gates не ослаблены.
+- 2026-09-13 — локальный финальный gate после event-contract исправления:
+  **422 passed in 138.32 s**; `pip check` — **No broken requirements found**;
+  `git diff --check` — PASS. Затронутый 10-cell
+  `initialization_recovery_validation.ipynb` выполнен заново. Read-only аудит
+  всех **18** committed notebooks / **117** непустых code cells подтвердил:
+  invalid nbformat `0`, error-output `0`, unexecuted `0`, missing/duplicate
+  cell IDs `0`; неизменённые тяжёлые GCC/SRP notebooks не пересчитывались.
+  Результаты/CSV C1, D1, D2 и held-out recovery benchmark не изменялись.
+  Corrective gate остаётся **In review** до зелёной Linux/Windows CI matrix;
+  весь S7C-D по-прежнему **In progress**.
+
+- 2026-09-12 — начат corrective gate от принятого commit
+  `979520a80aea5a2820ccdf61554a6f7c0c474fbe` в отдельной ветке
+  `feature/s7c-initialization-recovery`. C1 и опубликованный D2 остаются
+  воспроизводимыми вариантами; новый recovery-вариант будет только opt-in.
+  До фиксации протокола и нового held-out evaluation работа имеет статус
+  **In progress**. Не добавляются `Q>0`, манёвры, adaptive `Q/R` или
+  signal-level frontend.
+- 2026-09-12 — исходные D2 failures воспроизведены без изменения алгоритма.
+  Для `outlier_mild/informative/sequence=57` начальный six-event fit включил
+  два evaluator-only outliers, после чего было применено лишь 2 updates,
+  отклонено 37 и финальная ошибка позиции достигла `114.5200646 m`.
+  Для `poorly_conditioned/sequence=37` в initialization попал один outlier,
+  затем применено 0 updates, отклонено 39, финальная ошибка
+  `221.4304915 m`. Truth использовалась только после оценивания для пометки
+  журнала. Подтверждён failure mode: ошибочный prior вызывает длительный
+  reject-lock чистых bearings через pre-update NIS gate.
+- 2026-09-12 — реализован отдельный opt-in prototype с состояниями
+  `tentative/confirmed/questionable/recovering`, final batch-refit и раздельными
+  preliminary/confirmation/final residual scores. Профильные deterministic
+  gates нового пути и study-контракта: **13 passed in 31.93 s**; отдельный
+  совместный C1/D2 regression gate: **27 passed in 49.07 s**. На известных
+  failures текущая frozen-конфигурация дала final position error
+  `0.114007 m` и `0.797426 m`, без использования truth online.
+- 2026-09-12 — development study на seed `20260913`, `10` независимых
+  sequences/geometry завершён за `60.10 s`: `540` paired sequence rows,
+  `54` summaries и `20` provenance rows, structural audit PASS. Новый вариант
+  имел final valid `1.00` во всех 18 geometry/profile группах и ноль false
+  reset на clean profiles. Стоимость подтверждения не скрыта: nominal mean
+  confirmed-epoch fraction `0.71/0.70` против `0.84/0.84` у C1/D2.
+  После этого зафиксирован
+  [S7C_INITIALIZATION_RECOVERY_PROTOCOL.md](S7C_INITIALIZATION_RECOVERY_PROTOCOL.md):
+  6 construction + 3 independent confirmation bearings, лимит 16 candidates,
+  trigger recovery по 4 последовательным multi-station NIS rejects и новый
+  held-out seed `20260914`. Параметры после evaluation меняться не будут.
+- 2026-09-12 — добавлены compact evaluator-annotated журналы двух failures и
+  автоматические проверки frozen seeds, common streams, полного event
+  partition и численной неизменности C1/D2 путей. В журнале truth/outlier
+  label добавляется только после вызова estimator. Confirmation/recovery и
+  study gates: **13 passed**; held-out evaluation ещё не запускался, статус
+  остаётся **In progress**.
+- 2026-09-12 — frozen smoke gate на отдельном seed `20260915` прошёл за
+  `24.85 s`: 4 независимых base blocks, 36 paired profile-runs, 108
+  sequence-variant строк, 54 summaries и 4 provenance rows. Recovery-вариант
+  подтвердил финальное состояние в `36/36`, truth leakage и event-partition
+  violations — `0`; reset на этой малой smoke-выборке — `0`. C1 имел один
+  ожидаемо видимый invalid, поэтому smoke не подменяет held-out сравнение.
+  После этого protocol остаётся неизменным и разрешён финальный evaluation.
+- 2026-09-12 — frozen held-out evaluation на новом seed `20260914` завершён
+  без post-hoc настройки за `419.44 s`: 200 независимых base blocks, 1800
+  paired profile-runs, 5400 sequence-variant rows, 54 summaries и 200
+  provenance rows. Readback-аудит подтвердил `1200/1200` уникальных mechanism
+  seeds, общий поток трёх variants, полное разбиение delivered events и ноль
+  truth leakage. C1/D2 вызываются неизменёнными code paths.
+- 2026-09-12 — в ключевом `outlier_mild` recovery снизил conditional position
+  RMSE D2 с `16.668/21.840 m` до `0.781/0.593 m`, P95 с `1.533/1.097 m` до
+  `1.404/0.961 m`, maximum с `156.282/207.317 m` до `2.122/1.095 m` и доли
+  ошибок `>10 m`/`>50 m` с `0.02/0.02` и `0.03/0.02` до нуля для
+  informative/poorly-conditioned. Paired whole-sequence 95% CI разности RMSE
+  recovery−D2: `[-27.538, 0.001] m` и `[-36.709, 0.003] m`; редкие tails
+  делают interval широким и включающим около-ноль, поэтому dominance не
+  заявляется как универсальное.
+- 2026-09-12 — цена подтверждения видима в availability: для mild mean
+  confirmed-epoch fraction D2 `0.830/0.827`, recovery `0.707/0.684`; mean
+  first confirmation `2.087/2.084 s` против `3.672/3.972 s`. Final valid
+  recovery `0.99/1.00`; один informative mild run после единственного reset
+  остался censored recovery. Ещё один reset в poorly-conditioned strong был
+  успешно восстановлен. Всего по 1800 recovery profile-runs: 2 resets, 0
+  evaluator-classified false resets, 1 completed и 1 censored recovery.
+- 2026-09-12 — на clean nominal recovery сохранил final valid `1.00/1.00`,
+  position RMSE `0.755/0.565 m` против D2 `0.760/0.567 m`, conditional state
+  coverage `0.96/0.93` против `0.96/0.90`, но mean confirmed-epoch fraction
+  снизился `0.842/0.839 -> 0.716/0.705`. Это availability trade-off, а не
+  бесплатное улучшение. Во всех девяти профилях recovery maximum final error
+  не превысил `3.150/2.178 m`, final valid `0.998/0.999` в среднем по
+  informative/poorly-conditioned.
+- 2026-09-12 — новый affected notebook
+  `notebooks/initialization_recovery_validation.ipynb` выполнен: 10 cells,
+  6 code cells, nbformat valid, 0 error-output, 0 unexecuted code cells,
+  уникальные cell IDs; три сохранённых графика визуально проверены. Первый
+  запуск корректно остановился на незаявленном `pandas`; notebook переписан
+  на standard-library `csv` без изменения dependencies или численных CSV.
+  Полный pytest/pip/diff gate ещё не выполнен, S7C-D остаётся **In progress**.
+- 2026-09-12 — финальный corrective gate завершён: **415 passed in
+  143.28 s**; `pip check` — **No broken requirements found**;
+  `git diff --check` — PASS. Новый recovery notebook повторно выполнен
+  in-place, а неизменённый лёгкий D2 report — на временной копии; оба PASS.
+  On-disk audit всех **18/18** notebooks подтвердил валидный nbformat,
+  `0` error-output, `0` невыполненных непустых code cells и уникальные cell
+  IDs. Неизменённые тяжёлые GCC/SRP исследования по требованию не
+  пересчитывались. D1/D2/C1 CSV имеют нулевой diff от `979520a`.
+- 2026-09-12 — созданные артефакты: opt-in
+  `estimators/retarded_ekf_recovery.py`, paired study
+  `validation/initialization_recovery_study.py`, 13 новых deterministic/study
+  tests, frozen protocol, выполненный 10-cell notebook и четыре CSV:
+  5400 sequence rows, 54 summaries, 200 seed rows, 240 compact journal rows.
+  Средний runtime/sequence C1/D2/recovery равен
+  `0.755/0.290/0.674 s` для informative и `0.699/0.266/0.740 s` для
+  poorly-conditioned на данном Windows run; это implementation diagnostic, не
+  real-time guarantee. Corrective implementation завершена, но общий S7C-D
+  остаётся **In progress**: strict CV и `Q=0` не поддерживают манёвры;
+  adaptive `Q/R`, signal-level frontend и field calibration отсутствуют.
+
+- 2026-09-12 — входная база подтверждена: clean
+  `2d499b61a458ccd43d46321f97dc20d1e76747e5`, новая ветка
+  `feature/s7c-robust-bearing`. До evaluation зафиксирован
+  [S7C_D2_PROTOCOL.md](S7C_D2_PROTOCOL.md): четыре ablation-варианта,
+  deterministic leave-up-to-two consensus с `chi2_2(0.995)`, pre-update
+  gate `chi2_2(0.99)`, smoke/evaluation seeds `20260911/20260912`, две
+  геометрии, девять D1-профилей и 100 независимых sequences/geometry.
+  C1 default и D1 CSV не изменялись. Статус остаётся **In progress**
+  до deterministic/smoke/full gates.
+- 2026-09-12 — реализован opt-in `RetardedEKFRobustnessConfig`:
+  deterministic consensus и pre-update NIS gate могут включаться
+  независимо, а default сохраняет путь C1. Consensus записывает
+  used/excluded IDs и причины; все события успешного начального
+  prefix помечаются processed. NIS-отказ хранит конечный pre-update
+  NIS, постоянный event ID/reason и точно сохраняет prior state/P.
+  Новый deterministic/statistical-contract gate: **11 passed in 17.60s**;
+  старый C1 test file отдельно прошёл **15/15**. Реализован held-out
+  study с whole-sequence bootstrap и evaluator-only confusion labels; full evaluation
+  ещё не запущен.
+- 2026-09-12 — frozen smoke gate на seed `20260911` прошёл: 4
+  независимых base blocks, 36 paired profile-runs, 144 sequence-variant
+  строки, 72 summary и 4 provenance. Аудит подтвердил полное
+  разбиение delivered events, одинаковый поток для четырёх
+  variants и отсутствие truth leakage. В nominal smoke все четыре
+  variants совпали по final errors и не дали false rejections; combined
+  в этой малой выборке обнаружил все delivered strong/mixed outliers.
+  Эти `n=2/geometry` значения — только smoke, не статистический вывод.
+- 2026-09-12 — первый full evaluation остановлен на 21/200
+  блоках до записи CSV: повторный exhaustive leave-up-to-two search
+  на каждом растущем prefix давал неограниченно тяжёлые
+  повторные batch fits. До завершённого evaluation протокол уточнён
+  как bounded first-valid consensus: full/leave-one/two для `n<=8`, затем
+  не более 128 six-event hypotheses из локального RNG, детерминированно
+  привязанного к SHA-256 observable event IDs. Пороги, seed evaluation и
+  размер выборки не изменялись; незавершённые частичные исходы не
+  использовались для настройки.
+- 2026-09-12 — held-out evaluation на seed `20260912` завершён за
+  `543.31 s`: 200 независимых base blocks, 1800 paired profile-runs,
+  7200 sequence-variant строк, 72 profile aggregates, 200 provenance и
+  1200/1200 уникальных mechanism seeds. Повторный CSV audit прошёл;
+  D1 CSV не перезаписывались.
+- 2026-09-12 — на clean nominal combined сохранил final valid `1.00/1.00`;
+  position RMSE изменился с baseline `0.75872/0.56115 m` до
+  `0.77048/0.56746 m`, unconditional coverage — с `0.92/0.96` до
+  `0.90/0.96`. Наблюдаемые false clean rejection fractions `0.00822/0.00711`
+  близки к локальному 1%-му порогу, но не являются его доказательством.
+- 2026-09-12 — strong outliers: baseline valid `0.46/0.56`, conditional
+  position RMSE `8.472/5.999 m`, unconditional coverage `0/0`; combined valid
+  `1.00/1.00`, RMSE `0.814/0.599 m`, coverage `0.93/0.97` и detected outlier
+  fraction `1.00/1.00`. Mixed: baseline valid `0.70/0.77`, RMSE
+  `7.333/5.358 m`, coverage `0.12/0.13`; combined valid `1.00/1.00`, RMSE
+  `0.950/0.698 m`, coverage `0.91/0.91`, detected fraction `1.00/1.00`.
+  Whole-sequence paired 95% CI для gain valid strong равны
+  `[0.44,0.64]/[0.35,0.54]`, mixed `[0.21,0.39]/[0.15,0.31]`.
+- 2026-09-12 — вскрыто важное ограничение. Mild 5° outliers
+  иногда попадают в минимальный шестисобытийный initialization prefix;
+  после этого NIS gate может отклонять чистые updates и удерживать
+  плохой prior. Поэтому combined mild position RMSE/P95 равны
+  `13.321/1.747 m` и `40.549/8.666 m`: RMSE вскрывает редкие
+  catastrophic tails, которые P95 скрывает. NIS-gate-only также не
+  улучшает initialization success и имеет ещё более тяжёлые единичные
+  errors. Этот failure mode сохранён без post-hoc изменения порогов.
+- 2026-09-12 — после завершённого held-out run независимый readback-аудит
+  подтвердил `7200` sequence rows, `72` profile summaries, `200` provenance
+  rows, `1200/1200` уникальных mechanism seeds, полное разбиение событий,
+  отсутствие estimator truth leakage и корректный порядок paired CI.
+  Полный regression gate: **402 passed in 105.63 s**. Новый
+  `retarded_ekf_robust_validation.ipynb` выполнен, прошёл nbformat/error/
+  execution-count/cell-ID audit и визуальную проверку трёх графиков. Общий
+  audit всех committed notebooks ещё выполняется, поэтому S7C-D2 остаётся
+  **In progress**.
+- 2026-09-12 — финальный gate S7C-D2 завершён. Все **17/17** notebooks
+  программно выполнены на in-memory копиях: для каждого подтверждены валидный
+  nbformat, `0` error-output, `0` невыполненных непустых code-ячеек и уникальные
+  cell IDs. Сохранённый robust notebook отдельно выполнен in-place и визуально
+  проверен. Самые длительные regression notebooks: GCC statistical
+  `2390.244 s`, C1 EKF `154.049 s`; robust report `4.522 s`. On-disk audit
+  также прошёл для 17 файлов. `pip check`: **No broken requirements found**;
+  `git diff --check`: PASS. Автоматически перезаписанные legacy CSV после
+  notebook gate восстановлены; D1 и C1 CSV имеют нулевой diff относительно
+  `2d499b61`. S7C-D2 отмечен **Done**, но S7C-D в целом остаётся
+  **In progress**: манёвры, `Q>0`, adaptive `Q/R`, signal-level frontend и
+  гарантия устойчивости к mild-outlier contamination не реализованы.
+
+### Журнал S7C-D1
+
+- 2026-09-10 — входная база подтверждена: clean commit
+  `dd927d0b65c6210e7cee1bbe2d2418b44a333cfd`, ветка
+  `feature/s7c-d1-stress-benchmark`. До просмотра финальных результатов
+  зафиксирован [S7C_D1_PROTOCOL.md](S7C_D1_PROTOCOL.md): две геометрии,
+  100 независимых whole sequences/geometry, девять парных stress profiles,
+  200 независимых base blocks и 1800 зависимых profile-runs. Structured RNG
+  раздельно задаёт truth, nominal bearing noise, loss, delay, outlier mask и
+  outlier direction; общий noise внутри блока является намеренным paired
+  design. Full Monte Carlo ещё не запущен, статус остаётся **In progress**.
+- 2026-09-10 — реализован validation-only генератор D1: 45 потенциальных
+  событий строятся из общих до выбора профиля truth/noise/uniform-компонент,
+  пропуски физически отсутствуют во входе оценивателя, а выброс применяется
+  одним spherical exp-map и не раскрывается через `BearingMeasurement`.
+  Первый deterministic gate после structural-audit regression: **11 passed in
+  2.53s**. Проверены loss 0/1,
+  включительные gap-границы, delay bounds, seed collision/reproducibility,
+  причинность, schedule invariance state/P, аналитический `F P F^T`,
+  one-station stationary/radial rank deficiency, происхождение no-update
+  baseline и conditional/unconditional denominators с linear P95. Full
+  Monte Carlo ещё не запускался.
+- 2026-09-10 — smoke gate на двух независимых whole sequences для каждой
+  геометрии прошёл: 4 base blocks, 36 парных profile-runs и четыре метода на
+  профиль. Structural audit подтвердил ожидаемые 1476 epoch-summary, 144
+  sequence-result, 126 profile-summary и 4 seed-provenance строки, 24/24
+  уникальных mechanism seeds, причинный предел timestamps и полное разбиение
+  доставленных EKF-событий. Во время smoke исправлена только отчётность:
+  исторические initialization IDs теперь берутся из неизменяемой первой
+  принятой batch-инициализации, поскольку поздняя invalid publication может
+  не хранить active-state initialization IDs. Математика EKF не менялась.
+  Full Monte Carlo ещё не запускался.
+- 2026-09-10 — полный замороженный D1 benchmark выполнен: **200 независимых
+  base blocks** (100/geometry), **1800 парных profile-runs**, 7200
+  sequence-method результатов, 1476 epoch aggregates, 126 profile aggregates
+  и 200 provenance-строк. Все 1200 mechanism seeds уникальны; нарушений
+  разбиения `potential=delivered+lost`, causal timestamp или provenance нет.
+  Causal-prefix batch и отдельно маркированный offline full-record batch на
+  14.5 s совпали точно по position/velocity error (`max difference = 0`).
+- 2026-09-10 — nominal final EKF при 14.5 s имеет valid `1.00/1.00`, position
+  RMSE/P95 `0.755710/1.277699 m` (informative) и `0.536089/0.849089 m`
+  (poorly-conditioned), velocity RMSE `0.072936/0.057025 m/s`; unconditional
+  valid-and-covered `0.96/0.94`. Dropout 50% сохраняет valid `1.00/1.00`, но
+  position RMSE возрастает до `1.175664/0.826065 m`. All-station gap даёт
+  среднюю position error в конце паузы `3.035035/3.488783 m`, а на первой
+  заранее заданной эпохе после следующего использованного observation —
+  `1.447162/1.504769 m`; среднее время до него `0.344596/0.350774 s`. Это
+  диагностическое сравнение, не заранее определённая гарантия recovery.
+- 2026-09-10 — контролируемое нарушение Gaussian-модели обнаруживает предел
+  baseline. Mild 5° outliers сохраняют valid `1.00`, но unconditional coverage
+  падает до `0.25/0.27`, а mean pre-update NIS возрастает до `11.507/10.891`.
+  Strong 20° outliers дают valid `0.57/0.53`, position RMSE среди valid
+  `7.791918/5.094362 m`, unconditional coverage `0.00/0.02` и mean NIS
+  `303.225/260.564`. Mixed даёт valid `0.75/0.77`, position RMSE
+  `5.873203/4.226248 m`, coverage `0.19/0.15`. Парные bootstrap 95% CI для
+  потери valid относительно nominal: strong `[-0.53,-0.34]`/`[-0.57,-0.37]`,
+  mixed `[-0.34,-0.17]`/`[-0.32,-0.15]`. Это зафиксированный failure mode,
+  а не основание для post-hoc настройки C1.
+- 2026-09-10 — covariance audit валидных final EKF результатов: symmetry
+  error `0`, minimum eigenvalue `4.78563e-5`, maximum finite condition number
+  `1.14826e4`; NIS определён для 52858 update attempts и не был скрыто
+  отфильтрован (`undefined=0`). Среднее полное processing time на одну
+  sequence/profile равнялось `0.731939 s`, P95 `7.163695 s`, maximum
+  `11.226545 s`; этот первый timing заменён финальным изолированным
+  прогоном ниже. Эти offline Python timings не доказывают real-time
+  readiness.
+- 2026-09-10 — отдельный data-quality gate обнаружил и исправил только
+  endpoint-roundoff Wilson interval: при `0/100` нижняя граница была
+  `3.46945e-18`, а при `100/100` одна upper boundary округлялась ниже 1.
+  Формула теперь явно возвращает 0/1 на соответствующих endpoints; численные
+  исходы Monte Carlo, оценки и covariance не менялись. Regression suite D1:
+  **12 passed in 2.49s**; во всех epoch/profile строках CI теперь содержат
+  оценку и лежат в вероятностном support.
+- 2026-09-10 — перед финальной приёмкой закрыт reporting gap: epoch CSV ранее
+  сохранял только `available_measurement_count`, тогда как протокол требует
+  раздельные event counters на общих эпохах. Добавлены min/mean/max для
+  potential, full-profile delivered/lost, causally available и method-specific
+  used/initialization/update/rejected/quarantined/unprocessed counts. Smoke
+  4/4 blocks прошёл усиленный partition audit.
+- 2026-09-11 — corrected full reporting rerun завершён с теми же truth/noise
+  seeds, профилями и неизменной математикой EKF: 200/200 base blocks,
+  1800 paired profile-runs. Итоговые CSV имеют размеры
+  epoch/sequence/profile/provenance `1476/7200/126/200`; все 1200
+  mechanism seeds уникальны. Нарушений event partitions, causal timestamps,
+  Wilson bounds или CI ordering нет. Максимум различия финальных
+  causal-prefix/offline batch error/NEES равен `0`. Новые epoch event
+  counters — только reporting-поля; все основные state/error/coverage/NIS
+  результаты совпали с первым полным прогоном. В изолированном
+  запуске mean/P95/max total processing runtime равны
+  `0.808915/8.598511/11.858379 s`, mean measurement-update runtime
+  `0.023722 s`.
+- 2026-09-11 — финальный gate S7C-D1 закрыт. Полный `pytest`: **390 passed
+  in 96.18s**; `pip check`: `No broken requirements found`; working-tree и
+  staged `git diff --check`: PASS. Все **16/16 committed notebooks** выполнены в текущей
+  логической цепочке; для D1 notebook после финального CSV rerun
+  повторён `nbconvert` и проверены 16/16 cell IDs, nbformat, нуль error
+  outputs и нуль невыполненных code cells. Полный GCC notebook с 210000
+  trials завершился за `2583.961 s`; его артефакты и все прежние tracked
+  CSV не изменены. S7C-D1 = **Done**; S7C-C и S7C-D остаются **In
+  progress**. Ни robust outlier handling, ни `Q>0`, ни manoeuvre model на этом
+  этапе не добавлены.
+
+### Журнал S7C-C1
+
+- 2026-09-09 — открыт corrective gate на ветке `fix/s7c-c1-review` от
+  опубликованного потомка `7004372`. На исходной реализации воспроизведены:
+  `KeyError('unknown_station')`; вечная блокировка инициализации первой
+  сингулярной `R` при `rejected_event_ids=()`; различие частого и одноразового
+  `advance_to` `0.000792674741 m` с `6+9` против `15+0`
+  initialization/update events. До финальных Monte Carlo/notebook gates C1
+  временно имеет статус **In review**.
+- 2026-09-09 — зафиксирован новый event contract. `advance_to(T)` внутренне
+  проигрывает все полные availability groups до `T`; внешний график публикаций
+  больше не выбирает initialization prefix. Raw journal отделён от C1-eligible
+  набора. `unknown_station_id` и `unsupported_singular_covariance` получают
+  persistent per-event diagnostics, не блокируют пригодные данные и не
+  инвалидируют корректное состояние. Conflict/recovery сохраняются в
+  lifecycle history. Первичный regression gate: **37 passed**; полная
+  статистическая приёмка ещё не выполнена.
+
+- 2026-09-08 — входной gate S7C-B закрыт на фактической базе. Патч добавил
+  `MODEL_REVIEW.md`, явный `BearingMeasurement.tangent_frame`, согласованные
+  static/dynamic residual/Jacobian ветви и устойчивую рационализированную
+  constant-velocity emission-time формулу. SHA-256 пользовательских
+  `array_comparison.ipynb` и `moving_source_3d.ipynb` до/после применения
+  совпал; эти локальные изменения не перезаписываются и не войдут в commit.
+- 2026-09-08 — deterministic/smoke gate первого EKF: **22 passed**. Зафиксирован
+  до полного запуска протокол из 24 конфигураций и 4 независимых whole
+  sequences/config: **96 независимых последовательностей**, 15 асинхронных
+  bearings/sequence. Временные публикации и NIS/NEES внутри sequence зависимы.
+  Математический контракт и заранее выбранные gates записаны в
+  `RETARDED_EKF_MODEL.md`. Полный study создал 4416 publication rows, 384
+  sequence-method rows и 96 aggregate rows; численный аудит и финальные gates
+  ещё выполняются.
+- 2026-09-09 — полный S7C-C1 benchmark завершён на заранее зафиксированном
+  `base_seed=20260908`: 24 конфигурации, 4 независимые whole sequences на
+  конфигурацию, **96 независимых последовательностей**, 15 асинхронных
+  bearings/sequence. Все `96/96` EKF-последовательностей инициализированы и
+  дали valid final state; Wilson 95% CI доли успешной инициализации
+  `[0.961524, 1]`. Временные publication/NIS/NEES внутри sequence по-прежнему
+  считаются зависимыми, а не отдельными trials.
+- 2026-09-09 — итоговые independent-sequence метрики: EKF final position
+  RMSE/P95 `0.424889226/0.856009559 m`, velocity RMSE/P95
+  `0.186864851/0.359536159 m/s`; causal-prefix batch
+  `0.424831873/0.853387347 m` и `0.186713039/0.360116149 m/s`; общий initial
+  batch без дальнейших updates `2.741750935/6.008923959 m` и
+  `0.803557065/1.827238321 m/s`. Здесь P95 явно вычислен NumPy с
+  `method="linear"` по одной final error на каждую из 96 независимых whole
+  sequences. Ранее записанные `0.898071921/0.379273586`,
+  `0.900702064/0.382271152` и `6.513211445/1.950452186` использовали
+  дискретный метод `higher`; изменение чисел P95 не является изменением
+  состояния или ошибок оценивателя. Offline full-record batch приведён только как
+  непричинный reference и совпал с финальным causal-prefix batch. Обязательное
+  превосходство EKF над batch не заявляется: итоговые ошибки практически
+  равны, а отдельные конфигурации меняются в обе стороны.
+- 2026-09-09 — final-state 95% coverage EKF равно `93/96 = 0.96875`, Wilson
+  95% CI `[0.912113, 0.989316]`; diagnostic mean measurement NIS
+  `2.030445767` при двух измерительных степенях свободы, средняя временная
+  NIS-coverage `0.946759259`. Последняя величина не получает binomial CI,
+  поскольку updates внутри sequence зависимы. Mean time-to-first-estimate
+  `1.121424673 s`, mean measurement-update runtime `0.000522868 s`, maximum
+  covariance symmetry error `0`, minimum covariance eigenvalue
+  `2.13666178e-5`.
+- 2026-09-09 — во время финального notebook gate найден воспроизводимый
+  входной S7C-B false reject: один noiseless-compatible full-rank batch
+  завершался по `xtol` с scaled KKT `1.410077e-6`. После исходного TRF solve
+  добавлен детерминированный LM polish в той же residual/Jacobian
+  параметризации; результат принимается только при неувеличении cost, без
+  ослабления `1e-6` gate. Регрессия теперь даёт valid solution, scaled KKT
+  `4.89331977e-7`; итоговый S7C-B CSV имеет `557/576` valid rows, причины 19
+  ожидаемых отказов: `18 insufficient_measurements` и
+  `1 insufficient_local_observability`. Offline coverage `96/96`, causal
+  prefixes `77/96, 96/96, 96/96, 96/96, 96/96`; maximum accepted scaled KKT
+  `5.00014318e-7`, maximum exact-constraint residual `0`.
+- 2026-09-09 — сравнение accepted full-rank S7C-B rows с `c281523d`:
+  successful counts/fractions не изменились; максимум изменения objective
+  `1.15108e-12`, position error `2.94025e-7 m`, velocity error
+  `3.52748e-7 m/s`, summary RMSE `5.04796e-8 m` и `6.41989e-8 m/s`.
+  Изменение condition number не превышает `4.47e-9` относительно. Это
+  численно эквивалентные полноранговые результаты, а не новый статистический
+  эффект.
+- 2026-09-09 — corrective review завершён. Неизвестные станции и singular
+  tangent covariance теперь отклоняются индивидуально как
+  `unknown_station_id` и `unsupported_singular_covariance`; raw journal и
+  положительно-определённый C1-eligible набор разделены. Полные availability
+  groups внутренне проигрываются независимо от частоты внешних публикаций,
+  а lifecycle history сохраняет invalidation/recovery даже внутри одного
+  `advance_to`. Targeted gate: **37 passed**; расширенный retarded gate:
+  **74 passed, 304 deselected**.
+- 2026-09-09 — финальная приёмка: полный `pytest` **378 passed in 98.76s**;
+  `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  Все **15/15 committed notebooks** выполнены, включая полный GCC study;
+  после последнего solver-polish отдельно повторены затронутые
+  `retarded_batch_validation.ipynb` и `retarded_ekf_validation.ipynb`.
+  Аудит сохранённых объектов: **96 code cells**, invalid nbformat `0`, error
+  outputs `0`, unexecuted nonempty cells `0`, missing cell IDs `0`. Два
+  пользовательских notebook `array_comparison.ipynb` и
+  `moving_source_3d.ipynb` выполнялись в памяти без перезаписи; их уже
+  существующие пользовательские commits сохранены и не переписаны.
+  Console warnings ограничены прежними Windows ZMQ/IPython permission/TCP
+  transport сообщениями; notebook error outputs отсутствуют.
+
+### Журнал S7C-B
+
+- 2026-09-06 — открыт corrective audit package на исходном commit
+  `697350ddc32010964eb8ce2d174680d32d4fa6f3`; S7C-B остаётся **In review**,
+  S7C-C не начат. Regression-тестами воспроизведены: локальный TDOA-WLS
+  cost `480.3817488` против `109.2645712`, игнорирование zero-variance TDOA
+  на `100 мкс`, NIS `0` вне поддержки rank-0/rank-1 Gaussian, отказ
+  физически наблюдаемой zenith-сцены, выход GCC за дробную границу `2.4`
+  отсчёта и FFT/direct расхождение Nyquist при oversampling.
+- 2026-09-06 — завершена первая математическая часть аудита. Far-field WLS
+  переведён на единичный 3D-вектор и алгебраическое перечисление stationary,
+  hard-case и elevation-boundary кандидатов квадратичной задачи с точными
+  линейными constraints covariance nullspace. Результат помечен
+  `algebraic_quadratic_candidate_enumeration`: это численный контракт, не
+  символическое доказательство глобального оптимума. Exact spherical WLS
+  использует тот же PSD support contract, но сохраняет явно приблизительный
+  `deterministic_multistart_approximation`. NIS возвращает `inf` вне поддержки вырожденной
+  Gaussian и использует только положительный спектр внутри поддержки.
+  Bearing fusion/retarded model используют pole-safe residual
+  `-B_y Log_y(u)` в фиксированном tangent frame измерения; антипод остаётся
+  явной неоднозначностью. Профильный gate WLS/NIS/zenith/Jacobian:
+  **28 passed in 4.45s**. GCC regressions пока намеренно красные до следующей
+  части исправления; полный pytest/notebook gate ещё не выполнялся.
+
+- 2026-09-06 — завершена вторая техническая часть corrective audit. GCC-PHAT
+  формирует регулярную сетку только внутри `[-tau_max,+tau_max]` и отдельно
+  вычисляет допустимые дробные endpoints; при oversampled `irfft` исходный
+  Nyquist-bin делится на два, а корреляция масштабируется к нормировке
+  исходного DFT. Moving-source metadata теперь явно разделяет
+  `reception_synchronous_delay_difference_seconds = d_i(t_r)-d_j(t_r)` и
+  `same_emission_tdoa_seconds=(R_i(t_e)-R_j(t_e))/c` на сохранённой сетке
+  `same_emission_times_s`; синтез каналов не изменён. Добавлены event-arrival
+  alignment и условие известной полосы
+  `f_max,emit max(dt_e/dt_r) < fs/2`; при неизвестной полосе автоматическая
+  гарантия не заявляется. Emission solver ограничивает Newton/Brent support
+  `PiecewiseLinearTrajectory` без молчаливой экстраполяции.
+- 2026-09-06 — S7C-B RNG переведён с арифметического сложения seed на
+  `SeedSequence([base_seed, configuration_index, sequence_index, stream_id])`
+  с отдельными noise/delivery streams и run-aware sequence/event provenance.
+  Large-count regression проверяет два соседних base seed, два configuration
+  index и `1001` sequence index без пересечений identifiers/generated seeds.
+  Совместный профильный gate затронутых WLS/NIS/bearing/GCC/moving/RNG
+  модулей: **146 passed in 44.37s**; дополнительные spherical-nullspace,
+  rotated-zenith и rank-aware chi-square regressions: **21 passed in 7.69s**.
+  Полный pytest, regeneration и notebook audit ещё не выполнены.
+
+- 2026-09-06 — завершён полный пересчёт затронутых статистических артефактов.
+  Получены: bearing covariance/quality `216/1368`, GCC pair/DOA/covariance
+  `840/574/70`, legacy GCC Monte Carlo `36`, SRP DOA/runtime `792/594`, moving
+  source `6480`, sequential frame/summary `903/21`, S7C-B sequence/summary
+  `576/144` строк. Полный SRP grid выполнен для прежних 198 конфигураций;
+  сумма unique exact-reference contributions равна `594` sampled trials, а
+  maximum sampled exact/fast disagreement `0.0313428471°` относится только к
+  первым трём evaluation trials/config. После итоговой версии algebraic WLS
+  полный pytest: **337 passed in 53.66s**. Notebook/pip/diff gates ещё не
+  завершены, поэтому S7C-B остаётся **In review**, S7C-C не начат.
+
+- 2026-09-06 — воспроизводящие численные примеры после исправления:
+  far-field WLS возвращает одинаковую стоимость `109.26457116698435` для
+  default и независимой `initial_angles=(0,1)` вместо прежнего локального
+  `480.3817488`; zero-variance TDOA constraint выполнен с residual
+  `1.0842e-19 s` вместо нарушения `1e-4 s`; несовместимые rank-0/rank-1 NIS
+  дают `inf`. Zenith-сцена восстанавливает позицию с ошибкой `1.9281e-14 m`,
+  analytic/central-FD Jacobian расходятся максимум на `1.1102e-16`.
+  Fractional GCC bounds дают ровно `-2.4/+2.4` samples; FFT/direct correlation
+  maximum error по interpolation `1/2/5` и included/excluded Nyquist равен
+  `1.6653e-16`. Для `v=+30/-30 m/s` equal-reception diagnostics равны
+  `536.193029/638.977636 us`, а same-emission event TDOA в обоих случаях
+  `583.090379 us`. Ограниченный piecewise пример имеет корень
+  `t_e=0.004999957500702035 s` внутри `[0,1]` с нулевым residual.
+  RNG regression проверил `12012/12012` уникальных provenance IDs и generated
+  seeds на двух соседних base seeds, двух configurations и 1001 sequences.
+
+- 2026-09-06 — численные выводы пересчитанных studies сохранены честно, без
+  требования побитового совпадения после исправления алгоритма/RNG. Published
+  bearing covariance остаются full tangent rank `2` во всех `216/216` строках,
+  support violations `0`; low-noise WLS/CRLB gates остались PASS `6/6`.
+  Static multi-station metrics не изменились, кроме runtime. Средний paired SRP
+  RMSE сохранился практически (`2.2638334° -> 2.2638205°`); GCC variants в том
+  же CSV изменились из-за admissible-lag/global-WLS fixes. Moving mean RMSE:
+  reference-3 `3.6054168° -> 3.6052929°`, all-6 `2.7701216° -> 2.7682161°`,
+  SRP `0.60641773° -> 0.60641773°`; отдельные шумовые tail rows могут заметно
+  меняться, потому что теперь выбирается минимальная WLS cost, а не ближайший
+  локальный basin. Sequential mean coverage неизменна `0.9833887043`.
+  Новый S7C-B RNG дал offline coverage `96/96`, causal prefixes
+  `77/96,96/96,96/96,96/96,96/96` вместо прежних `70/96,...`; invalid reasons
+  `18 insufficient_measurements + 1 insufficient_local_observability` вместо
+  `24+2`. Offline position/speed RMSE равны `0.326550535 m` и
+  `0.108023901 m/s`; все accepted rows имеют rank `6`, maximum scaled KKT
+  `6.18716e-7 < 1e-6`. Это новый случайный набор, не улучшение метода.
+
+- 2026-09-06 — notebook gate обнаружил и исправил stale отчётный assertion в
+  `retarded_batch_validation.ipynb`, который жёстко ожидал старые `70/96` после
+  намеренной смены RNG. Новый notebook проверяет `77/96`, точные failure counts,
+  base seed и `SeedSequence` scheme. Все **14/14 committed notebooks** выполнены
+  fresh kernels; в исполненных объектах **90 code cells**, invalid nbformat
+  `0`, error-output `0`, unexecuted nonempty `0`, missing IDs `0`. Два
+  существовавших до аудита пользовательских diff — `array_comparison.ipynb` и
+  `moving_source_3d.ipynb` — выполнены в памяти и намеренно не перезаписаны.
+  Единственные console warnings — прежние Windows ZMQ/IPython permissions/TCP
+  transport сообщения, не notebook error outputs. `pip check`: `No broken
+  requirements found`; `git diff --check`: PASS. Финальный post-notebook pytest:
+  **337 passed in 53.42s**. S7C-B остаётся **In review** до независимой
+  приёмки; S7C-C не начат. Последний gate на точном финальном working tree:
+  **337 passed in 50.85s**, `pip check` PASS, `git diff --check` PASS; окружение
+  `Python 3.11.7`, `numpy 2.4.6`, `scipy 1.17.1`.
+
+- 2026-09-06 — изменённые CSV и причины: `bearing_covariance_summary.csv` и
+  `bearing_quality_summary.csv` пересчитаны для pole-safe residual/rank-aware
+  NIS; `gcc_pair_error_summary.csv`, `gcc_doa_summary.csv`,
+  `gcc_covariance_summary.csv`, `gcc_phat_monte_carlo.csv` — для точной
+  fractional lag boundary, Nyquist normalization и algebraic WLS;
+  `monte_carlo_crlb_summary.csv` — для нового far-field WLS;
+  `moving_source_summary.csv` — для WLS/GCC и явной TDOA semantics;
+  `sequential_doa_frame_results.csv`, `sequential_doa_summary.csv` и
+  `srp_doa_summary.csv` — для тех же downstream estimators;
+  `retarded_batch_sequence_results.csv`, `retarded_batch_summary.csv` — для
+  collision-free structured RNG и provenance. `srp_runtime_summary.csv`,
+  `fractional_delay_benchmark.csv`, `multistation_static_summary.csv` меняют
+  главным образом измеренные runtime-поля после свежего полного запуска.
+  Детерминированные `far_field_boundary.csv`,
+  `fractional_delay_accuracy.csv`, `gcc_phat_validation.csv` численно не
+  изменились. Из пользовательских локальных изменений в итоговый коммит не
+  включаются `notebooks/array_comparison.ipynb` и
+  `notebooks/moving_source_3d.ipynb`.
+
+- 2026-09-03 — открыт corrective gate по независимому аудиту commit
+  `e5a90fd66afe7fd19a02cc55fdc504e6056503e9`; статус остаётся **In
+  review**, S7C-C не начат. Воспроизведено: noiseless wide-сцена имеет valid/
+  rank `6/6/6` при requested reference epoch `0/2/30 s`, но при `100 s`
+  ошибочно получает rank `3` и `insufficient_local_observability`, несмотря
+  на trajectory error `4.0194e-14 m`. Причина — смешение безразмерного
+  optimizer velocity parameter с физическим `velocity_scale_mps` в rank/KKT/
+  covariance diagnostics. Также воспроизведён `ValueError: tuple.index(x): x
+  not in tuple` для `base_seed=20260904`: lookup ошибочно включал seed в
+  identity физической конфигурации. До исправления, regeneration и полного
+  regression/notebook gate этап не принимается.
+- 2026-09-03 — diagnostics разделены по координатам: dimensionless optimizer
+  velocity parameter используется только для поиска, а rank, condition,
+  exact-constraint nullspace, projected-KKT и Gaussian-linearization
+  covariance вычисляются по физическим Jacobian `[q0,v]` и SI scales
+  `[100 m,10 m/s]`. Rank threshold не ослаблялся, exact zero-variance
+  constraints сохранены. Профильный gate event/batch/study: **24 passed in
+  9.86s**. Для requested epochs `0/2/30/100 s` результаты теперь все valid и
+  rank 6; ошибки общей траектории `1.231e-14/0/3.035e-14/4.019e-14 m`, ошибки
+  скорости `4.172e-15/3.053e-15/5.604e-15/1.847e-14 m/s`. Physical scaled
+  condition соответственно `230.216/208.253/15724.142/1935475.586`; их
+  равенство намеренно не требуется. Максимальный absolute residual проверки
+  `P1=F P0 F^T` равен `9.2641e-11` при 100 s и проходит новый допуск
+  `atol=2e-10, rtol=5e-10`; заявленные position/speed допуски `2e-8` теперь
+  явно используют `rtol=0`.
+- 2026-09-03 — physical configuration identity отделена от `base_seed`.
+  Default mapping сохранён (`sequence/noise/delivery seeds` первой сцены:
+  `20260903/3182215699/603279027`); `base_seed=20260904` работает и меняет
+  realization без изменения geometry/motion/noise/schedule. Regression
+  проверяет воспроизводимость одинакового seed и отсутствие повторов среди
+  всех sequence/noise/delivery generator streams фиксированной 96-sequence
+  матрицы.
+- 2026-09-03 — S7C-B study повторён: **576 sequence rows**, **144 summaries**.
+  Относительно `e5a90fd` состояния, objective, position/speed errors, coverage,
+  failures и rank побитово неизменны: valid `550/576`, failures `24`
+  `insufficient_measurements` и `2` `insufficient_local_observability`, ranks
+  `0:24`, `5:2`, `6:550`. Изменились именно исправленные diagnostics:
+  finite condition min/median/max с `27687.334/221128.840/866730734.710` на
+  `96.912/987.525/217923903.822`; max KKT изменился только на roundoff с
+  `9.34187823859016e-7` до `9.34187823812051e-7`. Runtime также заново измерен
+  (maximum row delta `0.0388735 s`). Полный pytest/notebook gate ещё впереди;
+  статус остаётся **In review**.
+- 2026-09-03 — corrective gate завершён локально, S7C-B сохранён в статусе
+  **In review**, S7C-C не начат. Финальный профильный gate с S7C-A
+  observability: **32 passed in 10.01s**; полный post-notebook pytest: **311
+  passed in 51.81s**; `pip check`: `No broken requirements found`; `git diff
+  --check`: PASS. Все **14/14 committed notebooks** выполнены свежими kernels:
+  `array_comparison` 10.076 s, `bearing_uncertainty_validation` 56.919 s,
+  `far_field_fractional_delay_validation` 87.877 s,
+  `gcc_phat_monte_carlo` 23.377 s, `gcc_phat_validation` 7.295 s,
+  `gcc_statistical_validation` 1469.628 s,
+  `monte_carlo_crlb_validation` 104.008 s, `moving_source_3d` 6.093 s,
+  `moving_source_validation` 6.224 s, `multistation_static_validation`
+  83.822 s, `retarded_batch_validation` 32.722 s,
+  `retarded_bearing_model_validation` 9.673 s,
+  `sequential_doa_validation` 9.246 s и `srp_phat_validation` 7.225 s.
+  Строгий аудит **90 code cells**: invalid nbformat `0`, error-output `0`,
+  unexecuted nonempty `0`, missing IDs `0`.
+- 2026-09-03 — финальное сравнение с `e5a90fd`: S7C-B coverage/failures/rank,
+  estimates, objective и error metrics неизменны. Исправленные physical
+  diagnostics дают condition min/median/max
+  `96.9117/987.5251/217923903.8222`; max scaled KKT
+  `9.34187823812051e-7`. Latest runtime median/max `0.045998/0.838365 s`
+  (max — единичный timing outlier, не numerical failure). Свежий общий
+  notebook run изменил в legacy CSV только runtime/derived latency fields:
+  maximum timing delta `0.00390290 s` в fractional-delay benchmark,
+  `0.000737005 s` в static multi-station summary и `0.00338950 s` в
+  sequential frame results; error/coverage/seed fields не изменились.
+- 2026-09-03 — S7C-B открыт со статусом **In progress** на чистом commit
+  `31c68e9f398211d6935081d1e03fa3b18d77f615`. Зафиксированы границы:
+  синхронизированные reception timestamps, известные station poses и
+  постоянный `c`, строго constant/subsonic velocity, direct bearing-level
+  measurements и синтетический angular noise. Event replay обязан разделять
+  physical reception time и causal availability, журналировать invalid/drop/
+  duplicate/conflict и не использовать truth/future data внутри estimator.
+- 2026-09-03 — реализованы truth-free causal event stream и общий offline/
+  causal-prefix batch estimator. Exact emission time пересчитывается для
+  каждого candidate state; objective использует covariance eigenspace
+  whitening, а zero-variance directions остаются equality constraints без
+  epsilon. Ограничение `||v||<c` обеспечивается гладким отображением
+  unconstrained velocity parameters в открытый дозвуковой шар. Начальный
+  deterministic gate: **14 passed in 1.53s**; recovery tolerances заранее
+  зафиксированы как `2e-8 m`, `2e-8 m/s`, maximum angular residual `2e-10
+  rad` для хорошо обусловленных noiseless сцен.
+- 2026-09-03 — завершены deterministic, exact-constraint и study gates:
+  **28 passed in 10.09s** для event/batch/study/dynamic-observability набора и
+  **307 passed in 52.59s** для полной регрессии. Тесты подтверждают отсутствие
+  future access, канонический equal-availability replay, exact duplicate без
+  повторного веса, quarantine conflicting ID, offline/final-causal equality,
+  статический предел, rigid/time/rebase/station-permutation invariance,
+  central-FD whitened Jacobian, exact `R=0`/rank-1 constraints и явные invalid
+  результаты для несовместимости/недостаточной наблюдаемости/antipodal rays.
+- 2026-09-03 — полный S7C-B direct-bearing study за seed `20260903` создал
+  **96 независимых целых sequences**, **576 sequence/prefix rows** и **144
+  aggregates**: 2 station geometries × 3 motions × 2 tangent-noise levels
+  (`0.05°`, `0.2°`) × 2 delivery schedules × 4 independent sequence seeds.
+  Пять causal prefixes внутри одной sequence явно помечены зависимыми.
+  Offline coverage `96/96`; causal coverage: `70/96` на первом publication
+  time и `96/96` на каждом из следующих четырёх. Все 26 invalid — ожидаемые
+  ранние случаи: 24 `insufficient_measurements`, 2
+  `insufficient_local_observability`. Full offline и последний causal prefix
+  совпали точно: maximum state/objective difference `0`.
+- 2026-09-03 — offline numerical benchmark: общий position RMSE/P95
+  `0.312518/0.708637 m`, speed RMSE/P95 `0.108351/0.213955 m/s`. По
+  geometry/noise position RMSE: wide `0.074203 m` (`0.05°`) и `0.303674 m`
+  (`0.2°`), compact `0.103977 m` и `0.531165 m`; speed RMSE соответственно
+  `0.024752`, `0.094480`, `0.039325`, `0.189405 m/s`. Эти synthetic
+  direct-bearing результаты не включают GCC/SRP signal-level errors и не
+  являются tracking benchmark. Максимальный accepted scaled projected-KKT
+  residual `9.341878238590161e-7` при gate `1e-6`; Monte Carlo использует
+  full-rank covariance, поэтому final exact-constraint residual равен `0`.
+- 2026-09-03 — добавлены reader-facing notebook, два CSV и README/API
+  документация. Новый notebook выполнен top-to-bottom: 6/6 code cells,
+  error-output `0`, unexecuted `0`; latest measured median/max batch runtime
+  `0.0493948/0.864921 s`. Общая приёмка всех committed notebooks, повторный
+  pytest, `pip check` и diff audit ещё выполняются; поэтому S7C-B остаётся
+  **In progress**.
+- 2026-09-03 — финальная локальная приёмка S7C-B завершена, статус переведён
+  в **In review** до отдельного решения о приёмке; S7C-C не начат. После
+  последней CSV-схемы полный pytest: **307 passed in 52.71s**; `pip check`:
+  `No broken requirements found`; `git diff --check`: PASS. Аудит всех
+  **14/14 notebooks**, **90 code cells**: invalid nbformat `0`, error-output
+  `0`, unexecuted nonempty cells `0`, missing IDs `0`. Измеренные времена
+  свежего общего запуска: `array_comparison` 9.685 s,
+  `bearing_uncertainty_validation` 55.927 s,
+  `far_field_fractional_delay_validation` 86.479 s,
+  `gcc_phat_monte_carlo` 25.395 s, `gcc_phat_validation` 7.052 s,
+  `gcc_statistical_validation` 1708.667 s,
+  `monte_carlo_crlb_validation` 106.749 s, `moving_source_3d` 6.284 s,
+  `moving_source_validation` 6.358 s, `multistation_static_validation`
+  83.473 s, `retarded_batch_validation` 33.841 s,
+  `retarded_bearing_model_validation` 9.838 s,
+  `sequential_doa_validation` 9.449 s и `srp_phat_validation` 7.374 s.
+  После добавления persistent full event journal релевантный S7C-B notebook
+  выполнен ещё раз; его 6/6 code cells также прошли строгий аудит.
+- 2026-09-03 — sequence CSV теперь сохраняет полный event journal в
+  `event_journal_json`, а также accepted/conflicted event IDs. Smoke regression
+  проверяет причины `accepted`, `duplicate_exact`, `excluded_dropped`; unit
+  event tests отдельно покрывают `excluded_invalid`, same-availability ordering
+  и conflicting-ID quarantine. Последний CSV имеет 576 строк и все 96 unique
+  sequence seeds; journal actions полного study — `accepted`,
+  `duplicate_exact`, `excluded_dropped`. Latest median/max batch runtime после
+  перегенерации `0.0497909/0.116140 s`.
+- 2026-09-03 — обязательное свежее выполнение прежних notebooks изменило
+  только runtime-derived поля прежних CSV. `fractional_delay_benchmark.csv`:
+  четыре timing/speedup columns (максимальная timing delta `1.9990e-4 s`);
+  `multistation_static_summary.csv`: только `mean_runtime_per_estimate_s`
+  (`5.63236e-4 s`); sequential frame CSV: runtime и две производные latency
+  columns (maximum delta `5.17350e-3 s`); sequential summary: только четыре
+  mean runtime/latency columns (maximum delta `3.35270e-4 s`). Физические,
+  error, coverage и seed поля этих старых результатов не изменились.
+
+### Формулы, допущения и команды S7C-B
+
+- Оценивается одно состояние `x=[q0,v]` с
+  `q(te)=q0+v(te-t0)`, `||v||<c`; для каждого candidate заново решается
+  `tr=te+||q(te)-p_k||/c`.
+- `reception_center_timestamp_s` входит в физическую модель;
+  `available_timestamp_s` только задаёт causal prefix. Offline и causal
+  используют один objective/optimizer и отличаются только доступным набором.
+- Для `R=U+ Lambda+ U+^T + U0 0 U0^T` objective использует
+  `Lambda+^(-1/2) U+^T r`, а `U0^T r=0` — exact constraints без epsilon.
+  Local 6x6 covariance — Gaussian linearization benchmark; при неполной
+  наблюдаемости finite covariance не возвращается.
+- Синтетический шум независим на уровне direct bearing events. Он не является
+  моделью ошибок перекрывающихся GCC/SRP audio frames. Independent Monte Carlo
+  unit — целая sequence; пять causal prefixes одной sequence зависимы. При
+  четырёх sequences/config устойчивые P99/P99.9 и operational thresholds не
+  заявляются.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -c "from validation.retarded_batch_study import run_retarded_batch_study; run_retarded_batch_study()"
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_batch_validation.ipynb
+git diff --check
+```
+
+### Журнал S7C-A
+
+- 2026-09-01 — corrective gate завершён: S7C-A переведён в **Done**, S7C-B —
+  **Next**. Полный pytest: `286 passed in 43.51s`; `pip check`: `No broken
+  requirements found`; `git diff --check`: PASS. Все 13 notebooks заново
+  выполнены отдельными свежими kernels: `array_comparison` 9.867 s,
+  `bearing_uncertainty_validation` 55.561 s,
+  `far_field_fractional_delay_validation` 85.827 s, `gcc_phat_monte_carlo`
+  25.721 s, `gcc_phat_validation` 7.166 s, `gcc_statistical_validation`
+  1609.543 s, `monte_carlo_crlb_validation` 102.484 s, `moving_source_3d`
+  6.341 s, `moving_source_validation` 6.410 s,
+  `multistation_static_validation` 85.160 s,
+  `retarded_bearing_model_validation` 9.872 s,
+  `sequential_doa_validation` 9.429 s и `srp_phat_validation` 7.355 s.
+  Строгий аудит 13 notebooks/84 code cells: invalid nbformat `0`, error-output
+  `0`, unexecuted nonempty code cells `0`, missing cell IDs `0`.
+- 2026-09-01 — полный свежий notebook run перезаписал измеряемые runtime-поля,
+  а не физические эталоны: `fractional_delay_benchmark.csv` изменил только
+  четыре timing/speedup columns; `multistation_static_summary.csv` — только
+  `mean_runtime_per_estimate_s` (max absolute change `6.132234373126266e-4
+  s`); оба sequential CSV — только runtime/availability-derived latency
+  columns (max runtime delta `5.1549999807321e-3 s`). В
+  `gcc_doa_summary.csv` deterministic Monte Carlo-метрики, seeds и основная
+  схема неизменны; только два noiseless diagnostic bias fields изменились на
+  не более `5.2154667089186735e-9 deg` и `8.537721090694117e-7 deg` из-за
+  floating-point решения. Эти изменения являются результатом обязательного
+  свежего исполнения, а не подгонкой эталонов под tests.
+- 2026-09-01 — one-station observability теперь разделена математически.
+  Радиальный пример имеет rank `4`, `s_min=1.5312424663145318e-18`.
+  Нерадиальный finite-`c=343 m/s` пример имеет формальный rank `6`,
+  `s_min=1.6270620060085154e-8`, SI-scaled condition
+  `2670001.46786563`. Независимый instantaneous Jacobian имеет rank `5` и
+  scale-null residual `1.0408340855860843e-16`. При `c=343, 3430, 34300 m/s`
+  слабые singular values равны `1.6270620059271063e-8`,
+  `1.611393764476606e-9`, `1.6098350716521786e-10`, а spectral distances до
+  instantaneous limit — `5.131610546002005e-3`, `5.13609396293407e-4`,
+  `5.136613363563169e-5`. Формальный rank 6 не интерпретируется как
+  практически устойчивое single-station ranging.
+- 2026-09-01 — открыт corrective gate после независимого аудита вывода о
+  single-station observability. Требуется разделить мгновенный bearing,
+  радиальное движение, формальный full-rank нерaдиальный retarded-time случай
+  и практическую устойчивость. До полного pytest и повторного исполнения всех
+  13 notebooks S7C-A имеет статус **In review**; S7C-B не начинается.
+- 2026-09-01 — реализованы независимый instantaneous Jacobian без передачи
+  `np.inf` в production solver и три one-station сценария. Профильный gate:
+  `19 passed in 4.20s`. Для нерaдиального движения finite-difference mismatch
+  `5.663698676716677e-13`, то есть `3.480935978961724e-5` от smallest
+  singular value `1.6270620060085154e-8`; SVD tolerance остаётся стандартным
+  `max(shape)*eps*s_max` и не подбирается под ожидаемый rank.
+- 2026-09-01 — усиленный one-station temporal gate выявил существующую
+  cross-platform нестабильность двух near-zero angular checks на Ubuntu:
+  `arccos(dot)` квантовал почти совпадающие directions в
+  `1.2074182697257333e-6 deg`. Порог `1e-6 deg` не ослаблен; общая скалярная
+  метрика заменена математически эквивалентной устойчивой формулой
+  `atan2(||u×v||,u^T v)`, сохраняющей first-order resolution около нуля.
+  Retarded-time формулы и сохранённые S7B CSV не менялись.
+- 2026-09-01 — commit `6696014d1ee4dba63cb56babbeb97fbfb38499af`
+  прошёл обе CI jobs: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566879)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33476775610/job/99757566671).
+  S7C-A переведён в **Done**, S7C-B — в **Next**.
+- 2026-09-01 — локальная приёмка завершена. Pinned environment:
+  `numpy=2.4.6`, `scipy=1.17.1`; полный pytest: `283 passed in 44.59s`;
+  `pip check` и `git diff --check` PASS. Проверены 13 notebooks и 84 code
+  cells: `nbformat` valid, error outputs `0`, unexecuted cells `0`.
+  `notebooks/retarded_bearing_model_validation.ipynb` программно выполнен.
+- 2026-09-01 — randomized FD audit использовал seed `20260901`, 1000 valid
+  scenes: 950 с `|v|=0…60 m/s`, 50 stress scenes с `|v|=0.75c…0.9c`, range
+  `10…500 m`. Максимумы: retarded-equation residual `1.1102230246251565e-15
+  s`, analytic/numeric emission-time difference `4.884981308350689e-15 s`,
+  `dt_e/dx` absolute mismatch `6.915884531721872e-12`, local-direction
+  Jacobian mismatch `4.486511717693986e-10`, tangent-residual Jacobian
+  mismatch `2.725225094202255e-9`, relative mismatch по компонентам с
+  `|J_numeric|>1e-7` — `3.861468973416781e-6`. Допуски `2e-8` absolute и
+  `2e-5` relative не ослаблялись после запуска.
+- 2026-09-01 — observability examples: четыре temporal bearings одной станции
+  для радиального constant-velocity движения имеют rank `4` и две численно
+  нулевые singular directions (smallest singular value
+  `1.5312424663145318e-18`); три станции и три reception epochs имеют rank `6`, condition
+  `9.577896723107909`, smallest singular value `0.010160665945304471`.
+  Почти коллинеарные станции и окно `0.002 s` сохраняют numerical rank `6`,
+  но ухудшают condition до `4316.373666947092`, smallest singular value до
+  `8.72927229583684e-6`. Это local parameterization diagnostic заданного
+  candidate state, не estimator, covariance или CRLB.
+- 2026-09-01 — S7B CSV подтверждены побитово неизменными: geometry SHA-256
+  `190F5470FAC0F4C46A478C5EB2EBEB8790C201A256E1CB620CA0D423BB24FF05`,
+  static SHA-256
+  `7B9C3E7722689488F0F37C5C65DE9EAB760653F00BC1C2ED46596CB76A2013B3`.
+- 2026-09-01 — статическая и динамическая модели переведены на одну общую
+  производную spherical tangent residual по predicted direction; targeted
+  regression S7B остался зелёным: `28 passed`.
+- 2026-09-01 — уравнение использует только синхронизированный
+  `reception_center_timestamp_s`:
+  `t_r=t_e+||q(t_e)-p_k||/c`. `available_timestamp_s` участвует только в
+  причинном отборе событий, а `StationPose.clock_*` не применяется повторно.
+- 2026-09-01 — добавлены проверки analytic/numeric emission time, статического
+  предела, причинности, rigid/time/rebase invariance, pole/antipode и
+  finite-difference Jacobian. Targeted результат: `22 passed`.
+
+### Формулы и допущения S7C-A
+
+- `q(t_e)=q0+v(t_e-t0)`,
+  `t_r=t_e+||q(t_e)-p_k||/c`, `|v|<c`, `t_e<t_r`, range `>0`.
+- Для `Delta=t_e-t0`, `u=(q(t_e)-p_k)/range` и
+  `gamma=1+u^T v/c`:
+  `dt_e/dx=-[u^T,Delta u^T]/(c gamma)`,
+  `dq_e/dx=[I,Delta I]+v(dt_e/dx)`,
+  `du_world/dx=(I-uu^T)dq_e/dx/range`,
+  `du_local/dx=Q_k^T du_world/dx`.
+- Residual:
+  `tangent_residual(u_pred_local,u_measured_local)-mu_cal` в радианах дуги.
+  Производная spherical residual общая со статическим S7B. Pole и antipode
+  отклоняются явно; raw azimuth/elevation subtraction не применяется.
+- Timestamps считаются уже синхронизированными. `reception_center_timestamp_s`
+  входит в propagation equation; `available_timestamp_s` только ограничивает
+  причинную доступность; `StationPose.clock_offset_s/clock_drift_s_per_s` не
+  применяются второй раз.
+- Среда однородна, неподвижна, `c` постоянно. Не моделируются process noise,
+  ускорение внутри constant-velocity state, clock uncertainty, ветер,
+  отражения, signal-level fusion и tracking.
+
+### Команды проверки S7C-A
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe -c "from validation.retarded_bearing_validation import run_retarded_bearing_validation; run_retarded_bearing_validation()"
+.\.venv\Scripts\python.exe -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=900 notebooks\retarded_bearing_model_validation.ipynb
+git diff --check origin/main...HEAD
+```
+
+### Журнал S7B
+
+- 2026-08-31 — открыт неблокирующий housekeeping после S7B: GitHub Actions
+  переводится на `actions/checkout@v7` и `actions/setup-python@v7`, checkout
+  получает `fetch-depth: 0`, а whitespace gate проверяет branch diff от
+  merge-base через `git diff --check origin/main...HEAD`. Узкий SciPy SR1
+  `RuntimeWarning: overflow encountered in scalar divide` локализован во
+  внутреннем reciprocal почти нулевого update denominator и точечно подавлен
+  только для модуля `scipy.optimize._hessian_update_strategy`; final
+  constraint/KKT/observability/forward-ray gates не меняются. Математика,
+  допуски и CSV не изменялись. Локально: полный pytest **259 passed in
+  40.25s**, `pip check` PASS, `git diff --check` PASS, `results/` без diff.
+  Pinned Linux `numpy=2.4.6`/`scipy=1.17.1` повторил 1000-scene randomized
+  gate: **1 passed in 18.69s**, прежний SR1 warning отсутствует. Из-за
+  housekeeping-объёма notebooks не перезаписывались и CSV не пересчитывались;
+  новый merge-base whitespace gate дополнительно обнаружил и удалил только
+  trailing blank EOF lines в двух существующих multistation tests.
+  Cross-platform CI matrix остаётся финальным acceptance gate. S7B остаётся
+  `Done`, S7C не начат.
+- 2026-08-31 — повторный diagnostic commit `6defb6b` прошёл обе CI jobs:
+  [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763226)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33384439147/job/99463763057).
+  Одиночный Ubuntu failure commit `147a84c` не воспроизвёлся ни в read-only
+  Linux Docker full suite, ни в 10 последовательных 1000-scene gates, ни в
+  повторном CI. Workflow сохраняет публичную failure-аннотацию для будущих
+  отказов. S7B переведён в **Done**, S7C — в **Next**, но S7C не начат.
+- 2026-08-31 — финальный status commit `147a84c` временно вернул S7B в
+  **In review**: [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459311852)
+  прошёл, но [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382997494/job/99459312050)
+  упал на pytest. Предыдущий кодовый commit `aac36f1` прошёл обе платформы,
+  поэтому выполнено повторное pinned Linux воспроизведение в read-only Docker
+  mount: полный suite дал **259 passed in 44.25s**. Дополнительно 10 отдельных
+  Linux pytest-процессов выполнили один и тот же 1000-scene randomized gate:
+  **10/10 PASS**, суммарно 10000 сцен и false-invalid `0`. В workflow добавлена
+  публичная failure-аннотация последних 120 строк pytest для точной диагностики
+  любого повторного CI failure; S7C не начат.
+- 2026-08-31 — cross-platform gate commit `aac36f1` завершён зелёной GitHub
+  Actions matrix: [Ubuntu Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989049)
+  и [Windows Python 3.12](https://github.com/leomanchic/diploma/actions/runs/33382562395/job/99457989250)
+  установили зависимости строго из `requirements.txt` и успешно выполнили
+  pytest, `pip check`, `git diff --check`. S7B переведён в **Done**, S7C — в
+  **Next**, но S7C не начат.
+- 2026-08-31 — реализован cross-platform KKT corrective gate, CI ещё не
+  запускался, поэтому S7B остаётся **In review**. Теперь отдельно сохраняются
+  `raw_projected_gradient_norm=||Z^T grad J||`, dimensionless
+  `scaled_projected_kkt_residual=0.5*sqrt(g_Z^T solve(I_Z,g_Z))`,
+  `optimizer_success` и `optimizer_message`; default scaled tolerance — `1e-6`.
+  `optimizer_success=False` больше не является самостоятельной причиной
+  invalid при конечной позиции, выполненных exact constraints, full local
+  observability, forward rays и scaled-KKT PASS. Локальный pinned audit
+  (`numpy=2.4.6`, `scipy=1.17.1`, seed `20260831`) на **1000** совместимых
+  rank-1 сценах: false-invalid `0`, preliminary exceedances `13`, max final
+  constraint `2.458754593756406e-16 rad`, max raw projected gradient
+  `7.746729289788835e-9`, max scaled KKT `5.233099289902724e-9`. Профильные
+  tests: **20 passed**; полный pytest: **259 passed**. Добавлены регрессии
+  trials `771/793`, diagnostic-only optimizer-exit test, truly-suboptimal
+  `xtol` rejection и rigid/scale/permutation invariance checks. `pip check`:
+  `No broken requirements found`; `git diff --check`: PASS. Все **12/12**
+  notebooks выполнены в изолированной копии: `nbformat` valid, error-output
+  `0`, unrun nonempty code cells `0`, missing cell IDs `0`. Оба полноранговых
+  multistation CSV побитово неизменны относительно `9b2e749`. Добавлена GitHub
+  Actions matrix Ubuntu/Windows Python 3.12 со строгой установкой из
+  `requirements.txt`; до её зелёного результата S7B остаётся **In review**.
+  S7C не начат.
+- 2026-08-31 — открыт cross-platform corrective gate к commit `9b2e749`.
+  Pinned Linux full pytest дал `1 failed, 254 passed`: совместимые trials
+  `771/793` имеют final constraints `4.9117431969933596e-17` и
+  `7.253739856973443e-18 rad`, но отвергаются из-за platform-dependent
+  optimizer exit/raw-gradient threshold. До dimensionless Newton-correction
+  KKT, deterministic regressions, 1000-scene gate и зелёной Ubuntu/Windows
+  GitHub Actions matrix S7B имеет статус **In review**; S7C не начинается.
+- 2026-08-31 — numerical-robustness приёмка S7B завершена. Полный pytest:
+  **255 passed in 44.01s**; профильный gate: **23 passed in 22.15s**;
+  `pip check`: `No broken requirements found`; `git diff --check`: PASS.
+  `multistation_static_validation.ipynb` программно выполнен без ошибок;
+  аудит всех **12/12 notebooks**: `nbformat` valid, error-output `0`, unrun
+  nonempty code cells `0`, missing cell IDs `0`. Только этот notebook
+  импортирует изменённый triangulator. Полноранговый
+  `multistation_static_summary.csv` после regeneration совпал с tip
+  `5309cf0` по всем 68 non-runtime полям точно (`max abs/rel=0/0`), после
+  чего runtime-only rewrite убран; committed CSV остаётся побитово неизменным.
+
+  Итоговый randomized audit: 1000 совместимых двухстанционных rank-1 сцен,
+  seed `20260831`, false-invalid **0**, preliminary residual выше `1e-10`
+  встречался 13 раз, max final constraint residual
+  `2.458754593756406e-16 rad`, max covariance-scaled projected-KKT
+  `7.746729289788835e-9` при acceptance `1e-8`. Targeted regression:
+  preliminary `1.5262609922398919e-10 rad`, final `5.040341608778079e-17
+  rad`, KKT `4.476730845207426e-14`, valid. Заведомо несовместимый случай:
+  preliminary/final residual `0.0361929475478882 rad`,
+  `incompatible_exact_constraints`, all-NaN covariance. S7B=`Done`,
+  S7C=`Planned (Next)`; tracking не добавлен.
+- 2026-08-31 — исправлен preliminary-feasibility control flow и добавлен
+  scaled projected-KKT gate `||Z^T grad J||`. На воспроизведённой совместимой
+  rank-1 сцене preliminary residual `1.5262609922398919e-10 rad` больше
+  tolerance, но constrained SR1 solve даёт final residual `5.04e-17 rad` и
+  KKT `4.48e-14`, поэтому результат valid. Искусственный optimizer
+  `success=True` с сообщением `xtol`, feasible constraints и большим KKT
+  корректно возвращает `projected_kkt_not_satisfied`. Randomized gate на
+  **1000** совместимых двухстанционных rank-1 сценах, seed `20260831`:
+  false-invalid `0`, preliminary exceedances `13`, max preliminary residual
+  `2.202425200253308e-10 rad`, max final residual
+  `2.458754593756406e-16 rad`, max scaled projected-KKT
+  `7.746729289788835e-9`. Заведомо несовместимый gate и общая приёмка ещё
+  выполняются; S7B остаётся **In review**, S7C не начинается. Профильный
+  pytest: **23 passed in 22.15s**.
+- 2026-08-31 — открыт corrective gate к tip `5309cf0`: preliminary
+  `least_squares` ошибочно мог окончательно объявить совместимые exact
+  constraints несовместимыми при residual `1.5381543336219373e-10 rad`,
+  лишь немного превышающем tolerance `1e-10 rad`, хотя последующий
+  constrained solve уменьшает residual до `1.2497494302150491e-17 rad`.
+  До исправления control flow, scaled projected-KKT diagnostic, targeted и
+  1000-scene randomized gates S7B имеет статус **In review**; S7C не
+  начинается.
+- 2026-08-31 — корректирующая приёмка S7B завершена. Финальный полный pytest:
+  **252 passed in 18.42s**; `pip check`: `No broken requirements found`;
+  `git diff --check`: PASS. Все **12/12 notebooks** выполнены через
+  `nbconvert` на отдельных executed-копиях без перезаписи пользовательского
+  `moving_source_3d.ipynb`; единый аудит: `nbformat` valid, error-output `0`,
+  unrun nonempty code cells `0`, missing cell IDs `0`. Финальный
+  `multistation_static_validation.ipynb` дополнительно выполнен in-place:
+  12 cells/9 code, те же четыре нулевых audit-counts.
+
+  Численная constrained-WLS проверка: три exact nonparallel bearings при
+  `R=0` дали position error `8.93e-15 m`, constraint residual `0 rad` и
+  нулевую covariance; dimensions `(positive, exact, constraint-rank,
+  free, local-rank)=(0,6,3,0,3)`. Rank-1 `R` дал max exact residual
+  `4.85e-17 rad` и max `A C A^T=3.40e-21`. Несовместимые exact bearings
+  явно вернули invalid с `incompatible_exact_constraints` и residual
+  `3.6193e-2 rad`. Расстояние finite-variance решения до constrained при
+  `lambda=1e-4,1e-6,1e-8,1e-10,1e-12 rad^2` монотонно уменьшилось:
+  `7.5187e-2, 1.0957e-3, 1.1011e-5, 1.1011e-7, 1.1011e-9 m`.
+  Station-permutation mismatch: `0 m / 3.47e-18 m²`; global rigid-transform
+  mismatch: `7.11e-15 m / 7.63e-17 m²`.
+
+  CSV имеют **126×69** и **9×24**. Полноранговая summary после перехода от
+  эквивалентного symmetric whitening к буквальному
+  `Lambda+^(-1/2) U+^T r` не побитово совпала с `4ff91c4`, но categorical,
+  coverage и failure fields не изменились. Среди scalar metrics max absolute
+  difference `2.031e-3` относится к condition `1.670e5` (relative
+  `1.216e-8`), max relative difference `3.976e-7` — к covariance-ratio
+  diagnostic; position RMSE max absolute/relative differences равны
+  `1.016e-6 m / 9.075e-9`. Wall-clock runtime исключён из сравнения. Exact
+  constraint acceptance использует явный numerical solver
+  tolerance `1e-10 rad`, но covariance eigenvalues не заменяются epsilon и
+  nullspace не игнорируется. Запрошенные критерии не ослаблялись. S7B=`Done`,
+  S7C=`Planned (Next)`; tracking в этом commit не добавлен.
+- 2026-08-31 — полный static study повторён после constrained-WLS fix:
+  `multistation_static_summary.csv` имеет **126×69**, geometry CSV —
+  **9×24**. Первое сравнение при эквивалентном symmetric whitener было
+  побитово идентично commit `4ff91c4`; финальная буквальная spectral-coordinate
+  реализация изменила только floating-point младшие разряды с maxima,
+  перечисленными в финальном gate выше, без categorical/coverage/failure
+  изменений. Исключено `mean_runtime_per_estimate_s`, потому что это новое
+  wall-clock измерение.
+  Новые geometry-поля: `world_frame_definition=ENU_x_east_y_north_z_up_m` и
+  `station_position_reference=microphone_array_centroid`. Этап остаётся
+  **In review** до notebook и общих regression gates.
+- 2026-08-31 — constrained WLS реализован и прошёл профильный gate:
+  **20 passed in 3.45s**. Для каждого `R` отдельно сохраняются `U+`,
+  положительные `Lambda+` и `U0`; objective использует whitened residual
+  `Lambda+^(-1/2) U+^T r`, а `U0^T r=0` передаётся оптимизатору как equality
+  constraint. Несовместимые constraints дают
+  `failure_reason=incompatible_exact_constraints` и `NaN` position
+  covariance. Diagnostics разделяют finite-variance information,
+  constraint Jacobian/rank и reduced information на допустимом manifold.
+  Geometry record расширен полями `world_frame_definition` и
+  `station_position_reference`, поэтому после регенерации CSV будет иметь
+  фактическую, а не заявленную, ширину 24. Этап остаётся **In review** до
+  full pytest/notebook/pip/diff gates.
+- 2026-08-31 — открыт корректирующий acceptance gate к commit `4ff91c4`.
+  Обнаружена математическая ошибка: прежнее применение `R^+` трактовало
+  covariance nullspace как нулевой вес, тогда как вырожденная Gaussian-модель
+  требует точных ограничений `U0^T r(q)=0`. До constrained WLS, новых
+  deterministic/limit tests, пересчёта CSV/notebook и полной повторной
+  приёмки S7B имеет статус **In review**, S7C не реализуется. Фактический
+  geometry CSV commit `4ff91c4` содержит **9×22**, несмотря на ошибочную
+  запись `9×24`; будут добавлены и документированы два поля мировой системы,
+  после чего схема действительно станет 24-column.
+- 2026-08-31 — предыдущая приёмка, зафиксированная в commit `4ff91c4`
+  и теперь superseded корректирующим gate выше. После исправления временного
+  контракта тогда полный pytest дал **247 passed in 20.33s**; `pip check`:
+  `No broken requirements found`. Все **12/12 committed notebooks** выполнены
+  через `nbconvert`; единый аудит дал `nbformat` valid, error-output `0`,
+  unrun nonempty code cells `0`, missing cell IDs `0` для каждого. Размеры
+  В том отчёте размеры CSV были ошибочно записаны как `126×69` и `9×24`:
+  фактическая geometry-таблица commit `4ff91c4` имела **9×22**. Все 13 прежних
+  контролируемых CSV также сохранили ожидаемое число строк. `git diff
+  --check` проходил. Эта приёмка не учитывала exact nullspace constraints и
+  потому не является финальной; dynamic 3D tracking не был реализован.
+- 2026-08-31 — исправлена промежуточная ошибка временной семантики нового
+  API: первоначально static triangulator по умолчанию требовал одинаковые
+  reception timestamps. Это неверно для разнесённых станций, потому что один
+  source state/emission может иметь разные propagation delays. Теперь
+  обязательная association задаётся общими `sequence_id/frame_index`, разные
+  reception timestamps разрешены, а их равенство доступно только как явная
+  опциональная проверка. Профильный gate **11 passed in 7.60s**, полный
+  **247 passed**. Никакого true emission time в online measurement не
+  добавлено.
+- 2026-08-31 — количественная invariance/Jacobian проверка после финальной
+  коррекции: ideal position max abs error `7.11e-15 m`, station permutation
+  position/covariance mismatch `5.33e-15 m / 5.20e-18 m²`, global
+  rotation+translation position/covariance mismatch `1.42e-14 m /
+  2.60e-18 m²`, analytic/numeric Jacobian max abs mismatch `2.63e-11`,
+  coordinate-scale covariance relative Frobenius mismatch `9.78e-17`.
+- 2026-08-30 — полный статический study выполнен и затем воспроизводимо
+  повторён внутри нового notebook. Использованы 9 физических конфигураций,
+  **128 calibration + 256 evaluation** независимых direct-bearing
+  realizations на конфигурацию, то есть 3456 уникальных role/config
+  realizations; семь matched scenarios дают **24192 spherical WLS estimates**
+  на common random numbers. `multistation_static_summary.csv` содержит
+  **126 строк × 69 полей** (63/63 calibration/evaluation),
+  `multistation_geometry_summary.csv` — **9 × 24**. Девять calibration и
+  девять evaluation seeds уникальны по роли, overlap `0`. GCC/SRP, truth и
+  true range online не использовались.
+- 2026-08-30 — в ideal-known-pose three-station evaluation position RMSE
+  находится в `0.2964…38.5498 m`, P95 `0.5040…64.8676 m`, P99
+  `0.6390…134.4900 m`; диапазон отражает dimensionless geometry sweep, а не
+  одну дальность. Worst-conditioned geometry — `near_collinear_far`:
+  median information condition `1692.90`, RMSE `38.55 m`, P95 `64.87 m`.
+  Лучший `equilateral_near` даёт condition `5.37`, RMSE `0.296 m`, P95
+  `0.504 m`. На данной sampled grid ideal-three RMSE ниже обоих выбранных
+  two-station subsets во всех 9 конфигурациях, но это не универсальное
+  утверждение: результат зависит от intersection angle и measurement quality.
+- 2026-08-30 — local Gaussian covariance benchmark численно проверен, а не
+  принят по отсутствию исключений. Для 9 ideal-three evaluation групп
+  `trace(C_emp)/trace(mean C_pred)=0.810…1.195`; nominal 95% ellipsoid
+  coverage `0.840…0.965`. Ухудшение coverage в elongated/nearly-collinear
+  случаях показывает предел локальной Gaussian linearization. Один
+  `5°/-2°` erroneous bearing не отбрасывается скрыто: median scenario RMSE
+  `19.66 m`, worst RMSE `815.59 m`, maximum failure fraction `0.0547`.
+  Position/orientation/covariance mismatch также сохранены отдельными
+  сценариями. P99 при 256 evaluation realizations — sampled diagnostic,
+  не operational tail guarantee.
+- 2026-08-30 — `multistation_static_validation.ipynb` успешно выполнен за
+  ~74 s: 12/12 cells имеют ID, `nbformat` valid, error-output `0`, unrun
+  nonempty code `0`. Notebook повторяет CSV study, строит RMSE/intersection-
+  angle и covariance/coverage diagnostics, а также good/poor ENU scenes с
+  validation-only truth marker. Обновлены `README.md`, `AGENTS.md` и
+  `ROADMAP.md`; dynamic 3D tracking, retarded-time fusion, synchronization,
+  ветер, отражения, SRP-Harmonics и hardware I/O всё ещё не реализованы.
+  Полный pytest после документации и аудит остальных committed notebooks ещё
+  не выполнены, поэтому S7B пока не объявлен завершённым.
+- 2026-08-30 — реализован bearing-level Monte Carlo
+  `validation/multistation_static_study.py`. Девять физических конфигураций
+  охватывают equilateral/elongated/nearly-collinear station layouts,
+  baseline `10/20/40/50 m`, несколько `range/baseline` и
+  `altitude/baseline`, aligned/varied local orientations. Семь matched
+  сценариев на одних tangent-noise draws сравнивают ideal 3/2 stations,
+  отказ одной из трёх, position/orientation calibration mismatch, bearing
+  covariance mismatch и один `5°/-2°` erroneous bearing. Шум генерируется
+  непосредственно в сферической tangent plane с известными `mu,R`, не через
+  GCC/SRP. Calibration/evaluation bearing-noise seeds раздельны; `mu_cal,R`
+  fit только по calibration. Число 2D residual components явно не называется
+  independent trials. Smoke gate с `12/16` realizations: все coverage `1.0`,
+  outlier RMSE больше ideal-three более чем втрое; профильный набор study +
+  deterministic tests **15 passed in 3.33s**.
+- 2026-08-30 — создан `visualization/multistation_scene.py`: ENU stations и
+  их локальные оси, bearing rays без фиктивной station range, closest-point
+  residuals, estimated 3D point и local 95% Gaussian covariance ellipsoid.
+  True position разрешена только с явным `validation_mode=True`. Создан
+  12-cell `multistation_static_validation.ipynb`; `nbformat` valid до
+  исполнения. Визуализационный/study gate **4 passed in 3.88s**. Для full
+  study зафиксированы **128 calibration + 256 evaluation независимых
+  bearing-level realizations на физическую конфигурацию**; P99 по 256
+  evaluation realizations будет только sampled diagnostic. Full study,
+  notebook execution и общая приёмка ещё не выполнены.
+- 2026-08-30 — в исходной реализации commit `4ff91c4` был создан
+  `estimators/bearing_triangulation.py`: прозрачный
+  closest-rays baseline
+  `q=pinv(sum w(I-dd^T)) sum w(I-dd^T)p` и основной spherical weighted
+  nonlinear least squares с residual
+  `tangent_residual(u_pred_local,u_hat)-mu_cal`. Initial point не использует
+  truth; ground/`z>=0` constraint отсутствует; source обязан лежать впереди
+  каждого принятого луча. Результат сохраняет residuals, ranges, raw
+  Jacobian, position information/eigen/rank/condition, ненаблюдаемые мировые
+  направления и local Gaussian covariance benchmark только при полном ранге.
+  Историческая реализация обрабатывала singular/zero `R` только спектральной
+  pseudoinverse без epsilon и тем самым ошибочно отбрасывала zero-variance
+  constraints; это поведение заменено constrained WLS в корректирующем gate
+  2026-08-31 выше.
+- 2026-08-30 — выведен и реализован аналитический `dr/dq`; его log-map часть
+  использует `a=u^T y`, `v=y-au`, `theta=atan2(||v||,a)` и производную
+  `(theta/||v||)v`, включая connection terms меняющегося az/el tangent basis.
+  Центральные разности подтверждают Якобиан также при переходе azimuth через
+  `-pi/pi`. Обнаружена численная потеря точности прежнего малого log-map через
+  `arccos(dot)`; она исправлена на устойчивый `atan2(||projection||,dot)`.
+  Добавлены deterministic tests для 2/3 станций, разных локальных ориентаций,
+  global translation/rotation, station permutation, backward bearing,
+  collinear/nearly-parallel геометрии, масштаба covariance и `R,mu_cal`.
+  Старый `test_cycle_projection` больше не использует хрупкий фиксированный
+  `2e-19`: roundoff-допуск равен machine epsilon, умноженному на норму данных
+  и явный малый operation factor. Профильный gate **18 passed in 0.64s**;
+  полный регрессионный gate **243 passed in 17.31s**. Monte Carlo/CSV/notebook
+  ещё не выполнены, этап остаётся в работе.
+- 2026-08-30 — реализованы `model/station.py` и `model/measurements.py`.
+  `StationPose` задаёт правую ENU-систему (`x=East,y=North,z=Up`), проверяет
+  `Q^TQ=I`, `det(Q)=+1`, хранит решётку относительно centroid и вычисляет
+  `r_world=p+Q r_local`; numpy-массивы защищены от изменения. Общий
+  `BearingMeasurement` содержит только online-доступные timestamps, локальный
+  единичный bearing, tangent `R`/`mu_cal`, estimator/quality/valid metadata и
+  намеренно не имеет truth/error/emission-time полей. Singular PSD covariance
+  разрешена без epsilon; invalid record хранит all-NaN direction/covariance,
+  а не фиктивное измерение. Проверены local/world round-trip, глобальные
+  перенос/поворот, permutation микрофонов, неверные rotations, centroid и
+  неизменяемость: профильный gate **13 passed in 0.47s**. Триангуляция и
+  observability ещё не реализованы, этап остаётся в работе.
+- 2026-08-30 — новое ТЗ прочитано полностью вместе с `AGENTS.md`,
+  `PROJECT_STATUS.md`, `README.md` и `ROADMAP.md`. Рабочее дерево было чистым
+  на точном commit `a48d000e30bc446c1df0995d90f56bde4a9458bc`; поскольку этот
+  commit не слит в `main`, создана отдельная ветка
+  `feature/multistation-foundation` непосредственно от него. Зафиксирована
+  граница этапа: сначала bearing-level статическая триангуляция и
+  наблюдаемость, без смешивания с ошибками GCC/SRP и без dynamic tracking.
+  Реализация, deterministic/smoke/full gates, CSV и notebook ещё не
+  выполнены, поэтому этап не объявляется завершённым.
+
+### Формулы и ограничения S7B
+
+Для station pose `p_k,Q_k` и локального измерения `u_hat_k` мировой луч и
+предсказание имеют вид
+
+`d_k=Q_k u_hat_k`,
+`u_pred,k(q)=Q_k^T(q-p_k)/||q-p_k||`.
+
+Основной residual и спектральное разложение covariance:
+
+`r_k(q)=tangent_residual(u_pred,k(q),u_hat_k)-mu_cal,k`,
+`R_k=U_{+,k} Lambda_{+,k} U_{+,k}^T + U_{0,k} 0 U_{0,k}^T`.
+
+Constrained WLS решает
+
+`min_q sum ||Lambda_{+,k}^(-1/2) U_{+,k}^T r_k(q)||^2`
+
+при точных equality constraints
+
+`U_{0,k}^T r_k(q)=0`.
+
+Finite-variance information равна
+`I_+=sum H_k^T U_{+,k} Lambda_{+,k}^-1 U_{+,k}^T H_k`. Пусть `A` —
+Якобиан всех точных constraints, а столбцы `Z` образуют `null(A)`. Тогда
+combined local observability rank равен
+`rank(A)+rank(Z^T I_+ Z)`, а при полном combined rank локальная covariance
+на допустимом manifold равна `C_q=Z(Z^T I_+ Z)^-1 Z^T`. Если `Z` пуст,
+точные constraints локально фиксируют все три координаты и `C_q=0`. Если
+constraints несовместимы либо combined rank меньше трёх, result invalid и
+covariance содержит `NaN`; сохраняются constraint/reduced-information ranks,
+eigenvalues и ненаблюдаемые мировые направления. Это не точная CRLB
+signal-level модели. Closest-rays baseline использует pseudoinverse; обычное
+обращение вырожденной матрицы, скрытое `z>=0`, ground constraint и arbitrary
+epsilon отсутствуют.
+
+Проверено: ENU/local-world transforms, proper rotations, centroid/permutation,
+2/3 stations, forward rays, wrap `-pi/pi`, analytic Jacobian, global
+translation/rotation, station permutation, масштабирование, singular/zero
+angular covariance, collinear/nearly-parallel geometry, calibration-only
+`R,mu_cal`, disjoint seeds и empirical-vs-predicted covariance.
+
+Не реализовано: dynamic/asynchronous 3D tracking, retarded-time fusion,
+clock synchronization/transport, signal-level multi-station GCC/SRP fusion,
+ветер, температура, отражения, SRP-Harmonics, hardware I/O и field data.
+Статический estimator принимает только bearings, заранее ассоциированные с
+одним source state (`sequence_id/frame_index`); он не должен применяться к
+движущемуся источнику с несогласованными states.
+
+Ослабления и статистические ограничения: быстрый smoke использует `12/16`,
+полный study — `128/256` independent calibration/evaluation realizations на
+физическую конфигурацию; P99 по 256 samples является только sampled
+diagnostic. Семь scenarios используют common random numbers, поэтому 24192
+estimator calls не являются 24192 уникальными noise realizations. Допуск
+cycle projection масштабируется как `64*eps*||data||`; он заменил хрупкое
+фиксированное `2e-19`, а не был подобран под один остаток. Финальных
+проваленных критериев нет. Промежуточно исправлены малый log-map
+`arccos→atan2` и неверное равенство reception timestamps.
+
+### Журнал S7A
+
+- 2026-08-30 — корректирующий gate bias-centered NIS полностью принят перед
+  bearing tracking. CSV и notebook перегенерированы: **216 covariance / 1368
+  quality rows**, 36/36 calibration/evaluation физических групп. Во всех
+  216 строках сохранён ненулевой `mu_cal` (`calibration_bias_norm_deg`
+  `0.01052…0.83711°`), centered/raw P95 различаются, bias-correction flag
+  истинный, centering source равен только `calibration`, evaluation mean use
+  равен `0`, а `chi_square_comparison_statistic=centered_nis`. После коррекции
+  centered NIS P95 / `chi-square(2)` P95 на 108 evaluation группах имеет
+  диапазон `0.10165…2.33270`, median `1.15129`; `88/108` групп лежат в
+  диагностическом диапазоне `0.5…1.5`. Median raw normalized squared error
+  P95 / `chi-square(2)` P95 равна `1.15347`, но raw statistic с chi-square не
+  сравнивается. Реальный set-аудит всех 108/108 sequence/source/noise seeds
+  дал overlap `0/0/0`; декларативных замен этому контролю нет.
+  Финальная проверка после выполнения всех notebook: **226 passed in 17.48s**,
+  `pip check` — `No broken requirements found`; все **11/11 notebook** имеют
+  `nbformat` valid, error-output `0`, unrun code `0`, missing ID `0`.
+  Ослаблений допусков и проваленных критериев нет; прежнее ограничение на
+  tail confidence intervals при трёх независимых sequence/group сохраняется.
+  `ROADMAP.md`: S7A=`Done`, S7B=`Next`. Tracking/EKF/UKF не реализованы.
+  Итог: **calibrated bearing measurement benchmark, not tracking and not a
+  signal-level CRLB**.
+- 2026-08-30 — начат и пройден математический gate bias-centered NIS перед
+  S7B. Матрица `R` и `mu_cal` по-прежнему оцениваются только на calibration
+  residuals. Для обоих split теперь
+  `NIS_centered=(r-mu_cal)^T R^+ (r-mu_cal)`; evaluation mean нигде не
+  участвует в центрировании. Прежняя величина `r^T R^+ r` сохранена отдельно
+  как `raw_normalized_squared_error`, а `chi-square(2)` сравнивается только с
+  centered NIS. Добавлены calibration bias/centering source/bias-correction
+  fields. Sequence/source/noise disjointness теперь вычисляется реальным
+  пересечением множеств; любой ненулевой overlap останавливает study, CSV
+  хранит четыре overlap counts и audit flag. Профильный результат:
+  **17 passed in 5.55s**. Полные CSV/notebook ещё не перегенерированы, поэтому
+  корректирующий gate пока не объявлен завершённым; tracking/EKF/UKF не
+  реализуются.
+- 2026-08-29 — финальная приёмка S7A завершена. После полного повторного
+  выполнения notebook весь pytest: **223 passed in 17.25s**; `pip check`:
+  `No broken requirements found`. Все **11/11 notebook** выполнены через
+  `nbconvert`, проходят `nbformat.validate`, имеют error-output `0`, unrun
+  непустых code cells `0` и missing cell ID `0`. Итоговый CSV-аудит:
+  covariance/quality `216/1368` строк, обязательных полей не пропущено,
+  `36/36` физических calibration/evaluation групп; уникальных sequence,
+  source и noise seeds `108/108` на split, межролевой overlap `0/0/0`.
+  Нарушений PSD/symmetry `0/0`, evaluation covariance fit `0`, online truth
+  use `0`, ложных independent-frame claims `0`, probability claims для
+  quality `0`. Финальных проваленных критериев нет. Статистическое ограничение
+  явно сохранено: три независимые sequence на группу не дают узких tail
+  confidence intervals; CI не вычислялись, поэтому frame bootstrap не
+  применялся. `ROADMAP.md`: S7A=`Done`, S7B=`Next`. Итоговая формулировка:
+  **calibrated bearing measurement benchmark, not tracking and not a
+  signal-level CRLB**.
+- 2026-08-29 — полный S7A benchmark выполнен после PASS gates и повторно
+  воспроизведён внутри `bearing_uncertainty_validation.ipynb`. Сетка:
+  36 физических групп × `(3 calibration + 3 evaluation)` = **216 независимых
+  continuous sequences**, по 6000 reception samples (`0.125 s`) и 20 overlap
+  frames каждая. Итого по каждой split/group/method 60 статистически зависимых
+  residual samples, но ровно 3 независимые sequence units. Сохранены **216
+  covariance rows** (108 calibration + 108 evaluation) и **1368 quality rows**.
+  Все 108 calibration/evaluation sequence seeds уникальны внутри роли;
+  sequence/source/noise overlap между ролями равен `0`. Coverage всех строк
+  `1.0`, antipodal count `0`; все `R` symmetric, PSD и rank 2 без epsilon,
+  minimum eigenvalue `9.655e-8 rad^2`, maximum condition number `150.135`.
+  Notebook: 8 cells, `nbformat` valid, error-output `0`, unrun code `0`,
+  missing ID `0`. Полная регрессия и остальные notebook ещё не повторены.
+- 2026-08-29 — первоначальная **raw, нецентрированная** диагностика
+  `r^T R^+ r` не подтверждала универсальную Gaussian model. Эти числа
+  superseded корректирующим gate 2026-08-30 и теперь хранятся только как
+  `raw_normalized_squared_error`, без chi-square comparison. Для 108 evaluation
+  групп прежнее отношение raw P95 к `chi-square(2)` P95
+  имеет диапазон `0.0967…2.7851`, median `1.1535`; только `77/108` групп лежат
+  в диагностическом диапазоне `0.5…1.5`, а fraction выше chi-square P95 лежит
+  в `0…0.30`. Median P95-ratio по SNR равен `1.029/1.067/1.371` для
+  `-6/5/20 dB`. Это benchmark хвостов, **не утверждение Gaussian distribution**.
+  Средний evaluation RMSE tetrahedral для ref-3/all-6/SRP составляет на
+  `-6 dB` `4.394/1.669/0.741°`, на `5 dB` `0.237/0.177/0.179°`, на `20 dB`
+  `0.098/0.071/0.071°`; square соответственно `1.873/1.796/1.303°`,
+  `0.410/0.350/0.350°`, `0.309/0.304/0.309°`. Это усреднение по двум сигналам
+  и трём траекториям, не критерий превосходства метода.
+- 2026-08-29 — offline quality/error analysis показывает контекстную, а не
+  вероятностную связь. Средний по группам модуль Spearman наиболее велик у
+  SRP score margin (`0.214`), GCC mean/min peak ratio (`0.184/0.181`) и GCC
+  curvature (`0.166`); максимум отдельных групп достигает `0.655/0.763`.
+  Знак может меняться (например, на square/high-SNR систематические эффекты
+  дают положительную связь peak ratio с error), поэтому универсальная online
+  probability calibration не заявляется. Все group-level SRP curvature means
+  конечны; минимальная mean eigenvalue `0.445`. Профильный deterministic/study/
+  SRP/sequential набор: **34 passed in 8.99s**.
+- 2026-08-29 — observable quality добавлена в общий frame-wise API без truth:
+  GCC сохраняет peak ratios/curvatures/spectral energies используемых пар,
+  их агрегаты, boundary count и valid pair count; reference-3 использует
+  только три опорные пары, all-6 — шесть. SRP сохраняет peak score,
+  coarse-grid score margin и симметричную локальную `-H(score)` с собственными
+  значениями в координатах радиан дуги; на elevation-boundary Hessian явно
+  недоступен. Ни одна величина не называется вероятностью. Регрессия
+  SRP/moving/sequential: **27 passed in 8.36s**.
+- 2026-08-29 — реализован независимый sequence-level calibration/evaluation
+  pipeline `validation/bearing_uncertainty_study.py`. Основная сетка содержит
+  36 групп: tetrahedral/square × SNR `-6/5/20 dB` × stationary/transverse/
+  piecewise × random broadband/deterministic multisine, `fs=48 kHz`,
+  `L/H=1024/256`. Calibration/evaluation получают разные role-coded sequence,
+  source и noise seeds; все методы внутри sequence используют один stream.
+  Deterministic multisine сохраняет фиксированный спектр, но получает
+  воспроизводимый seed-dependent общий phase offset, поэтому splits имеют
+  разные waveform realizations. Smoke gate с `2+2` независимыми sequence
+  прошёл: 6 covariance и 38 quality records, все `R` symmetric/PSD, seed
+  overlap `0`, evaluation-fit use `0`, online truth use `0`. Профильные тесты:
+  **13 passed in 1.85s**. Для полного benchmark после PASS зафиксированы
+  **3 calibration + 3 evaluation независимых sequence на группу**, duration
+  `0.125 s`; overlap frames используются как зависимые residual samples, не
+  как independent trials. Полный study и notebook ещё не выполнены.
+- 2026-08-29 — реализован `model/bearing_statistics.py`. Для нормированных
+  `u,u_hat` вычисляются `theta=acos(clip(u^T u_hat,-1,1))`, сферический
+  `Log_u(u_hat)=theta*(u_hat-(u^T u_hat)u)/sin(theta)` и его координаты в
+  ортонормированном базисе `e_az,e_el`; единицы residual — радианы дуги.
+  Малые углы обрабатываются через норму касательной проекции, а почти
+  антиподальные направления явно дают `AntipodalDirectionError`, поскольку
+  log-map там не единственен. Sample covariance строится без произвольного
+  epsilon, сохраняет eigen/rank/condition/correlation diagnostics; NIS
+  использует `R^+`. Deterministic gate: **8 passed in 0.14s**. В wrap-тесте
+  elevation-компонент ограничен величиной второго порядка `delta_phi^2`:
+  одинаковый elevation двух точек не означает, что соединяющая их геодезическая
+  лежит на параллели. Calibration/evaluation study ещё не выполнен.
+- 2026-08-29 — полностью прочитаны `AGENTS.md`, `PROJECT_STATUS.md` и
+  `README.md`. Создан `ROADMAP.md` с этапами S0–S13, зависимостями и явным
+  различием single-station bearing tracking и multi-station 3D localization.
+  S7A отмечен `In progress`, S7B — `Planned (Next)`. Начата реализация
+  сферического tangent residual; deterministic/smoke gates, полный study,
+  notebook и общая приёмка ещё не выполнены.
+
+### Точная схема последовательности
+
+- Один source array `s[n]` синтезируется на весь source-time support. Из него
+  одним retarded-time проходом получаются непрерывные clean channels
+  `x_m[n]`; одна noise matrix `w_m[n]` создаётся один раз на всю
+  последовательность, после чего `y_m[n]=x_m[n]+w_m[n]`.
+- Frame `k` является view `y_m[kH : kH+L]` общего массива, где
+  `L=1024`, `H=256`, overlap `L-H=768` (`75%`). При `N=12000` samples
+  число frame равно `1+floor((N-L)/H)=43` на последовательность. Общие
+  overlap samples побитово одинаковы; frame не ресинтезируются.
+- Для start/end reception timestamps `t_s,t_f` центр равен
+  `t_c=(t_s+t_f)/2`. Истинный timestamp bearing — centroid emission time
+  `t_e`, решающий `t_c=t_e+||q(t_e)-centroid(r)||/c`, а не обычный reception
+  time. Physical delay равен `t_c-t_e`; acquisition latency для оценки,
+  относимой к центру frame, равна `t_f-t_c`; available timestamp равен
+  `t_f+t_algorithm`. Total emission-to-available latency равна сумме этих
+  трёх составляющих.
+- Frames обрабатываются по возрастанию `k`. Estimator получает только текущий
+  frame, координаты и `fs`; truth, future samples и будущие DOA ему не
+  передаются. Методы используют один frame hash и один shared six-pair GCC
+  frontend, затем отдельные reference-3/all-6/SRP backends.
+- Основные параметры: `fs=48000 Hz`, duration `0.25 s`, chunk `4096`,
+  Kaiser FIR `129`; maximum interpolation weight matrix содержит
+  `4096*129=528384` элементов вместо зависимости от полной длины stream.
+- Диагностические последовательности: stationary, constant-velocity
+  transverse/receding, circular, piecewise-linear maneuver, azimuth wrap
+  `359° -> 0°`, а также low-SNR `-12 dB` с явно маркированным all-channel
+  data dropout. Все траектории дозвуковые, не пересекают решётку и остаются
+  внутри построенного source-time support.
+- 43 overlap frame каждой последовательности статистически зависимы и не
+  называются независимыми trials. Frame-level и sequence-level метрики
+  хранятся отдельно в CSV.
 
 ### Журнал текущего этапа
 
+- 2026-08-29 — финальная приёмка завершена. Полный pytest после выполнения
+  notebook: **209 passed in 16.56s**; `pip check`: `No broken requirements
+  found`. Все **10/10** notebook программно выполнены и проходят
+  `nbformat.validate`; error-output `0`, невыполненных непустых code-ячеек
+  `0`, отсутствующих cell ID `0`. CSV counts: GCC `840/574/70`, SRP
+  `792/594`, moving `6480`, sequential frame/summary `903/21`. Sequential
+  аудит: 301 уникальный статистически зависимый frame, frame-hash violations
+  `0`, causality/timestamp violations `0`, truth/future-use flags `0`.
+  Stationary coverage `1.0`, truth change `0°`, RMSE
+  `0.0514/0.0381/0.0376°`; wrap coverage `1.0`, переход
+  `356.81° -> 2.97°`, RMSE `0.0681/0.0577/0.0579°` для
+  ref-3/all-6/SRP. В шести штатных sequence coverage `1.0`; low-SNR/dropout
+  coverage `0.88372`, пять invalid frame на метод без фиктивного bearing.
+  Mean algorithm runtime по штатным sequence находится примерно в диапазонах
+  `2.06…2.24 ms` ref-3, `1.48…1.68 ms` all-6 и `3.85…4.42 ms` SRP;
+  physical delay `72.874…76.562 ms`, acquisition latency `10.65625 ms`, total
+  latency `85.012…91.461 ms`. Новых ослабленных тестовых допусков нет;
+  P95/P99 по 43 overlap frames являются sequence diagnostics, не оценками
+  хвостов независимой выборки. Console warnings Windows ZMQ/IPython остаются
+  нефатальными и не являются notebook error-output. Итог:
+  **sequential independent bearings, not tracking**.
+- 2026-08-29 — новый `sequential_doa_validation.ipynb` программно выполнен:
+  `nbformat` valid, error-output `0`, невыполненных непустых code-ячеек `0`;
+  он повторно создал и проверил 903/21 CSV-строку, causality, shared hashes,
+  invalid semantics, stationary и wrap. После документации и package exports
+  полный pytest: **209 passed in 16.86s**. Это промежуточная приёмка: остальные
+  девять notebook ещё должны быть повторно выполнены до завершения этапа.
+- 2026-08-29 — реализован полный sequential study и два раздельных CSV.
+  Семь потоков по `0.25 s` содержат по 12000 reception samples при `48 kHz`;
+  `frame_length=1024`, `hop_length=256`, overlap `768` samples (`75%`) дают
+  по **43** перекрывающихся frame и всего **301 статистически зависимый
+  frame**, не independent trials. Сохранены **903 frame-level** строки
+  (три метода) и **21 sequence-level** агрегат. Для шести штатных
+  последовательностей coverage `1.0`; диапазоны conditional RMSE/P95/P99:
+  ref-3 `0.0514…0.1060° / 0.0855…0.1625° / 0.0953…0.1990°`, all-6
+  `0.0381…0.0880° / 0.0639…0.1474° / 0.0796…0.1661°`, SRP
+  `0.0376…0.0886° / 0.0627…0.1485° / 0.0785…0.1680°`. Low-SNR
+  (`-12 dB`) stream имеет явный all-channel data-dropout и ровно 5 invalid
+  frames на метод, coverage `38/43=0.88372`; invalid bearing/error fields
+  остаются пустыми. Stationary truth change строго `0°`; wrap-последовательность
+  проходит `356.81° -> 2.97°` с круговым шагом <`1°` и RMSE <`0.14°`.
+  Chunk `4096`, FIR `129`, maximum interpolation working set `528384`
+  coefficients. Mean physical propagation delay `72.874…76.562 ms`;
+  acquisition latency относительно центра frame до последнего принятого
+  sample `10.65625 ms` (`frame span=21.3125 ms`, nominal `1024/fs=21.3333 ms`);
+  algorithm runtime измеряется отдельно, total emission-to-available latency
+  `85.012…91.461 ms`. Causality audit: future sample/DOA use `0`, несовпадений
+  frame hash между методами `0`, timestamp violations `0`. Notebook создан и
+  проходит `nbformat`; профильные continuous/sequential/moving tests:
+  **27 passed in 4.02s**. Полная приёмка всех notebook ещё не выполнена.
+- 2026-08-29 — полностью прочитаны `AGENTS.md`, `PROJECT_STATUS.md` и
+  `README.md`; начат этап непрерывного потока. В `simulate_moving_source`
+  добавлен chunked режим: при блоке `B` и FIR длины `L` интерполяционный
+  working set ограничен `B*L`, тогда как emission times, delays и output
+  остаются непрерывными по всей последовательности. Реализован
+  `simulation/continuous_stream.py`: один source waveform, одна noise matrix
+  на весь stream и read-only overlap views исходного `channels`, без
+  покадрового ресинтеза. Strict regression для chunked/monolithic:
+  channels `atol=3e-12`, emission/delays `atol=2e-15 s`, одинаковый valid
+  region. Подтверждены точный overlap, v=0/static agreement и полная seed-
+  воспроизводимость. Профильный результат: **13 passed in 1.57s**. Этап не
+  завершён до sequential study, полного pytest и notebook-аудита.
 - 2026-08-29 — итоговая приёмка reporting-поправок завершена. После полного
   пересчёта `results/moving_source_summary.csv` выполнен весь pytest:
   **198 passed in 14.22s**. Все **9/9** notebook программно перевыполнены и
