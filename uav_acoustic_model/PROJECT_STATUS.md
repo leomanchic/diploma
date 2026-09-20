@@ -2,6 +2,39 @@
 
 Последнее обновление: 2026-09-20
 
+## Gazebo replay contract (S8-GZ-R)
+
+- Ветка `fix/gazebo-run-reproducibility` создана от
+  `03dc7d7408bc53c783af38279b622bfba8458f6c`, без merge с `main`.
+  Исходные `gazebo_state.csv`, `manifest.json`, `scene.sdf` прямой и поворота
+  сохранены побайтно. Два каталога явно мигрированы в схему
+  `experiment.json` v2 и повторно обработаны с прежними параметрами.
+- Replay берёт из сохранённого опыта запись и её SHA-256, станции и
+  микрофоны, аудио/seed/SNR, настройки кадров/GCC/SRP/stride,
+  `Qc`/историю/пороги/budget, значения bias/R и происхождение калибровки.
+  SHA исполняемого Python-кода и SHA итоговых CSV/summary проверяются;
+  изменение текущего `simulation/gazebo_scene.json` не влияет на replay.
+  Для новой комбинации параметров `new` создаёт отдельный каталог; старый
+  формат требует явной команды `migrate`.
+- Переносимый ID прямой `gzrun-fbd21802584061da2cd121dc`, поворота
+  `gzrun-a4eef95e4fc48da4243996d5`. Он одинаков для GCC/SRP одного
+  потока и разный у прямой/поворота; event IDs больше не пересекаются.
+  `comparison_group_id` связывает парные опыты отдельно. Viewer проверяет
+  recording/config/result hashes и строит станции из замороженного опыта;
+  пустой updates CSV перезаписывается заголовком.
+- Сравнение с `03dc7d7` сохранено в
+  `results/gazebo_offline/reproducibility_comparison.json`: для каждого из
+  четырёх kind/method сочетаний 1260 bearing, 42 публикации и 32 обновления;
+  максимум разницы bearing/координат/времени подтверждения/RMSE/доли
+  валидных публикаций **0** при допуске `1e-12`; статусы и числа принятых
+  30/отклонённых 2 обновлений совпали точно. Время исполнения не
+  сравнивалось. Смена ID и метаданных ожидаема, акустическая математика и
+  алгоритмы GCC/SRP/tracker не менялись.
+- Команды replay/new/viewer и проверки в `gazebo/README.md`.
+  Приёмка: целевые тесты **18 passed**, полный `pytest -q` — **516 passed in
+  153.53 s**, `pip check` без конфликтов, `git diff --check` без замечаний.
+  Старые Monte Carlo и тяжёлые notebooks не запускались.
+
 ## Gazebo offline integration pilot (S8-GZ)
 
 - Начальное состояние ветки `feature/gazebo-offline-integration`: SHA

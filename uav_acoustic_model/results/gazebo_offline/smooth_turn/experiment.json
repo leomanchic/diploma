@@ -1,0 +1,416 @@
+{
+  "code": {
+    "git_commit_sha_at_creation": "03dc7d7408bc53c783af38279b622bfba8458f6c",
+    "sha256": "f85dc3f59cf21c0e25ed6616d7c721af76be48dec5a827b7955459b48c6a1db3"
+  },
+  "comparison_group_id": null,
+  "config_sha256": "a4eef95e4fc48da4243996d5cc1d785479ac5bbe8a286570004d34e0792b36c0",
+  "processing": {
+    "audio": {
+      "base_seed": 20260920,
+      "chunk_size_samples": 4096,
+      "duration_s": 4.5,
+      "fir_length": 129,
+      "geometric_attenuation": false,
+      "noise_model": "independent_station_stream_AWGN",
+      "reception_start_s": 0.5,
+      "sampling_rate_hz": 48000.0,
+      "signal_model": "random_broadband",
+      "snr_db": 10.0,
+      "sound_speed_mps": 343.0,
+      "source_maximum_frequency_hz": 10000.0,
+      "source_minimum_frequency_hz": 300.0,
+      "source_seed": 7695369920107171460,
+      "source_taper_fraction": 0.0,
+      "station_noise_seeds": {
+        "S0": 4325937063107916634,
+        "S1": 4694909611747425658,
+        "S2": 6076579060007146674
+      }
+    },
+    "calibration": {
+      "origin": {
+        "evaluation_used": false,
+        "sha256": "37b7dd7718393a32a5ef5c0b0b3d0801a968ed338b98e645f73e71b5d7fb7a19",
+        "source_name": "three_station_audio_calibration.csv",
+        "split": "calibration"
+      },
+      "values": [
+        {
+          "bias_rad": [
+            6.166287983504802e-05,
+            0.00014821960417930454
+          ],
+          "covariance_rad2": [
+            [
+              1.6993658198970995e-05,
+              -1.2837557059374698e-06
+            ],
+            [
+              -1.2837557059374698e-06,
+              1.8569274437897742e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            7.059071953500783e-05,
+            0.00015039751407343332
+          ],
+          "covariance_rad2": [
+            [
+              1.6947967836974178e-05,
+              -1.4129751478731665e-06
+            ],
+            [
+              -1.4129751478731665e-06,
+              1.8464658588564294e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            -0.00046496264038545557,
+            0.00019931132385448409
+          ],
+          "covariance_rad2": [
+            [
+              1.7205689584438466e-05,
+              -7.911004987111703e-07
+            ],
+            [
+              -7.911004987111703e-07,
+              1.7478219181667276e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            -0.0004739526377976617,
+            0.00018981801409856185
+          ],
+          "covariance_rad2": [
+            [
+              1.709719944671609e-05,
+              -7.939804850809974e-07
+            ],
+            [
+              -7.939804850809974e-07,
+              1.7305298516393538e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            0.0001583631663769137,
+            -4.829092222711812e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8660236630218435e-05,
+              5.297797678846075e-07
+            ],
+            [
+              5.297797678846075e-07,
+              1.912144519176803e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S2"
+        },
+        {
+          "bias_rad": [
+            0.0001533524895824084,
+            -3.262762430540808e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8656417133848722e-05,
+              6.539832088848626e-07
+            ],
+            [
+              6.539832088848626e-07,
+              1.909837179103141e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S2"
+        }
+      ]
+    },
+    "frontend": {
+      "frame_length": 1024,
+      "gcc": {
+        "delay_bound": "baseline_over_c_plus_2_samples",
+        "interpolation_factor": 2,
+        "maximum_frequency_hz": 10000.0,
+        "minimum_frequency_hz": 200.0,
+        "pair_selection": "all_6_oriented_pairs",
+        "relative_spectral_floor": 1e-08,
+        "wls_sigma_tdoa_s": "one_sample"
+      },
+      "hop_length": 512,
+      "methods": [
+        "all_6_equal_gcc_wls",
+        "equal_weight_srp_phat"
+      ],
+      "modeled_processing_delay_s": 0.01,
+      "srp": {
+        "pair_weighting": "equal",
+        "search_steps_deg": [
+          5.0,
+          1.0,
+          0.25
+        ]
+      },
+      "station_delivery_delay_s": {
+        "S0": 0.0,
+        "S1": 0.015,
+        "S2": 0.03
+      }
+    },
+    "stations": [
+      {
+        "id": "S0",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S1",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          100.0,
+          0.0,
+          5.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S2",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          10.0,
+          90.0,
+          -2.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "tracker": {
+      "frame_stride": 32,
+      "history_step_s": 0.25,
+      "history_window_s": 0.85,
+      "manoeuvre_end_s": 3.5,
+      "manoeuvre_start_s": 2.5,
+      "maximum_range_m": 150.0,
+      "maximum_transport_delay_s": 0.1,
+      "position_coverage_threshold": 12.591587243743977,
+      "qc_m2_s3": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "recovery": {
+        "confirmation_measurement_count": 3,
+        "confirmation_reception_span_s": 0.05,
+        "confirmation_station_count": 2,
+        "construction_measurement_count": 6,
+        "fit_nis_threshold": 10.596634733096073,
+        "inconsistency_reception_span_s": 0.5,
+        "inconsistency_rejection_count": 4,
+        "inconsistency_station_count": 2,
+        "maximum_batch_optimizations_per_generation": null,
+        "maximum_candidate_count": 16,
+        "maximum_confirmation_age_s": 3.0,
+        "maximum_confirmation_events": 180,
+        "maximum_confirmation_failures": 20,
+        "maximum_hypotheses_per_generation": 8,
+        "maximum_initialization_buffer_events": 360,
+        "pre_update_nis_threshold": 9.210340371976184
+      }
+    }
+  },
+  "provenance": {
+    "migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"
+  },
+  "recording": {
+    "manifest": {
+      "audio_seed": 20260920,
+      "duration_s": 6.0,
+      "export_period_s": 0.02,
+      "exporter_source_sha256": "662b322536a537c4c486c0a33970b9870049f85fd0ad6d094d6d4882de3e9ace",
+      "frame": "ENU x=East y=North z=Up, metres, seconds",
+      "gazebo_seed": 20260920,
+      "gazebo_sim_version": "8.15.0",
+      "kind": "smooth_turn",
+      "output_state": "post-physics Gazebo ECM world pose of sound_source",
+      "physics_step_s": 0.001,
+      "quaternion_order": "w,x,y,z",
+      "scene_config_sha256": "3ca61414759374b49a282f8975367a58f0e3349521eb96ccd5e0f421938dbad4",
+      "scene_sdf_sha256": "cfa362f2a6fba95ab46868abd4b82c7f86d63e92a17497d3d3214d872fa4a6db",
+      "schema_version": 1,
+      "source_command": {
+        "initial_position_m": [
+          70.0,
+          55.0,
+          40.0
+        ],
+        "initial_velocity_mps": [
+          7.0,
+          -3.0,
+          1.5
+        ],
+        "turn_angle_rad": 0.45,
+        "turn_end_s": 3.5,
+        "turn_start_s": 2.5
+      },
+      "station_config": [
+        {
+          "id": "S0",
+          "position_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "id": "S1",
+          "position_m": [
+            100.0,
+            0.0,
+            5.0
+          ],
+          "rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "id": "S2",
+          "position_m": [
+            10.0,
+            90.0,
+            -2.0
+          ],
+          "rpy_rad": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "ubuntu": "Ubuntu 24.04.5 LTS",
+      "velocity": "not exported; interpolator derivatives are inferred from observed positions"
+    },
+    "manifest_sha256": "84f93ce17590d558a510c881bd118bb1ad3abb3401f4b5b43592fb1ee3fe6e72",
+    "state_sha256": "f0801e86e4241112f79b19edaf59ef2c9b59381cc6e87ebbaf806605af688a34"
+  },
+  "run_id": "gzrun-a4eef95e4fc48da4243996d5",
+  "schema_version": 2
+}

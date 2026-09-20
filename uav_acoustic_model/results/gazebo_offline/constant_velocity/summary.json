@@ -1,9 +1,14 @@
 {
+  "schema_version": 2,
+  "run_id": "gzrun-fbd21802584061da2cd121dc",
+  "sequence_id": "gzrun-fbd21802584061da2cd121dc",
+  "config_sha256": "fbd21802584061da2cd121dcb087e242c6083120d45120a773ccb471c9b3bd30",
+  "code_sha256": "f85dc3f59cf21c0e25ed6616d7c721af76be48dec5a827b7955459b48c6a1db3",
   "recording_kind": "constant_velocity",
   "gazebo_sim_version": "8.15.0",
   "gazebo_state_sha256": "4bb4a554a2abce964d3d2b1a476c4b266f80d215d0a3abec2ff76f63fc2f39fa",
   "frozen_calibration_sha256": "37b7dd7718393a32a5ef5c0b0b3d0801a968ed338b98e645f73e71b5d7fb7a19",
-  "frozen_calibration_source": "results/three_station_audio_calibration.csv",
+  "frozen_calibration_source": "three_station_audio_calibration.csv",
   "seed": 20260920,
   "snr_db": 10.0,
   "audio_sampling_rate_hz": 48000.0,
@@ -22,7 +27,7 @@
   "frame_length": 1024,
   "hop_length": 512,
   "tracker_frame_stride": 32,
-  "frontend_wall_runtime_s": 8.270067613000037,
+  "frontend_wall_runtime_s": 9.126461265999751,
   "methods": {
     "all_6_equal_gcc_wls": {
       "bearing_frames": 1260,
@@ -36,6 +41,7 @@
       "first_confirmation_time_s": 1.5553125,
       "final_valid": true,
       "accepted_update_count": 30,
+      "rejected_update_count": 2,
       "failure_reasons": {
         "initialization_failed:no_observable_hypothesis": 5,
         "tentative_initialization_unconfirmed": 4
@@ -57,6 +63,7 @@
       "first_confirmation_time_s": 1.5553125,
       "final_valid": true,
       "accepted_update_count": 30,
+      "rejected_update_count": 2,
       "failure_reasons": {
         "initialization_failed:no_observable_hypothesis": 5,
         "tentative_initialization_unconfirmed": 4
