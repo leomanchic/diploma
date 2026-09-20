@@ -29,6 +29,9 @@ dev = [
 where = ["."]
 include = ["model*", "estimators*", "simulation*", "validation*", "visualization*"]
 
+[tool.setuptools.package-data]
+simulation = ["gazebo_scene.json"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]

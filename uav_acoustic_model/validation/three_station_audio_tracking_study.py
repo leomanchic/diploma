@@ -29,6 +29,7 @@ from model.geometry import tetrahedral_array
 from model.measurements import BearingMeasurement
 from model.station import StationPose
 from simulation.continuous_stream import extract_overlapping_frames
+from simulation.gazebo_offline import shared_stations
 from simulation.manoeuvre_trajectory import BenchmarkManoeuvreTrajectory
 from simulation.moving_source import solve_emission_time
 from simulation.multistation_audio import MultistationAudioStream, synthesize_multistation_audio
@@ -98,11 +99,7 @@ class AudioBearingCalibration:
 
 
 def pilot_stations() -> tuple[StationPose, ...]:
-    positions = ([0.0, 0.0, 0.0], [100.0, 0.0, 5.0], [10.0, 90.0, -2.0])
-    return tuple(
-        StationPose(f"S{index}", position, np.eye(3), tetrahedral_array())
-        for index, position in enumerate(positions)
-    )
+    return shared_stations()
 
 
 def pilot_configurations() -> tuple[AudioPilotConfig, ...]:
