@@ -1,0 +1,10 @@
+{
+  "calibration_tangent_frame": "prediction",
+  "maximum_serialized_residual_disagreement_rad": 0.0,
+  "maximum_tracker_residual_at_truth_disagreement_rad": 2.220446049250313e-16,
+  "maximum_truth_direction_disagreement": 5.551115123125783e-17,
+  "residual_convention": "Log_prediction(measurement), azimuth/elevation orthonormal arc radians",
+  "sampled_group_count": 48,
+  "sampled_valid_rows": 144,
+  "tracker_calibration_operation": "residual_minus_calibration_bias"
+}

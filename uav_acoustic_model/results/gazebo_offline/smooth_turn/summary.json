@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "run_id": "gzrun-126db8767bc88d7abd840c1f",
+  "sequence_id": "gzrun-126db8767bc88d7abd840c1f",
+  "config_sha256": "126db8767bc88d7abd840c1fbf61ef7a4214de43b789f6541a23f0c25dd68791",
+  "code_sha256": "8430cb16cfae6755754a0888cbf46a91945bd87a13bfaf4927a32dacf34b59b5",
+  "recording_kind": "smooth_turn",
+  "gazebo_sim_version": "8.15.0",
+  "gazebo_state_sha256": "f0801e86e4241112f79b19edaf59ef2c9b59381cc6e87ebbaf806605af688a34",
+  "frozen_calibration_sha256": "37b7dd7718393a32a5ef5c0b0b3d0801a968ed338b98e645f73e71b5d7fb7a19",
+  "frozen_calibration_source": "three_station_audio_calibration.csv",
+  "seed": 20260920,
+  "snr_db": 10.0,
+  "audio_sampling_rate_hz": 48000.0,
+  "gazebo_export_rate_hz": 50.0,
+  "audio_duration_s": 4.5,
+  "audio_source_sample_count": 221489,
+  "audio_source_start_time_s": 0.20743152144218768,
+  "minimum_emission_time_s": 0.21280652144218767,
+  "maximum_emission_time_s": 4.816396542596956,
+  "recording_support_s": [
+    0.001,
+    6.0
+  ],
+  "maximum_export_gap_s": 0.020000000000000462,
+  "maximum_interpolated_speed_mps": 7.762088376719598,
+  "frame_length": 1024,
+  "hop_length": 512,
+  "tracker_frame_stride": 32,
+  "frontend_wall_runtime_s": 13.344552839999778,
+  "methods": {
+    "all_6_equal_gcc_wls": {
+      "bearing_frames": 1260,
+      "valid_bearing_frames": 1260,
+      "publication_count": 42,
+      "valid_publication_count": 33,
+      "availability_fraction": 0.7857142857142857,
+      "coverage_fraction_conditional": 1.0,
+      "position_rmse_m_conditional": 0.5889673519387111,
+      "position_p95_m_conditional": 1.2372357220386905,
+      "first_confirmation_time_s": 1.5553125,
+      "final_valid": true,
+      "accepted_update_count": 30,
+      "rejected_update_count": 2,
+      "failure_reasons": {
+        "initialization_failed:no_observable_hypothesis": 5,
+        "tentative_initialization_unconfirmed": 4
+      },
+      "update_rejection_reasons": {
+        "emission_outside_history": 2
+      },
+      "final_failure_reason": ""
+    },
+    "equal_weight_srp_phat": {
+      "bearing_frames": 1260,
+      "valid_bearing_frames": 1260,
+      "publication_count": 42,
+      "valid_publication_count": 33,
+      "availability_fraction": 0.7857142857142857,
+      "coverage_fraction_conditional": 1.0,
+      "position_rmse_m_conditional": 0.5883974164854895,
+      "position_p95_m_conditional": 1.2349116129493258,
+      "first_confirmation_time_s": 1.5553125,
+      "final_valid": true,
+      "accepted_update_count": 30,
+      "rejected_update_count": 2,
+      "failure_reasons": {
+        "initialization_failed:no_observable_hypothesis": 5,
+        "tentative_initialization_unconfirmed": 4
+      },
+      "update_rejection_reasons": {
+        "emission_outside_history": 2
+      },
+      "final_failure_reason": ""
+    }
+  }
+}

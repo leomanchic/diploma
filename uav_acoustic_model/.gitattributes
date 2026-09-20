@@ -1,0 +1,5 @@
+# Frozen experiment hashes must survive checkout on Windows and Linux.
+*.py text eol=lf
+results/gazebo_offline/** text eol=lf
+results/three_station_audio_calibration.csv text eol=lf
+simulation/gazebo_scene.json text eol=lf

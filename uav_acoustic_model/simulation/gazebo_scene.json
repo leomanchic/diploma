@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "frame": "ENU",
+  "stations": [
+    {"id": "S0", "position_m": [0.0, 0.0, 0.0], "rpy_rad": [0.0, 0.0, 0.0]},
+    {"id": "S1", "position_m": [100.0, 0.0, 5.0], "rpy_rad": [0.0, 0.0, 0.0]},
+    {"id": "S2", "position_m": [10.0, 90.0, -2.0], "rpy_rad": [0.0, 0.0, 0.0]}
+  ],
+  "source": {
+    "initial_position_m": [70.0, 55.0, 40.0],
+    "initial_velocity_mps": [7.0, -3.0, 1.5],
+    "turn_start_s": 2.5,
+    "turn_end_s": 3.5,
+    "turn_angle_rad": 0.45
+  },
+  "physics_step_s": 0.001,
+  "duration_s": 6.0,
+  "export_period_s": 0.02,
+  "audio_reception_start_s": 0.5,
+  "audio_duration_s": 4.5,
+  "audio_sampling_rate_hz": 48000,
+  "snr_db": 10.0,
+  "seed": 20260920
+}

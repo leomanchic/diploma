@@ -1,0 +1,5 @@
+split,recording_id,selected_interval_samples,required_source_samples_including_fir_guard,remaining_samples,required_source_start_time_s,required_source_stop_time_s,repeat_or_padding_used
+calibration,freesound-683298-sadiquecat-mavic-mini-2,288000,222108,65892,0.20743152144218774,4.834660688108855,False
+calibration,freesound-263022-alcappuccino-phantom-2,288000,222169,65831,0.2063007899307983,4.8348007899307985,False
+evaluation,freesound-383904-simeonradivoev-mini-quadcopter,288000,222108,65892,0.20743152144218774,4.834660688108855,False
+evaluation,freesound-321687-n-audioman-drone-takeoff,288000,222169,65831,0.2063007899307983,4.8348007899307985,False

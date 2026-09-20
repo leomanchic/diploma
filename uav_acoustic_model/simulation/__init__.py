@@ -12,6 +12,36 @@ from .signals import (
     random_bandlimited_signal,
 )
 from .propagation import PropagationResult, simulate_propagation
+from .trajectory import (
+    CircularTrajectory,
+    ConstantVelocityTrajectory,
+    PiecewiseLinearTrajectory,
+    StationaryTrajectory,
+    Trajectory,
+)
+from .moving_source import (
+    MovingSourceResult,
+    arrival_times_for_emission_event,
+    centroid_emission_time,
+    constant_velocity_emission_time,
+    retarded_time_doppler_factor,
+    simulate_moving_source,
+    solve_emission_time,
+    validate_doppler_bandlimit,
+)
+from .continuous_stream import (
+    ContinuousStreamResult,
+    OverlappingFrameBatch,
+    extract_overlapping_frames,
+    reception_time_grid,
+    synthesize_continuous_stream,
+)
+from .multistation_audio import (
+    MultistationAudioStream,
+    StationAudioStream,
+    multistation_audio_seeds,
+    synthesize_multistation_audio,
+)
 
 __all__ = [
     "DEFAULT_FIR_LENGTH",
@@ -23,33 +53,26 @@ __all__ = [
     "frequency_domain_delay",
     "windowed_sinc_delay",
     "random_bandlimited_signal",
-]
-from simulation.trajectory import (
-    CircularTrajectory,
-    ConstantVelocityTrajectory,
-    PiecewiseLinearTrajectory,
-    StationaryTrajectory,
-    Trajectory,
-)
-from simulation.moving_source import (
-    MovingSourceResult,
-    centroid_emission_time,
-    constant_velocity_emission_time,
-    retarded_time_doppler_factor,
-    simulate_moving_source,
-    solve_emission_time,
-)
-
-__all__ = [
     "CircularTrajectory",
     "ConstantVelocityTrajectory",
     "PiecewiseLinearTrajectory",
     "StationaryTrajectory",
     "Trajectory",
     "MovingSourceResult",
+    "arrival_times_for_emission_event",
     "centroid_emission_time",
     "constant_velocity_emission_time",
     "retarded_time_doppler_factor",
     "simulate_moving_source",
     "solve_emission_time",
+    "validate_doppler_bandlimit",
+    "ContinuousStreamResult",
+    "OverlappingFrameBatch",
+    "extract_overlapping_frames",
+    "reception_time_grid",
+    "synthesize_continuous_stream",
+    "MultistationAudioStream",
+    "StationAudioStream",
+    "multistation_audio_seeds",
+    "synthesize_multistation_audio",
 ]
