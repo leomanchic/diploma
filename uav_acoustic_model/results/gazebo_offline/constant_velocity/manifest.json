@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "scene_config_sha256": "3ca61414759374b49a282f8975367a58f0e3349521eb96ccd5e0f421938dbad4",
+  "scene_sdf_sha256": "c7fafea4f7f6878b9741dbeeabd6043716a7e374365ce5bcd53327197af4c4d3",
+  "exporter_source_sha256": "662b322536a537c4c486c0a33970b9870049f85fd0ad6d094d6d4882de3e9ace",
+  "gazebo_sim_version": "8.15.0",
+  "ubuntu": "Ubuntu 24.04.5 LTS",
+  "kind": "constant_velocity",
+  "frame": "ENU x=East y=North z=Up, metres, seconds",
+  "quaternion_order": "w,x,y,z",
+  "output_state": "post-physics Gazebo ECM world pose of sound_source",
+  "velocity": "not exported; interpolator derivatives are inferred from observed positions",
+  "physics_step_s": 0.001,
+  "export_period_s": 0.02,
+  "duration_s": 6.0,
+  "gazebo_seed": 20260920,
+  "audio_seed": 20260920,
+  "station_config": [
+    {
+      "id": "S0",
+      "position_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S1",
+      "position_m": [
+        100.0,
+        0.0,
+        5.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S2",
+      "position_m": [
+        10.0,
+        90.0,
+        -2.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "source_command": {
+    "initial_position_m": [
+      70.0,
+      55.0,
+      40.0
+    ],
+    "initial_velocity_mps": [
+      7.0,
+      -3.0,
+      1.5
+    ],
+    "turn_start_s": 2.5,
+    "turn_end_s": 3.5,
+    "turn_angle_rad": 0.45
+  }
+}

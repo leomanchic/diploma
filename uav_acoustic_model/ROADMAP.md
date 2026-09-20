@@ -40,6 +40,7 @@ bearing-измерениям определяет и затем причинно
 | S7C-D1 | Done | Измерить пределы принятого strict-CV C1 при потерях, паузах станций, задержках и выбросах без изменения фильтра | фиксированный протокол, paired 200-block/1800-run study, epoch/sequence/profile CSV и notebook | deterministic/smoke gates, честные denominators/coverage, полный reproducibility audit | S7C-C1 |
 | S7C-D2 | Done | Добавить явно включаемые robust initialization и pre-update NIS gate без изменения C1 default | consensus diagnostics, four-way ablation, paired held-out benchmark, CSV и notebook | baseline reproducibility, separate/combined mechanism tests, held-out whole-sequence comparison, full gates | S7C-D1 |
 | S8 | In progress | Проверить тракт с записанным приближением source signal | versioned manifest/loader, independent-session paired recorded/broadband pilot, source/session/origin split audit | воспроизводимый provenance, calibration-only uncertainty, session-level denominators и явная граница held-out source benchmark vs field validation | S4, S7A, synthetic S7C pilot |
+| S8-GZ | Done (integration pilot) | Записать две заданные траектории одного видимого источника в Gazebo и обработать офлайн тремя станциями | общая ENU-сцена, post-step pose CSV, finite-support адаптер, фиксированный GCC/SRP/tracker, 3D viewer | Gazebo→CSV доказан, прямая/поворот и 50→100 Гц сравнены численно, отказы показаны | S6, synthetic S7C pilot |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -47,6 +48,11 @@ bearing-измерениям определяет и затем причинно
 | S13 | Planned | Выполнить multi-station field validation | versioned datasets, calibration protocol, final report | независимый 3D ground truth и полностью воспроизводимый benchmark | S8–S12 |
 
 ## Уровни зрелости
+
+S8-GZ подтверждает только подключение уже принятого синтетического
+акустического конвейера к кинематическому движению Gazebo. Он не меняет статус
+S8 recorded-source validation, S7C-C/D или уровень полевой зрелости. Динамика
+полёта, автопилот, ROS 2, PX4, ветер и отражения в этот pilot не входят.
 
 | Уровень | Определение |
 |---|---|
