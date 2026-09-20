@@ -1,11 +1,4 @@
 {
-  "code": {
-    "git_commit_sha_at_creation": "03dc7d7408bc53c783af38279b622bfba8458f6c",
-    "git_commit_sha_at_last_refresh": "b6a20f89e65f26a57fe19af6e7b5ad30ba6865f0",
-    "sha256": "b8a9b466adb392618249962cc9428b7caba37b079584bbd884ada91a8d19665a"
-  },
-  "comparison_group_id": null,
-  "config_sha256": "0edcc1ecc5653fb7e8bb81b32829d401da212411c19e3954bc7f717fb19e71bb",
   "processing": {
     "audio": {
       "base_seed": 20260920,
@@ -21,13 +14,7 @@
       "sound_speed_mps": 343.0,
       "source_maximum_frequency_hz": 10000.0,
       "source_minimum_frequency_hz": 300.0,
-      "source_seed": 7695369920107171460,
-      "source_taper_fraction": 0.0,
-      "station_noise_seeds": {
-        "S0": 4325937063107916634,
-        "S1": 4694909611747425658,
-        "S2": 6076579060007146674
-      }
+      "source_taper_fraction": 0.0
     },
     "calibration": {
       "origin": {
@@ -331,96 +318,5 @@
       }
     }
   },
-  "provenance": {
-    "code_refresh_history": [
-      {
-        "previous_code_sha256": "f85dc3f59cf21c0e25ed6616d7c721af76be48dec5a827b7955459b48c6a1db3",
-        "previous_config_sha256": "fbd21802584061da2cd121dcb087e242c6083120d45120a773ccb471c9b3bd30",
-        "previous_git_commit_sha": "b6a20f89e65f26a57fe19af6e7b5ad30ba6865f0",
-        "previous_results_manifest_sha256": "257d8b9c1b41ef6fda57f66271413b4ed6c38d4f4442bfe4e51ea098a85c039f",
-        "previous_run_id": "gzrun-fbd21802584061da2cd121dc"
-      }
-    ],
-    "migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"
-  },
-  "recording": {
-    "manifest": {
-      "audio_seed": 20260920,
-      "duration_s": 6.0,
-      "export_period_s": 0.02,
-      "exporter_source_sha256": "662b322536a537c4c486c0a33970b9870049f85fd0ad6d094d6d4882de3e9ace",
-      "frame": "ENU x=East y=North z=Up, metres, seconds",
-      "gazebo_seed": 20260920,
-      "gazebo_sim_version": "8.15.0",
-      "kind": "constant_velocity",
-      "output_state": "post-physics Gazebo ECM world pose of sound_source",
-      "physics_step_s": 0.001,
-      "quaternion_order": "w,x,y,z",
-      "scene_config_sha256": "3ca61414759374b49a282f8975367a58f0e3349521eb96ccd5e0f421938dbad4",
-      "scene_sdf_sha256": "c7fafea4f7f6878b9741dbeeabd6043716a7e374365ce5bcd53327197af4c4d3",
-      "schema_version": 1,
-      "source_command": {
-        "initial_position_m": [
-          70.0,
-          55.0,
-          40.0
-        ],
-        "initial_velocity_mps": [
-          7.0,
-          -3.0,
-          1.5
-        ],
-        "turn_angle_rad": 0.45,
-        "turn_end_s": 3.5,
-        "turn_start_s": 2.5
-      },
-      "station_config": [
-        {
-          "id": "S0",
-          "position_m": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "rpy_rad": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        },
-        {
-          "id": "S1",
-          "position_m": [
-            100.0,
-            0.0,
-            5.0
-          ],
-          "rpy_rad": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        },
-        {
-          "id": "S2",
-          "position_m": [
-            10.0,
-            90.0,
-            -2.0
-          ],
-          "rpy_rad": [
-            0.0,
-            0.0,
-            0.0
-          ]
-        }
-      ],
-      "ubuntu": "Ubuntu 24.04.5 LTS",
-      "velocity": "not exported; interpolator derivatives are inferred from observed positions"
-    },
-    "manifest_sha256": "3e9f449e6b84f468821eadb1db73a3a341a30e31f542de272e38256809f07b5f",
-    "state_sha256": "4bb4a554a2abce964d3d2b1a476c4b266f80d215d0a3abec2ff76f63fc2f39fa"
-  },
-  "run_id": "gzrun-0edcc1ecc5653fb7e8bb81b3",
-  "schema_version": 2
+  "schema_version": 1
 }

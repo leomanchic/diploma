@@ -5,10 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import asdict
-from pathlib import Path
+from pathlib import Path, PurePath
+from types import SimpleNamespace
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -23,7 +25,7 @@ from validation.three_station_audio_tracking_study import (
     SIGNAL_MODEL, SOURCE_MAXIMUM_FREQUENCY_HZ, MODELED_PROCESSING_DELAY_S,
     STATION_DELIVERY_DELAY_S, QC_ALPHA_M2_S3, HISTORY_WINDOW_S,
     MAXIMUM_TRACKER_RANGE_M, MAXIMUM_TRANSPORT_DELAY_S,
-    POSITION_COVERAGE_THRESHOLD,
+    POSITION_COVERAGE_THRESHOLD, MANOEUVRE_START_S, MANOEUVRE_END_S,
 )
 from validation.srp_statistical import SRP_SEARCH_STEPS_DEG
 
@@ -46,12 +48,17 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(canonical_bytes(value)).hexdigest()
 
 
+def _source_name(path: PurePath, root: PurePath) -> str:
+    """Use the same digest label for a source file on every host OS."""
+    return path.relative_to(root).as_posix()
+
+
 def code_sha256() -> str:
     """Hash runnable Python source, independent of checkout path or Git metadata."""
     digest = hashlib.sha256()
     for folder in ("model", "simulation", "estimators", "validation"):
         for path in sorted((ROOT / folder).glob("*.py")):
-            digest.update(str(path.relative_to(ROOT)).encode())
+            digest.update(_source_name(path, ROOT).encode())
             digest.update(b"\0")
             digest.update(bytes.fromhex(sha256(path)))
     return digest.hexdigest()
@@ -68,6 +75,53 @@ def stations_from_experiment(experiment: dict) -> tuple[StationPose, ...]:
                              Rotation.from_euler("xyz", item["rpy_rad"]).as_matrix(),
                              np.asarray(item["microphones_local_m"], dtype=float))
                  for item in experiment["processing"]["stations"])
+
+
+def calibration_from_experiment(experiment: dict) -> dict:
+    result = {}
+    for item in experiment["processing"]["calibration"]["values"]:
+        covariance = np.asarray(item["covariance_rad2"], dtype=float)
+        bias = np.asarray(item["bias_rad"], dtype=float)
+        if (covariance.shape != (2, 2) or not np.all(np.isfinite(covariance))
+                or np.min(np.linalg.eigvalsh(covariance)) <= 0):
+            raise ValueError("frozen calibration covariance is not positive definite")
+        if bias.shape != (2,) or not np.all(np.isfinite(bias)):
+            raise ValueError("frozen calibration bias must be two finite radians")
+        key = item["station_id"], item["estimator_variant"]
+        if key in result:
+            raise ValueError("duplicate frozen calibration key")
+        result[key] = SimpleNamespace(covariance_rad2=covariance,
+                                      mean_residual_rad=bias)
+    expected = {(station.station_id, method) for station in stations_from_experiment(experiment)
+                for method in experiment["processing"]["frontend"]["methods"]}
+    if set(result) != expected:
+        raise ValueError("frozen calibration station/method keys do not match experiment")
+    return result
+
+
+def check_processing_compatibility(experiment: dict) -> None:
+    frontend = experiment["processing"]["frontend"]
+    if frontend["methods"] != list(ESTIMATOR_VARIANTS):
+        raise ValueError("frozen estimator methods are incompatible with this code")
+    if frontend["gcc"] != {
+        "pair_selection": "all_6_oriented_pairs", "delay_bound": "baseline_over_c_plus_2_samples",
+        "interpolation_factor": 2, "minimum_frequency_hz": 200.0,
+        "maximum_frequency_hz": 10000.0, "relative_spectral_floor": 1e-8,
+        "wls_sigma_tdoa_s": "one_sample",
+    } or frontend["srp"] != {"pair_weighting": "equal", "search_steps_deg": list(SRP_SEARCH_STEPS_DEG)}:
+        raise ValueError("frozen GCC/SRP settings are incompatible with this code")
+    audio = experiment["processing"]["audio"]
+    if audio["source_minimum_frequency_hz"] != 300.0 or audio["source_taper_fraction"] != 0.0:
+        raise ValueError("frozen source spectrum is incompatible with this code")
+    if audio["noise_model"] != "independent_station_stream_AWGN":
+        raise ValueError("frozen noise model is incompatible with this code")
+    source_seed, noise_seeds = multistation_audio_seeds(audio["base_seed"], len(experiment["processing"]["stations"]))
+    expected_noise = dict(zip((item["id"] for item in experiment["processing"]["stations"]), noise_seeds, strict=True))
+    if audio["source_seed"] != source_seed or audio["station_noise_seeds"] != expected_noise:
+        raise ValueError("stored audio seeds disagree with base seed")
+    tracker = experiment["processing"]["tracker"]
+    if tracker["manoeuvre_start_s"] != MANOEUVRE_START_S or tracker["manoeuvre_end_s"] != MANOEUVRE_END_S:
+        raise ValueError("frozen evaluation phase settings are incompatible with this code")
 
 
 def _calibration_snapshot(path: Path, stations: list[dict]) -> dict:
@@ -179,22 +233,76 @@ def _write_json(path: Path, value: dict) -> None:
                     encoding="utf-8")
 
 
+def _recording_snapshot(directory: Path, recording) -> dict:
+    return {"state_sha256": recording.csv_sha256,
+            "manifest_sha256": sha256(directory / "manifest.json"),
+            "manifest": recording.manifest}
+
+
+def _new_experiment(directory: Path, processing: dict, provenance: dict,
+                    comparison_group_id: str | None = None) -> dict:
+    recording = load_gazebo_recording(directory)
+    return finalize_experiment({
+        "schema_version": SCHEMA_VERSION,
+        "recording": _recording_snapshot(directory, recording),
+        "processing": processing,
+        "code": {"sha256": code_sha256(), "git_commit_sha_at_creation": _git_sha()},
+        "provenance": provenance,
+        "comparison_group_id": comparison_group_id,
+    })
+
+
+def initialize_experiment(directory: Path, processing_config_path: Path,
+                          *, comparison_group_id: str | None = None) -> dict:
+    """Freeze explicit processing inputs for a new, already recorded Gazebo scene."""
+    directory, config_path = Path(directory), Path(processing_config_path)
+    if (directory / EXPERIMENT_FILE).exists():
+        raise FileExistsError(f"{EXPERIMENT_FILE} already exists; use a new recording directory")
+    result_files = ("summary.json", "bearing_results.csv", RESULTS_FILE, "viewer.html")
+    if (any((directory / name).exists() for name in result_files)
+            or any(directory.glob("tracking_*.csv"))
+            or any(directory.glob("updates_*.csv"))):
+        raise ValueError("directory already has processing results; use `migrate` for legacy data or a new recording directory")
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    if set(config) != {"schema_version", "processing"} or config["schema_version"] != 1:
+        raise ValueError("processing config must have schema_version=1 and a processing object")
+    processing = json.loads(json.dumps(config["processing"]))
+    recording = load_gazebo_recording(directory)
+    stations = processing["stations"]
+    station_config = [{key: item[key] for key in ("id", "position_m", "rpy_rad")}
+                      for item in stations]
+    if station_config != recording.manifest["station_config"]:
+        raise ValueError("processing stations differ from recorded Gazebo geometry")
+    # Child seeds are deterministic outputs of the explicitly supplied base seed.
+    audio = processing["audio"]
+    source_seed, noise_seeds = multistation_audio_seeds(int(audio["base_seed"]), len(stations))
+    expected_noise = dict(zip((station["id"] for station in stations), noise_seeds, strict=True))
+    if "source_seed" in audio and audio["source_seed"] != source_seed:
+        raise ValueError("source_seed disagrees with base_seed")
+    if "station_noise_seeds" in audio and audio["station_noise_seeds"] != expected_noise:
+        raise ValueError("station_noise_seeds disagree with base_seed")
+    audio["source_seed"] = source_seed
+    audio["station_noise_seeds"] = expected_noise
+    # Check geometry, calibration keys and algorithm compatibility before writing.
+    stations_from_experiment({"processing": processing})
+    candidate = {"processing": processing}
+    calibration_from_experiment(candidate)
+    check_processing_compatibility(candidate)
+    experiment = _new_experiment(directory, processing, {
+        "initialized_from_processing_config": config_path.name,
+        "processing_config_sha256": sha256(config_path),
+    }, comparison_group_id)
+    _write_json(directory / EXPERIMENT_FILE, experiment)
+    return experiment
+
+
 def migrate_legacy(directory: Path, calibration_path: Path) -> dict:
     directory = Path(directory)
     if (directory / EXPERIMENT_FILE).exists():
         raise FileExistsError(f"{EXPERIMENT_FILE} already exists; migration is one-time")
-    recording = load_gazebo_recording(directory)
     processing = _default_processing(directory, calibration_path)
-    experiment = finalize_experiment({
-        "schema_version": SCHEMA_VERSION,
-        "recording": {"state_sha256": recording.csv_sha256,
-                      "manifest_sha256": sha256(directory / "manifest.json"),
-                      "manifest": recording.manifest},
-        "processing": processing,
-        "code": {"sha256": code_sha256(), "git_commit_sha_at_creation": _git_sha()},
-        "provenance": {"migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"},
-        "comparison_group_id": None,
-    })
+    experiment = _new_experiment(directory, processing,
+        {"migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"})
     _write_json(directory / EXPERIMENT_FILE, experiment)
     return experiment
 
@@ -203,7 +311,7 @@ def load_experiment(directory: Path, *, check_code: bool = False) -> dict:
     directory = Path(directory)
     path = directory / EXPERIMENT_FILE
     if not path.exists():
-        raise ValueError(f"legacy Gazebo result has no {EXPERIMENT_FILE}; run `python -m validation.gazebo_offline_run migrate {directory}` first")
+        raise ValueError(f"no {EXPERIMENT_FILE}; use `init --processing-config` for a new recording or `migrate` for a legacy result")
     experiment = json.loads(path.read_text(encoding="utf-8"))
     if experiment.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported experiment schema; explicit migration is required")
@@ -220,6 +328,34 @@ def load_experiment(directory: Path, *, check_code: bool = False) -> dict:
     if check_code and code_sha256() != experiment["code"]["sha256"]:
         raise ValueError("processing code SHA-256 differs from frozen experiment; use the matching code checkout or create a new experiment")
     return experiment
+
+
+def refresh_code_identity(directory: Path) -> dict:
+    """Explicitly supersede a verified result after processing code changes."""
+    directory = Path(directory)
+    experiment = load_experiment(directory)
+    verify_results(directory, experiment)
+    new_code_sha = code_sha256()
+    if new_code_sha == experiment["code"]["sha256"]:
+        raise ValueError("processing code SHA-256 is unchanged; replay the existing experiment")
+    updated = json.loads(json.dumps(experiment))
+    updated["provenance"].setdefault("code_refresh_history", []).append({
+        "previous_run_id": experiment["run_id"],
+        "previous_config_sha256": experiment["config_sha256"],
+        "previous_code_sha256": experiment["code"]["sha256"],
+        "previous_results_manifest_sha256": sha256(directory / RESULTS_FILE),
+        "previous_git_commit_sha": _git_sha(),
+    })
+    updated["code"]["sha256"] = new_code_sha
+    updated["code"]["git_commit_sha_at_last_refresh"] = _git_sha()
+    updated = finalize_experiment(updated)
+    staged = directory / (EXPERIMENT_FILE + ".pending")
+    _write_json(staged, updated)
+    os.replace(staged, directory / EXPERIMENT_FILE)
+    # The old result files remain inspectable, but cannot pass viewer checks
+    # until process publishes a complete manifest for the new identity.
+    (directory / RESULTS_FILE).unlink()
+    return updated
 
 
 def create_experiment(source: Path, destination: Path, *, snr_db: float | None = None,

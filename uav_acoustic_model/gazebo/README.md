@@ -16,28 +16,53 @@
 команды: постоянная скорость и гладкий поворот в `[2.5,3.5]` с. **Динамика
 полёта и автопилот здесь ещё не моделируются.**
 
-## Точные команды из корня `uav_acoustic_model`
+## Новая запись → инициализация → обработка → viewer
+
+Команды выполняются из корня `uav_acoustic_model`. Укажите **новый пустой**
+каталог для каждого запуска. `create_scene.py` отказывается писать в
+непустой каталог, поэтому принятые записи не перезаписываются.
 
 ```bash
 cmake -S gazebo -B build/gazebo
 cmake --build build/gazebo -j2
 mkdir -p build/gazebo-xdg build/gazebo-logs
 
-.venv/bin/python gazebo/create_scene.py constant_velocity results/gazebo_offline/constant_velocity
+recording_dir=results/gazebo_offline/manual_straight_001
+.venv/bin/python gazebo/create_scene.py constant_velocity "$recording_dir"
 XDG_CONFIG_HOME="$PWD/build/gazebo-xdg" XDG_DATA_HOME="$PWD/build/gazebo-xdg" \
 GZ_LOG_PATH="$PWD/build/gazebo-logs" GZ_SIM_SYSTEM_PLUGIN_PATH="$PWD/build/gazebo" \
-gz sim -s -r --iterations 6000 --seed 20260920 -v 2 results/gazebo_offline/constant_velocity/scene.sdf
+gz sim -s -r --iterations 6000 --seed 20260920 -v 2 "$recording_dir/scene.sdf"
+.venv/bin/python -m validation.gazebo_offline_run init "$recording_dir" --processing-config gazebo/processing_config.json
+.venv/bin/python -m validation.gazebo_offline_run process "$recording_dir"
+.venv/bin/python -m visualization.gazebo_offline_view "$recording_dir"
+xdg-open "$recording_dir/viewer.html"
+```
 
-.venv/bin/python gazebo/create_scene.py smooth_turn results/gazebo_offline/smooth_turn
+Для поворота используются те же команды с другим новым каталогом:
+
+```bash
+recording_dir=results/gazebo_offline/manual_turn_001
+.venv/bin/python gazebo/create_scene.py smooth_turn "$recording_dir"
 XDG_CONFIG_HOME="$PWD/build/gazebo-xdg" XDG_DATA_HOME="$PWD/build/gazebo-xdg" \
 GZ_LOG_PATH="$PWD/build/gazebo-logs" GZ_SIM_SYSTEM_PLUGIN_PATH="$PWD/build/gazebo" \
-gz sim -s -r --iterations 6000 --seed 20260920 -v 2 results/gazebo_offline/smooth_turn/scene.sdf
+gz sim -s -r --iterations 6000 --seed 20260920 -v 2 "$recording_dir/scene.sdf"
+.venv/bin/python -m validation.gazebo_offline_run init "$recording_dir" --processing-config gazebo/processing_config.json
+.venv/bin/python -m validation.gazebo_offline_run process "$recording_dir"
+.venv/bin/python -m visualization.gazebo_offline_view "$recording_dir"
+xdg-open "$recording_dir/viewer.html"
+```
 
-.venv/bin/python gazebo/create_scene.py smooth_turn results/gazebo_offline/smooth_turn_100hz --export-period-s 0.01
-XDG_CONFIG_HOME="$PWD/build/gazebo-xdg" XDG_DATA_HOME="$PWD/build/gazebo-xdg" \
-GZ_LOG_PATH="$PWD/build/gazebo-logs" GZ_SIM_SYSTEM_PLUGIN_PATH="$PWD/build/gazebo" \
-gz sim -s -r --iterations 6000 --seed 20260920 -v 2 results/gazebo_offline/smooth_turn_100hz/scene.sdf
+`gazebo/processing_config.json` явно задаёт геометрию микрофонов, аудио,
+SNR/seed, GCC/SRP, tracker и calibration bias/R. Его можно скопировать и
+изменить **до** `init`. Команда `init` проверяет соответствие станций
+манифесту новой записи, вычисляет дочерние source/noise seeds из base seed и
+сохраняет полный `experiment.json` с SHA конфигурации и записи. Ей не нужны
+старые `summary.json` и `bearing_results.csv`. Последующие изменения файла
+параметров не влияют на обработку уже инициализированного опыта.
 
+Проверка ранее принятых трёх записей и повторная обработка двух основных:
+
+```bash
 .venv/bin/python -m validation.gazebo_offline_run validate results/gazebo_offline
 .venv/bin/python -m validation.gazebo_offline_run process results/gazebo_offline/constant_velocity
 .venv/bin/python -m validation.gazebo_offline_run process results/gazebo_offline/smooth_turn
@@ -46,21 +71,23 @@ gz sim -s -r --iterations 6000 --seed 20260920 -v 2 results/gazebo_offline/smoot
 xdg-open results/gazebo_offline/constant_velocity/viewer.html
 xdg-open results/gazebo_offline/smooth_turn/viewer.html
 .venv/bin/python gazebo/compare_replay.py
+.venv/bin/python gazebo/compare_replay.py --base b6a20f89e65f26a57fe19af6e7b5ad30ba6865f0 --output results/gazebo_offline/reproducibility_comparison_b6a20f8.json
 ```
 
 Для просмотра сцены с GUI вместо `-s` можно запустить `gz sim -r ...` с тем
-же SDF и переменными окружения. Например, после сборки плагина:
+же SDF и переменными окружения **до** `init`, используя отдельный новый
+каталог. Например, вместо команды записи выше:
 
 ```bash
 XDG_CONFIG_HOME="$PWD/build/gazebo-xdg" XDG_DATA_HOME="$PWD/build/gazebo-xdg" \
 GZ_LOG_PATH="$PWD/build/gazebo-logs" GZ_SIM_SYSTEM_PLUGIN_PATH="$PWD/build/gazebo" \
-gz sim -r --seed 20260920 -v 2 results/gazebo_offline/constant_velocity/scene.sdf
+gz sim -r --iterations 6000 --seed 20260920 -v 2 "$recording_dir/scene.sdf"
 ```
 
 Окно Gazebo показывает землю, S0/S1/S2 и оранжевый `sound_source`.
 Параметры сцены находятся в `simulation/gazebo_scene.json`; параметры
 **уже обработанных** запусков — в их `experiment.json`. GUI запускает
-новую симуляцию и может перезаписать `gazebo_state.csv` указанного каталога;
+новую симуляцию и пишет `gazebo_state.csv` указанного каталога;
 для просмотра сохранённой обработки достаточно открыть `viewer.html`.
 Команда `--iterations 6000` завершает запись
 после 6 с **симуляционного** времени при шаге физики 1 мс. Паузы и изменение
@@ -126,11 +153,16 @@ xdg-open results/gazebo_offline/straight_snr5_seed23/viewer.html
 
 При необходимости `new` принимает `--calibration /путь/к/calibration.csv`.
 Изменение сохранённого `experiment.json` вручную нарушает его хеш; новая
-обработка выполняется через `new`. Старый каталог без `experiment.json`
-нужно преобразовать явно: `.venv/bin/python -m validation.gazebo_offline_run
+обработка с другими настройками выполняется через `new` или новый `init`.
+Старый каталог **с готовыми результатами**, но без `experiment.json`, нужно
+преобразовать явно: `.venv/bin/python -m validation.gazebo_offline_run
 migrate ПУТЬ_К_КАТАЛОГУ --calibration results/three_station_audio_calibration.csv`.
 Миграция требует исходные `summary.json` и `bearing_results.csv`, проверяет
 их против записи и калибровки. Два поставляемых запуска уже мигрированы.
+При намеренной смене хешируемого Python-кода команда `refresh-code` сначала
+проверяет старые результаты, сохраняет прежний run ID, SHA кода и SHA
+манифеста результатов в `provenance`, затем обновляет ID. После неё нужно
+повторить `process` и собрать viewer; исходная запись не меняется.
 Несовпадение SHA записи/манифеста/кода или итоговых CSV прерывает обработку
 или построение viewer с ошибкой. `results_manifest.json` фиксирует хеши всех
 результатов; пустой журнал обновлений остаётся CSV только с заголовком.
@@ -148,7 +180,10 @@ migrate ПУТЬ_К_КАТАЛОГУ --calibration results/three_station_audio_c
 содержит хеш фактически записанного CSV. `reproducibility_comparison.json`
 содержит численное сравнение двух replay с коммитом `03dc7d7`; порог
 абсолютной разницы `1e-12` для координат, bearing и агрегированных метрик,
-статусы сверяются точно. Замеренное время выполнения в сравнение не входит.
+статусы сверяются точно. `reproducibility_comparison_b6a20f8.json`
+сравнивает обновлённые ID с предыдущим replay-контрактом. Замеренное время
+выполнения в сравнение не входит. SHA кода использует относительные имена
+файлов с `/` на Linux и Windows; содержимое файлов остаётся под проверкой SHA.
 
 Допуски интеграционной проверки: `1e-6 м` для прямой, `1e-8 с` для задержки,
 `1e-5` RMS-единиц для общего аудио и `1e-5 м` для поворота. Они значительно

@@ -2,7 +2,37 @@
 
 Последнее обновление: 2026-09-20
 
-## Gazebo replay contract (S8-GZ-R)
+## Gazebo replay follow-up (S8-GZ-R)
+
+- Работа продолжена в `fix/gazebo-run-reproducibility` от `b6a20f8`, без
+  merge и force-push. `code_sha256()` хеширует относительные имена Python
+  файлов в POSIX-записи (`/`) на Linux и Windows, сохраняя проверку байтов
+  каждого файла. Регрессионный тест проверяет обе формы пути и изменение
+  хеша при изменении исходника.
+- `gazebo/processing_config.json` — явная версия 1 настроек обработки.
+  Команда `init --processing-config` фиксирует её в `experiment.json` сразу
+  после новой записи Gazebo, без прежних `summary.json`/`bearing_results.csv`.
+  Источник child seeds — заданный base seed; происхождение входного JSON
+  сохраняется по SHA. Тест проходит путь на копии реальной записи из Gazebo
+  в новом каталоге: init → короткая обработка → проверка результатов → viewer.
+  При отсутствии подтверждения время в summary равно `null`, отказ виден.
+  `create_scene.py` отклоняет непустой каталог.
+- Контрольные записи `gazebo_state.csv` и манифесты не изменены. Явный
+  `refresh-code` сохранил прежние run IDs, code SHA и result-manifest SHA в
+  provenance, затем два запуска повторно обработаны. Текущие IDs:
+  прямая `gzrun-0edcc1ecc5653fb7e8bb81b3`, поворот
+  `gzrun-07425c17257cb92015f7714e`. Сравнение с `b6a20f8` в
+  `results/gazebo_offline/reproducibility_comparison_b6a20f8.json` дало
+  максимальное численное расхождение **0** и **0** несовпадений статусов для
+  всех четырёх сочетаний траектории и метода. Сравнение с `03dc7d7` также
+  сохранено. Старые Monte Carlo и notebooks не перезапускались.
+- Точные команды новой записи, инициализации, обработки и просмотра находятся
+  в `gazebo/README.md`.
+- Локальная приёмка: целевые тесты **23 passed**, полный `pytest -q` —
+  **521 passed in 152.65 s**, `pip check` без конфликтов и
+  `git diff --check` без замечаний.
+
+## Gazebo replay contract (S8-GZ-R, базовое состояние b6a20f8)
 
 - Ветка `fix/gazebo-run-reproducibility` создана от
   `03dc7d7408bc53c783af38279b622bfba8458f6c`, без merge с `main`.

@@ -1,10 +1,11 @@
 {
   "code": {
     "git_commit_sha_at_creation": "03dc7d7408bc53c783af38279b622bfba8458f6c",
-    "sha256": "f85dc3f59cf21c0e25ed6616d7c721af76be48dec5a827b7955459b48c6a1db3"
+    "git_commit_sha_at_last_refresh": "b6a20f89e65f26a57fe19af6e7b5ad30ba6865f0",
+    "sha256": "b8a9b466adb392618249962cc9428b7caba37b079584bbd884ada91a8d19665a"
   },
   "comparison_group_id": null,
-  "config_sha256": "a4eef95e4fc48da4243996d5cc1d785479ac5bbe8a286570004d34e0792b36c0",
+  "config_sha256": "07425c17257cb92015f7714e84d9b87958b1bfbac61185528207184035209c82",
   "processing": {
     "audio": {
       "base_seed": 20260920,
@@ -331,6 +332,15 @@
     }
   },
   "provenance": {
+    "code_refresh_history": [
+      {
+        "previous_code_sha256": "f85dc3f59cf21c0e25ed6616d7c721af76be48dec5a827b7955459b48c6a1db3",
+        "previous_config_sha256": "a4eef95e4fc48da4243996d5cc1d785479ac5bbe8a286570004d34e0792b36c0",
+        "previous_git_commit_sha": "b6a20f89e65f26a57fe19af6e7b5ad30ba6865f0",
+        "previous_results_manifest_sha256": "528f69251580bbc3b78a1c4887ac6616dd2af52ebb74a94158f69852824521c8",
+        "previous_run_id": "gzrun-a4eef95e4fc48da4243996d5"
+      }
+    ],
     "migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"
   },
   "recording": {
@@ -411,6 +421,6 @@
     "manifest_sha256": "84f93ce17590d558a510c881bd118bb1ad3abb3401f4b5b43592fb1ee3fe6e72",
     "state_sha256": "f0801e86e4241112f79b19edaf59ef2c9b59381cc6e87ebbaf806605af688a34"
   },
-  "run_id": "gzrun-a4eef95e4fc48da4243996d5",
+  "run_id": "gzrun-07425c17257cb92015f7714e",
   "schema_version": 2
 }

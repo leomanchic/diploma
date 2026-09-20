@@ -16,16 +16,17 @@ import numpy as np
 from estimators.retarded_ekf_manoeuvre import ManoeuvreHistoryConfig
 from estimators.retarded_ekf_recovery import InitializationRecoveryConfig
 from simulation.gazebo_offline import load_gazebo_recording, shared_stations
-from simulation.multistation_audio import multistation_audio_seeds
 from simulation.moving_source import simulate_moving_source, solve_emission_time
 from simulation.multistation_audio import synthesize_multistation_audio
 from simulation.signals import random_bandlimited_signal
 from validation.gazebo_experiment import (
-    create_experiment, load_experiment, migrate_legacy,
+    calibration_from_experiment, check_processing_compatibility,
+    create_experiment, initialize_experiment, load_experiment, migrate_legacy,
+    refresh_code_identity,
     stations_from_experiment, verify_results, write_results_manifest,
 )
 from validation.three_station_audio_tracking_study import (
-    ESTIMATOR_VARIANTS, MANOEUVRE_START_S, MANOEUVRE_END_S,
+    ESTIMATOR_VARIANTS,
     _csv_bearing_row, bearing_measurements_from_records,
     extract_audio_bearing_records, run_tracker, trajectory_for_audio_pilot,
 )
@@ -73,49 +74,6 @@ def _write_result_csv(path: Path, rows: list[dict], *, empty_columns: tuple[str,
         writer.writerows(rows)
 
 
-def _calibration_from_experiment(experiment: dict) -> dict:
-    result = {}
-    for item in experiment["processing"]["calibration"]["values"]:
-        covariance = np.asarray(item["covariance_rad2"], dtype=float)
-        if covariance.shape != (2, 2) or np.min(np.linalg.eigvalsh(covariance)) <= 0:
-            raise ValueError("frozen calibration covariance is not positive definite")
-        key = item["station_id"], item["estimator_variant"]
-        if key in result:
-            raise ValueError("duplicate frozen calibration key")
-        result[key] = SimpleNamespace(covariance_rad2=covariance,
-                                      mean_residual_rad=np.asarray(item["bias_rad"], dtype=float))
-    expected = {(station.station_id, method) for station in stations_from_experiment(experiment)
-                for method in experiment["processing"]["frontend"]["methods"]}
-    if set(result) != expected:
-        raise ValueError("frozen calibration station/method keys do not match experiment")
-    return result
-
-
-def _check_fixed_frontend(experiment: dict) -> None:
-    frontend = experiment["processing"]["frontend"]
-    if frontend["methods"] != list(ESTIMATOR_VARIANTS):
-        raise ValueError("frozen estimator methods are incompatible with this code")
-    if frontend["gcc"] != {
-        "pair_selection": "all_6_oriented_pairs", "delay_bound": "baseline_over_c_plus_2_samples",
-        "interpolation_factor": 2, "minimum_frequency_hz": 200.0,
-        "maximum_frequency_hz": 10000.0, "relative_spectral_floor": 1e-8,
-        "wls_sigma_tdoa_s": "one_sample",
-    } or frontend["srp"] != {"pair_weighting": "equal", "search_steps_deg": [5.0, 1.0, 0.25]}:
-        raise ValueError("frozen GCC/SRP settings are incompatible with this code")
-    audio = experiment["processing"]["audio"]
-    if audio["source_minimum_frequency_hz"] != 300.0 or audio["source_taper_fraction"] != 0.0:
-        raise ValueError("frozen source spectrum is incompatible with this code")
-    if audio["noise_model"] != "independent_station_stream_AWGN":
-        raise ValueError("frozen noise model is incompatible with this code")
-    source_seed, noise_seeds = multistation_audio_seeds(audio["base_seed"], len(experiment["processing"]["stations"]))
-    expected_noise = dict(zip((item["id"] for item in experiment["processing"]["stations"]), noise_seeds, strict=True))
-    if audio["source_seed"] != source_seed or audio["station_noise_seeds"] != expected_noise:
-        raise ValueError("stored audio seeds disagree with base seed")
-    tracker = experiment["processing"]["tracker"]
-    if tracker["manoeuvre_start_s"] != MANOEUVRE_START_S or tracker["manoeuvre_end_s"] != MANOEUVRE_END_S:
-        raise ValueError("frozen evaluation phase settings are incompatible with this code")
-
-
 def process_recording(directory: Path, calibration_path: Path | None = None) -> dict:
     """Replay the frozen experiment with the existing acoustic pipeline."""
 
@@ -125,7 +83,7 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
     experiment = load_experiment(directory, check_code=True)
     if (directory / "results_manifest.json").exists():
         verify_results(directory, experiment)
-    _check_fixed_frontend(experiment)
+    check_processing_compatibility(experiment)
     recording = load_gazebo_recording(directory)
     manifest = recording.manifest
     processing = experiment["processing"]
@@ -165,7 +123,7 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
         station_delivery_delay_s=frontend["station_delivery_delay_s"],
         sequence_id=experiment["run_id"],
     )
-    calibration = _calibration_from_experiment(experiment)
+    calibration = calibration_from_experiment(experiment)
     for row in bearings:
         row["run_id"] = experiment["run_id"]
     history = ManoeuvreHistoryConfig(np.asarray(tracker_config["qc_m2_s3"], dtype=float),
@@ -242,7 +200,10 @@ def process_recording(directory: Path, calibration_path: Path | None = None) -> 
                                               if valid else None),
             "position_rmse_m_conditional": float(np.sqrt(np.mean(errors**2))) if len(errors) else None,
             "position_p95_m_conditional": float(np.percentile(errors, 95)) if len(errors) else None,
-            "first_confirmation_time_s": sequence["first_confirmation_time_s"],
+            "first_confirmation_time_s": (
+                float(sequence["first_confirmation_time_s"])
+                if np.isfinite(sequence["first_confirmation_time_s"]) else None
+            ),
             "final_valid": bool(sequence["final_valid"]),
             "accepted_update_count": sequence["accepted_update_count"],
             "rejected_update_count": sequence["rejected_update_count"],
@@ -326,23 +287,34 @@ def validate_recordings(root: Path) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("migrate", "new", "process", "validate"))
+    parser.add_argument("action", choices=("init", "migrate", "new", "process", "refresh-code", "validate"))
     parser.add_argument("path", type=Path)
     parser.add_argument("destination", nargs="?", type=Path)
     parser.add_argument("--snr-db", type=float)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--calibration", type=Path)
     parser.add_argument("--comparison-group-id")
+    parser.add_argument("--processing-config", type=Path)
     args = parser.parse_args()
     if args.action != "new" and args.destination is not None:
         parser.error("destination is allowed only with `new`")
-    if args.action != "new" and any(value is not None for value in
-        (args.snr_db, args.seed, args.comparison_group_id)):
-        parser.error("SNR, seed and comparison group changes require `new` and a separate destination")
-    if args.action in ("process", "validate") and args.calibration is not None:
-        parser.error("calibration changes require `new` and a separate destination")
-    if args.action == "process":
+    if args.action != "init" and args.processing_config is not None:
+        parser.error("--processing-config is allowed only with `init`")
+    if args.action != "new" and any(value is not None for value in (args.snr_db, args.seed)):
+        parser.error("SNR and seed changes require `new` or an explicit `init` processing config")
+    if args.action not in ("new", "init") and args.comparison_group_id is not None:
+        parser.error("comparison group is allowed only with `new` or `init`")
+    if args.action not in ("new", "migrate") and args.calibration is not None:
+        parser.error("calibration changes require `new` or an explicit `init` processing config")
+    if args.action == "init":
+        if args.processing_config is None:
+            parser.error("init requires --processing-config")
+        result = initialize_experiment(args.path, args.processing_config,
+                                       comparison_group_id=args.comparison_group_id)
+    elif args.action == "process":
         result = process_recording(args.path)
+    elif args.action == "refresh-code":
+        result = refresh_code_identity(args.path)
     elif args.action == "validate":
         result = validate_recordings(args.path)
     elif args.action == "migrate":

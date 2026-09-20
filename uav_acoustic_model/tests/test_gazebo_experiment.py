@@ -7,14 +7,16 @@ import json
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
 from simulation import gazebo_offline
+from gazebo.create_scene import create_scene
 from validation import gazebo_offline_run
+from validation import gazebo_experiment
 from validation.gazebo_experiment import (
-    create_experiment, finalize_experiment, load_experiment, sha256,
+    create_experiment, finalize_experiment, initialize_experiment, load_experiment, sha256,
     verify_results, write_results_manifest,
 )
 from visualization.gazebo_offline_view import create_viewer
@@ -22,6 +24,7 @@ from visualization.gazebo_offline_view import create_viewer
 RESULTS = Path(__file__).resolve().parents[1] / "results" / "gazebo_offline"
 STRAIGHT = RESULTS / "constant_velocity"
 TURN = RESULTS / "smooth_turn"
+PROCESSING_CONFIG = Path(__file__).resolve().parents[1] / "gazebo" / "processing_config.json"
 
 
 def _inputs_only(source: Path, target: Path) -> Path:
@@ -66,6 +69,100 @@ def test_run_id_is_portable_and_json_key_order_independent(tmp_path):
     (directory / "experiment.json").write_text(json.dumps(reordered, indent=4))
     assert load_experiment(directory)["run_id"] == experiment["run_id"]
     assert finalize_experiment(reordered)["run_id"] == experiment["run_id"]
+
+
+def test_code_hash_uses_posix_names_and_checks_source_bytes(tmp_path, monkeypatch):
+    relative_windows = gazebo_experiment._source_name(
+        PureWindowsPath(r"C:\checkout\validation\example.py"),
+        PureWindowsPath(r"C:\checkout"))
+    relative_posix = gazebo_experiment._source_name(
+        PurePosixPath("/checkout/validation/example.py"),
+        PurePosixPath("/checkout"))
+    assert relative_windows == relative_posix == "validation/example.py"
+    (tmp_path / "validation").mkdir()
+    source = tmp_path / "validation" / "example.py"
+    source.write_text("value = 1\n")
+    monkeypatch.setattr(gazebo_experiment, "ROOT", tmp_path)
+    digest = gazebo_experiment.code_sha256()
+    source.write_text("value = 2\n")
+    assert gazebo_experiment.code_sha256() != digest
+    directory = _inputs_only(STRAIGHT, tmp_path / "code-check")
+    with pytest.raises(ValueError, match="code SHA-256"):
+        load_experiment(directory, check_code=True)
+
+
+def test_fresh_gazebo_recording_init_process_viewer(tmp_path):
+    directory = tmp_path / "fresh-gazebo"
+    directory.mkdir()
+    for name in ("gazebo_state.csv", "manifest.json"):
+        shutil.copy2(STRAIGHT / name, directory / name)
+    recorded_sha = sha256(directory / "gazebo_state.csv")
+    assert not (directory / "summary.json").exists()
+    assert not (directory / "bearing_results.csv").exists()
+    config = json.loads(PROCESSING_CONFIG.read_text())
+    config["processing"]["audio"]["duration_s"] = 0.3
+    config["processing"]["audio"]["base_seed"] = 91234
+    config_path = tmp_path / "explicit-processing.json"
+    config_path.write_text(json.dumps(config))
+    command = [sys.executable, "-m", "validation.gazebo_offline_run", "init",
+               str(directory), "--processing-config", str(config_path)]
+    subprocess.run(command, check=True, capture_output=True, text=True)
+    frozen = load_experiment(directory, check_code=True)
+    assert frozen["processing"]["audio"]["base_seed"] == 91234
+    assert frozen["processing"]["audio"]["duration_s"] == 0.3
+    assert frozen["provenance"]["processing_config_sha256"] == sha256(config_path)
+    assert not (directory / "summary.json").exists()
+    config_path.write_text("{}")
+    summary = gazebo_offline_run.process_recording(directory)
+    assert summary["run_id"] == frozen["run_id"]
+    assert summary["seed"] == 91234
+    assert all(item["first_confirmation_time_s"] is None
+               for item in summary["methods"].values())
+    assert verify_results(directory)["run_id"] == frozen["run_id"]
+    assert create_viewer(directory).exists()
+    assert sha256(directory / "gazebo_state.csv") == recorded_sha
+    with pytest.raises(FileExistsError, match="experiment.json"):
+        initialize_experiment(directory, PROCESSING_CONFIG)
+
+
+def test_scene_generation_refuses_existing_recording(tmp_path):
+    directory = tmp_path / "accepted"
+    directory.mkdir()
+    (directory / "gazebo_state.csv").write_text("accepted recording\n")
+    with pytest.raises(FileExistsError, match="not empty"):
+        create_scene("constant_velocity", directory)
+    assert (directory / "gazebo_state.csv").read_text() == "accepted recording\n"
+
+
+def test_init_rejects_geometry_mismatch_before_freezing(tmp_path):
+    directory = tmp_path / "fresh"
+    directory.mkdir()
+    for name in ("gazebo_state.csv", "manifest.json"):
+        shutil.copy2(STRAIGHT / name, directory / name)
+    config = json.loads(PROCESSING_CONFIG.read_text())
+    config["processing"]["stations"][1]["position_m"][0] += 1
+    config_path = tmp_path / "wrong-stations.json"
+    config_path.write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="recorded Gazebo geometry"):
+        initialize_experiment(directory, config_path)
+    assert not (directory / "experiment.json").exists()
+
+
+def test_code_refresh_preserves_recording_and_prior_run_provenance(tmp_path, monkeypatch):
+    directory = _inputs_only(STRAIGHT, tmp_path / "refresh")
+    previous = load_experiment(directory)
+    for name in json.loads((STRAIGHT / "results_manifest.json").read_text())["files"]:
+        shutil.copy2(STRAIGHT / name, directory / name)
+    shutil.copy2(STRAIGHT / "results_manifest.json", directory / "results_manifest.json")
+    monkeypatch.setattr(gazebo_experiment, "code_sha256", lambda: "1" * 64)
+    refreshed = gazebo_experiment.refresh_code_identity(directory)
+    assert refreshed["run_id"] != previous["run_id"]
+    assert refreshed["recording"] == previous["recording"]
+    assert refreshed["processing"] == previous["processing"]
+    assert refreshed["provenance"]["code_refresh_history"][-1]["previous_run_id"] == previous["run_id"]
+    assert load_experiment(directory, check_code=True)["run_id"] == refreshed["run_id"]
+    with pytest.raises(ValueError, match="run process first"):
+        verify_results(directory)
 
 
 def test_run_id_changes_for_material_inputs(tmp_path):

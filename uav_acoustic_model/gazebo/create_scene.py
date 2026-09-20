@@ -46,6 +46,8 @@ def create_scene(kind: str, output_directory: Path, config_path: Path = CONFIG_P
     if period < step or abs(period / step - round(period / step)) > 1e-9:
         raise ValueError("export period must be an integral multiple of physics step")
     output_directory = output_directory.resolve()
+    if output_directory.exists() and any(output_directory.iterdir()):
+        raise FileExistsError(f"Gazebo scene destination is not empty: {output_directory}")
     output_directory.mkdir(parents=True, exist_ok=True)
     sdf = ET.Element("sdf", version="1.9")
     world = _element(sdf, "world", name="gazebo_offline")

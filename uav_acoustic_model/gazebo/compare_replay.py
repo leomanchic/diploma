@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import io
 import json
@@ -16,9 +17,9 @@ METHODS = ("all_6_equal_gcc_wls", "equal_weight_srp_phat")
 TOLERANCE = 1e-12
 
 
-def _old(kind: str, name: str) -> str:
+def _old(base: str, kind: str, name: str) -> str:
     path = f"uav_acoustic_model/results/gazebo_offline/{kind}/{name}"
-    result = subprocess.run(["git", "show", f"{BASE}:{path}"], cwd=ROOT,
+    result = subprocess.run(["git", "show", f"{base}:{path}"], cwd=ROOT,
                             capture_output=True, text=True, check=True)
     return result.stdout
 
@@ -34,9 +35,9 @@ def _difference(left: str, right: str) -> float:
     return abs(a - b)
 
 
-def _compare_rows(kind: str, name: str, columns: tuple[str, ...],
+def _compare_rows(base: str, kind: str, name: str, columns: tuple[str, ...],
                   status_columns: tuple[str, ...], method: str | None = None) -> dict:
-    before = _rows(_old(kind, name))
+    before = _rows(_old(base, kind, name))
     after = _rows((RESULTS / kind / name).read_text())
     if method is not None:
         before = [row for row in before if row["estimator_variant"] == method]
@@ -55,20 +56,20 @@ def _compare_rows(kind: str, name: str, columns: tuple[str, ...],
             "status_mismatches": status_mismatches}
 
 
-def compare() -> dict:
-    report = {"baseline_commit": BASE, "tolerance_absolute": TOLERANCE, "runs": {}}
+def compare(base: str = BASE) -> dict:
+    report = {"baseline_commit": base, "tolerance_absolute": TOLERANCE, "runs": {}}
     for kind in ("constant_velocity", "smooth_turn"):
-        before = json.loads(_old(kind, "summary.json"))
+        before = json.loads(_old(base, kind, "summary.json"))
         after = json.loads((RESULTS / kind / "summary.json").read_text())
         run = {"run_id": after["run_id"], "recording_sha256": after["gazebo_state_sha256"], "methods": {}}
         for method in METHODS:
-            bearing = _compare_rows(kind, "bearing_results.csv",
+            bearing = _compare_rows(base, kind, "bearing_results.csv",
                 tuple(f"estimate_{space}_{axis}" for space in ("local", "world") for axis in range(3))
                 + ("geodesic_error_deg",), ("valid", "invalid_reason"), method)
-            track = _compare_rows(kind, f"tracking_{method}.csv",
+            track = _compare_rows(base, kind, f"tracking_{method}.csv",
                 tuple(f"estimate_position_{axis}_m" for axis in "xyz") + ("position_error_m",),
                 ("valid", "confirmed", "status", "failure_reason"))
-            updates = _compare_rows(kind, f"updates_{method}.csv",
+            updates = _compare_rows(base, kind, f"updates_{method}.csv",
                 ("processing_time_s", "pre_update_nis"),
                 ("station_id", "frame_index", "update_applied", "failure_reason"))
             previous, current = before["methods"][method], after["methods"][method]
@@ -77,7 +78,7 @@ def compare() -> dict:
             metric_maximum = max(abs(previous[key] - current[key]) for key in numeric_metrics)
             if metric_maximum > TOLERANCE or previous["accepted_update_count"] != current["accepted_update_count"]:
                 raise AssertionError(f"{kind}/{method}: aggregate metrics changed")
-            old_updates = _rows(_old(kind, f"updates_{method}.csv"))
+            old_updates = _rows(_old(base, kind, f"updates_{method}.csv"))
             old_rejected = sum(row["update_applied"] == "False" for row in old_updates)
             if current["rejected_update_count"] != old_rejected:
                 raise AssertionError(f"{kind}/{method}: rejection count changed")
@@ -97,7 +98,12 @@ def compare() -> dict:
 
 
 if __name__ == "__main__":
-    result = compare()
-    path = RESULTS / "reproducibility_comparison.json"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", default=BASE, help="baseline commit or ref")
+    parser.add_argument("--output", type=Path,
+                        default=RESULTS / "reproducibility_comparison.json")
+    args = parser.parse_args()
+    result = compare(args.base)
+    path = args.output
     path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(path)
