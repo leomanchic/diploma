@@ -129,6 +129,7 @@ def synthesize_multistation_audio(
     geometric_attenuation: bool = False,
     maximum_emitted_frequency_hz: float = 10_000.0,
     external_source_signal: NDArray[np.float64] | None = None,
+    external_source_start_time_s: float | None = None,
     source_recording_id: str | None = None,
     source_session_id: str | None = None,
     noise_model: str = "received_snr",
@@ -175,20 +176,46 @@ def synthesize_multistation_audio(
     source_rng = np.random.default_rng(selected_source_seed)
     model = str(signal_model).lower()
     if external_source_signal is not None:
-        if model != "recorded_source_approximation":
+        if model not in {"random_broadband", "recorded_source_approximation"}:
             raise ValueError(
-                "external_source_signal requires signal_model="
-                "'recorded_source_approximation'"
+                "external_source_signal requires random_broadband or "
+                "recorded_source_approximation"
             )
         supplied = np.asarray(external_source_signal, dtype=float)
-        if supplied.ndim != 1 or supplied.size < source_count:
+        if supplied.ndim != 1:
             raise ValueError(
-                "external_source_signal must be one-dimensional and cover "
-                "the complete source-time support"
+                "external_source_signal must be one-dimensional"
             )
         if not np.all(np.isfinite(supplied)):
             raise ValueError("external_source_signal must be finite")
-        source = supplied[:source_count].copy()
+        if external_source_start_time_s is None:
+            if supplied.size < source_count:
+                raise ValueError(
+                    "external_source_signal must cover the complete "
+                    "source-time support"
+                )
+            source = supplied[:source_count].copy()
+        else:
+            supplied_start = float(external_source_start_time_s)
+            if not np.isfinite(supplied_start):
+                raise ValueError("external_source_start_time_s must be finite")
+            required_stop = source_start + source_count / sampling_rate
+            supplied_stop = supplied_start + supplied.size / sampling_rate
+            tolerance = 0.5 / sampling_rate
+            if (
+                supplied_start > source_start + tolerance
+                or supplied_stop < required_stop - tolerance
+            ):
+                raise ValueError(
+                    "external_source_signal does not cover the required "
+                    "absolute source-time support"
+                )
+            source = supplied.copy()
+            source_start = supplied_start
+    elif external_source_start_time_s is not None:
+        raise ValueError(
+            "external_source_start_time_s requires external_source_signal"
+        )
     elif model == "random_broadband":
         source = random_bandlimited_signal(
             sampling_rate,

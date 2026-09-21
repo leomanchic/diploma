@@ -8,6 +8,7 @@ from simulation.multistation_audio import (
     multistation_noise_seeds,
     synthesize_multistation_audio,
 )
+from simulation.signals import random_bandlimited_signal
 from simulation.trajectory import StationaryTrajectory
 
 
@@ -104,4 +105,42 @@ def test_fixed_background_rejects_disabled_attenuation_and_seeds_reproduce() -> 
             snr_db=10.0,
             noise_model="fixed_reference_snr",
             geometric_attenuation=False,
+        )
+
+
+def test_explicit_external_source_time_reuses_identical_absolute_waveform() -> None:
+    sampling_rate = 8_000.0
+    source = random_bandlimited_signal(
+        sampling_rate,
+        16_000,
+        np.random.default_rng(345),
+        maximum_frequency_hz=3_000.0,
+        taper_fraction=0.0,
+    )
+    common = dict(
+        stations=(_point_station(),),
+        duration_s=0.05,
+        reception_start_time_s=1.0,
+        sampling_rate_hz=sampling_rate,
+        maximum_emitted_frequency_hz=3_000.0,
+        signal_model="random_broadband",
+        snr_db=None,
+        geometric_attenuation=True,
+        external_source_signal=source,
+        external_source_start_time_s=0.0,
+    )
+    near = synthesize_multistation_audio(
+        trajectory=StationaryTrajectory([10.0, 0.0, 0.0]), **common
+    )
+    far = synthesize_multistation_audio(
+        trajectory=StationaryTrajectory([20.0, 0.0, 0.0]), **common
+    )
+    assert np.array_equal(near.source_signal, source)
+    assert np.array_equal(far.source_signal, source)
+    assert near.source_start_time_s == far.source_start_time_s == 0.0
+
+    with pytest.raises(ValueError, match="absolute source-time support"):
+        synthesize_multistation_audio(
+            trajectory=StationaryTrajectory([20.0, 0.0, 0.0]),
+            **{**common, "external_source_start_time_s": 0.95},
         )
