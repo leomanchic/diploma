@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "phase_command_start_sim_time_s": {
+    "takeoff": 22.452,
+    "hover_before": 41.332,
+    "straight_before": 43.372,
+    "turn_left": 46.412,
+    "straight_between": 50.412,
+    "turn_right": 52.432,
+    "hover_after": 56.432,
+    "land": 58.472,
+    "landed": 76.132
+  },
+  "offboard_start_attempts": [
+    "direct MAVLink: PX4 OFFBOARD confirmed"
+  ],
+  "completed": true,
+  "control": "PX4 SITL v1.17.0 via MAVSDK-Python 3.10.0 actions/telemetry and PyMAVLink 2.4.49 Offboard setpoints",
+  "python_version": "3.12.3",
+  "mavsdk_version": "3.10.0",
+  "pymavlink_version": "2.4.49",
+  "grpcio_version": "1.84.0",
+  "protobuf_version": "7.36.2"
+}

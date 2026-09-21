@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "read_from": "PX4 MAVLink PARAM via MAVSDK before arming",
+  "values": {
+    "MPC_XY_VEL_MAX": 12.0,
+    "MPC_Z_VEL_MAX_UP": 3.0,
+    "MPC_ACC_HOR": 3.0,
+    "MPC_ACC_HOR_MAX": 5.0,
+    "MPC_TKO_SPEED": 1.5,
+    "MPC_LAND_SPEED": 0.699999988079071,
+    "COM_RC_IN_MODE": 4
+  }
+}

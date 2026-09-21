@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "argv": [
+    "gz",
+    "sim",
+    "-r",
+    "-v",
+    "2",
+    "--seed",
+    "20260921",
+    "-s",
+    "/home/leo/projects/diploma-gazebo/uav_acoustic_model/results/px4_flight/opposite_turn_001/scene.sdf"
+  ],
+  "environment": {
+    "GZ_IP": "127.0.0.1",
+    "GZ_SIM_RESOURCE_PATH": "/home/leo/projects/PX4-Autopilot/Tools/simulation/gz/models",
+    "GZ_SIM_SYSTEM_PLUGIN_PATH": "/home/leo/projects/diploma-gazebo/uav_acoustic_model/build/px4-observer:/home/leo/projects/PX4-Autopilot/build/px4_sitl_default/src/modules/simulation/gz_plugins"
+  },
+  "seed_applied": 20260921,
+  "headless": true
+}
