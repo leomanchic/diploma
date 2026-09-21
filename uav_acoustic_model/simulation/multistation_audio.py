@@ -33,6 +33,8 @@ class StationAudioStream:
     nominal_snr_db: float | None
     effective_snr_db: float | None
     noise_seed: int
+    noise_model: str = "received_snr"
+    noise_rms: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +55,9 @@ class MultistationAudioStream:
     source_session_id: str | None = None
     noise_generated_once_per_station_stream: bool = True
     frames_resynthesized_independently: bool = False
+    noise_model: str = "received_snr"
+    reference_distance_m: float | None = None
+    reference_source_rms: float | None = None
 
 
 def multistation_audio_seeds(base_seed: int, station_count: int) -> tuple[int, tuple[int, ...]]:
@@ -67,6 +72,22 @@ def multistation_audio_seeds(base_seed: int, station_count: int) -> tuple[int, t
     if len(set(values)) != len(values):
         raise RuntimeError("source/noise seed collision")
     return values[0], values[1:]
+
+
+def multistation_noise_seeds(base_seed: int, station_count: int) -> tuple[int, ...]:
+    """Return reproducible station-noise seeds without changing a source seed."""
+
+    count = int(station_count)
+    if count < 1:
+        raise ValueError("station_count must be positive")
+    root = np.random.SeedSequence([int(base_seed), 0x4E4F4953])
+    values = tuple(
+        int(child.generate_state(1, dtype=np.uint64)[0])
+        for child in root.spawn(count)
+    )
+    if len(set(values)) != len(values):
+        raise RuntimeError("station noise seed collision")
+    return values
 
 
 def _common_source_support(
@@ -110,12 +131,19 @@ def synthesize_multistation_audio(
     external_source_signal: NDArray[np.float64] | None = None,
     source_recording_id: str | None = None,
     source_session_id: str | None = None,
+    noise_model: str = "received_snr",
+    reference_distance_m: float = 100.0,
+    source_seed: int | None = None,
+    noise_seed: int | None = None,
+    reference_source_rms: float | None = None,
 ) -> MultistationAudioStream:
     """Generate one continuous source and one continuous recording per station.
 
-    The same source samples and source-time origin feed every station.  AWGN
-    uses one independent draw for each complete station channel matrix and a
-    station-specific scale that realizes the requested full-stream SNR.
+    The same source samples and source-time origin feed every station. In the
+    legacy received_snr mode, AWGN uses a station-specific scale that realizes
+    the requested full-stream SNR. In fixed_reference_snr mode, one noise
+    scale is derived from source RMS and a fixed reference distance; it is
+    independent of the received clean stream and source distance.
     """
 
     poses = tuple(stations)
@@ -135,8 +163,16 @@ def synthesize_multistation_audio(
     source_start, source_count = _common_source_support(
         reception, poses, trajectory, sampling_rate, speed, int(fir_length)
     )
-    source_seed, noise_seeds = multistation_audio_seeds(seed, len(poses))
-    source_rng = np.random.default_rng(source_seed)
+    derived_source_seed, derived_noise_seeds = multistation_audio_seeds(seed, len(poses))
+    selected_source_seed = (
+        derived_source_seed if source_seed is None else int(source_seed)
+    )
+    noise_seeds = (
+        derived_noise_seeds
+        if noise_seed is None
+        else multistation_noise_seeds(int(noise_seed), len(poses))
+    )
+    source_rng = np.random.default_rng(selected_source_seed)
     model = str(signal_model).lower()
     if external_source_signal is not None:
         if model != "recorded_source_approximation":
@@ -177,6 +213,28 @@ def synthesize_multistation_audio(
             "or recorded_source_approximation with external_source_signal"
         )
 
+    selected_noise_model = str(noise_model).lower()
+    if selected_noise_model not in {"received_snr", "fixed_reference_snr"}:
+        raise ValueError("noise_model must be received_snr or fixed_reference_snr")
+    reference_distance = float(reference_distance_m)
+    if not np.isfinite(reference_distance) or reference_distance <= 0.0:
+        raise ValueError("reference_distance_m must be finite and positive")
+    if selected_noise_model == "fixed_reference_snr" and not geometric_attenuation:
+        raise ValueError(
+            "fixed_reference_snr requires geometric_attenuation=True"
+        )
+    measured_source_rms = float(np.sqrt(np.mean(source**2)))
+    selected_reference_source_rms = (
+        measured_source_rms
+        if reference_source_rms is None
+        else float(reference_source_rms)
+    )
+    if (
+        not np.isfinite(selected_reference_source_rms)
+        or selected_reference_source_rms <= 0.0
+    ):
+        raise ValueError("reference_source_rms must be finite and positive")
+
     station_streams: list[StationAudioStream] = []
     for station, noise_seed in zip(poses, noise_seeds, strict=True):
         propagation = simulate_moving_source(
@@ -198,12 +256,20 @@ def synthesize_multistation_audio(
         if snr_db is None:
             nominal = effective = None
             noise = np.zeros_like(clean)
+            noise_rms = 0.0
         else:
             nominal = float(snr_db)
             if not np.isfinite(nominal):
                 raise ValueError("snr_db must be finite or None")
             clean_rms = float(np.sqrt(np.mean(clean**2)))
-            sigma = clean_rms / 10.0 ** (nominal / 20.0)
+            if selected_noise_model == "received_snr":
+                sigma = clean_rms / 10.0 ** (nominal / 20.0)
+            else:
+                sigma = (
+                    selected_reference_source_rms
+                    / reference_distance
+                    / 10.0 ** (nominal / 20.0)
+                )
             noise = np.random.default_rng(noise_seed).normal(0.0, sigma, clean.shape)
             noise_rms = float(np.sqrt(np.mean(noise**2)))
             effective = float(20.0 * np.log10(clean_rms / noise_rms))
@@ -217,6 +283,8 @@ def synthesize_multistation_audio(
                 nominal,
                 effective,
                 int(noise_seed),
+                selected_noise_model,
+                noise_rms,
             )
         )
     return MultistationAudioStream(
@@ -225,13 +293,20 @@ def synthesize_multistation_audio(
         reception,
         tuple(station_streams),
         int(seed),
-        int(source_seed),
+        int(selected_source_seed),
         model,
         sampling_rate,
         maximum_frequency,
         True,
         None if source_recording_id is None else str(source_recording_id),
         None if source_session_id is None else str(source_session_id),
+        True,
+        False,
+        selected_noise_model,
+        reference_distance if selected_noise_model == "fixed_reference_snr" else None,
+        selected_reference_source_rms
+        if selected_noise_model == "fixed_reference_snr"
+        else None,
     )
 
 
@@ -239,5 +314,6 @@ __all__ = [
     "MultistationAudioStream",
     "StationAudioStream",
     "multistation_audio_seeds",
+    "multistation_noise_seeds",
     "synthesize_multistation_audio",
 ]

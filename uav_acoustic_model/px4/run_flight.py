@@ -56,8 +56,22 @@ def _phase(path: Path, name: str) -> None:
 def smooth_turn_velocity(elapsed_s: float, duration_s: float,
                          speed_mps: float, turn_angle_rad: float) -> tuple[float, float, float]:
     """Continuous commanded NED horizontal velocity and yaw (degrees)."""
+    return smooth_heading_change_velocity(
+        elapsed_s, duration_s, speed_mps, 0.0, turn_angle_rad
+    )
+
+
+def smooth_heading_change_velocity(
+    elapsed_s: float,
+    duration_s: float,
+    speed_mps: float,
+    start_angle_rad: float,
+    change_angle_rad: float,
+) -> tuple[float, float, float]:
+    """Smooth NED velocity from one ENU heading through a signed change."""
+
     u = min(1.0, max(0.0, elapsed_s / duration_s))
-    angle = turn_angle_rad * (3*u*u - 2*u*u*u)
+    angle = start_angle_rad + change_angle_rad * (3*u*u - 2*u*u*u)
     north = speed_mps * math.sin(angle)
     east = speed_mps * math.cos(angle)
     return north, east, 90.0 - math.degrees(angle)
@@ -80,6 +94,8 @@ def planned_route(plan: dict, phase_starts: dict[str, float],
                   landing_end_s: float) -> list[dict[str, float | str]]:
     """Requested spatial path and phase clock, kept separate from Gazebo truth."""
     vehicle = plan["vehicle"]
+    if vehicle.get("trajectory_profile", "single_turn") == "opposite_turns":
+        return planned_opposite_turn_route(plan, phase_starts, landing_end_s)
     x0, y0, z0 = vehicle["spawn_enu_m"]
     z = z0 + vehicle["takeoff_altitude_m"]
     speed = vehicle["horizontal_speed_mps"]
@@ -117,6 +133,71 @@ def planned_route(plan: dict, phase_starts: dict[str, float],
     x_end, y_end = x0 + speed*straight + east_turn, y0 + north_turn
     add(hover_end, x_end, y_end, z, "hover_after")
     add(landing_end_s, x_end, y_end, z0, "land")
+    return points
+
+
+def planned_opposite_turn_route(
+    plan: dict, phase_starts: dict[str, float], landing_end_s: float
+) -> list[dict[str, float | str]]:
+    """Requested route for the predeclared left-then-right range-study flight."""
+
+    vehicle = plan["vehicle"]
+    x0, y0, z0 = vehicle["spawn_enu_m"]
+    z = z0 + vehicle["takeoff_altitude_m"]
+    speed = float(vehicle["horizontal_speed_mps"])
+    angle = float(vehicle["turn_angle_rad"])
+    points: list[dict[str, float | str]] = []
+
+    def add(t: float, x: float, y: float, phase: str) -> None:
+        points.append({
+            "sim_time_s": float(t), "x_m": x, "y_m": y,
+            "z_m": z if phase not in {"takeoff", "land"} else (
+                z0 if phase == "takeoff" else z
+            ),
+            "flight_phase": phase,
+        })
+
+    add(phase_starts["takeoff"], x0, y0, "takeoff")
+    add(phase_starts["hover_before"], x0, y0, "hover_before")
+    add(phase_starts["straight_before"], x0, y0, "straight_before")
+    x = x0 + speed * float(vehicle["straight_before_s"])
+    y = y0
+    add(phase_starts["turn_left"], x, y, "turn_left")
+
+    def add_turn(
+        phase: str, duration: float, start_angle: float, change: float,
+        start_x: float, start_y: float,
+    ) -> tuple[float, float]:
+        x_value, y_value = start_x, start_y
+        previous = 0.0
+        for index in range(1, 101):
+            active = duration * index / 100
+            midpoint = 0.5 * (previous + active)
+            north, east, _ = smooth_heading_change_velocity(
+                midpoint, duration, speed, start_angle, change
+            )
+            dt = active - previous
+            x_value += east * dt
+            y_value += north * dt
+            add(phase_starts[phase] + active, x_value, y_value, phase)
+            previous = active
+        return x_value, y_value
+
+    x, y = add_turn(
+        "turn_left", float(vehicle["turn_left_s"]), 0.0, angle, x, y
+    )
+    add(phase_starts["straight_between"], x, y, "straight_between")
+    x += speed * math.cos(angle) * float(vehicle["straight_between_s"])
+    y += speed * math.sin(angle) * float(vehicle["straight_between_s"])
+    add(phase_starts["turn_right"], x, y, "turn_right")
+    x, y = add_turn(
+        "turn_right", float(vehicle["turn_right_s"]), angle, -angle, x, y
+    )
+    add(phase_starts["hover_after"], x, y, "hover_after")
+    points.append({
+        "sim_time_s": float(landing_end_s), "x_m": x, "y_m": y,
+        "z_m": z0, "flight_phase": "land",
+    })
     return points
 
 
@@ -198,27 +279,63 @@ async def fly(directory: Path) -> None:
         hover_start = mark("hover_before")
         log("hover_before", "mavlink.velocity_setpoint", 0, 0, 0, 90)
         await wait_sim_time(state_path, hover_start + vehicle["hover_before_s"], maximum_wait)
-        straight_start = mark("straight")
         speed = vehicle["horizontal_speed_mps"]
-        direct_offboard.set_velocity(0.0, speed, 0.0, 90.0)
-        log("straight", "mavlink.velocity_setpoint", 0, speed, 0, 90)
-        await wait_sim_time(state_path, straight_start + vehicle["straight_s"], maximum_wait)
-        turn_start = mark("turn")
-        turn_duration = vehicle["turn_s"]
         command_period = vehicle["offboard_setpoint_period_s"]
-        next_command = turn_start
-        while True:
-            t = _latest_sample(state_path)[0]
-            elapsed = t - turn_start
-            if elapsed >= turn_duration:
-                break
-            if t >= next_command:
-                vn, ve, yaw = smooth_turn_velocity(elapsed, turn_duration, speed,
-                                                    vehicle["turn_angle_rad"])
-                direct_offboard.set_velocity(vn, ve, 0.0, yaw)
-                log("turn", "mavlink.velocity_setpoint", vn, ve, 0, yaw)
-                next_command = t + command_period
-            await asyncio.sleep(0.01)
+        profile = vehicle.get("trajectory_profile", "single_turn")
+
+        async def straight_phase(
+            name: str, duration_s: float, heading_rad: float
+        ) -> None:
+            started = mark(name)
+            north = speed * math.sin(heading_rad)
+            east = speed * math.cos(heading_rad)
+            yaw = 90.0 - math.degrees(heading_rad)
+            direct_offboard.set_velocity(north, east, 0.0, yaw)
+            log(name, "mavlink.velocity_setpoint", north, east, 0, yaw)
+            await wait_sim_time(state_path, started + duration_s, maximum_wait)
+
+        async def turn_phase(
+            name: str, duration_s: float, start_angle_rad: float,
+            change_angle_rad: float,
+        ) -> None:
+            started = mark(name)
+            next_command = started
+            while True:
+                t = _latest_sample(state_path)[0]
+                elapsed = t - started
+                if elapsed >= duration_s:
+                    break
+                if t >= next_command:
+                    vn, ve, yaw = smooth_heading_change_velocity(
+                        elapsed, duration_s, speed,
+                        start_angle_rad, change_angle_rad,
+                    )
+                    direct_offboard.set_velocity(vn, ve, 0.0, yaw)
+                    log(name, "mavlink.velocity_setpoint", vn, ve, 0, yaw)
+                    next_command = t + command_period
+                await asyncio.sleep(0.01)
+
+        if profile == "single_turn":
+            await straight_phase("straight", vehicle["straight_s"], 0.0)
+            await turn_phase(
+                "turn", vehicle["turn_s"], 0.0, vehicle["turn_angle_rad"]
+            )
+        elif profile == "opposite_turns":
+            angle = float(vehicle["turn_angle_rad"])
+            await straight_phase(
+                "straight_before", vehicle["straight_before_s"], 0.0
+            )
+            await turn_phase(
+                "turn_left", vehicle["turn_left_s"], 0.0, angle
+            )
+            await straight_phase(
+                "straight_between", vehicle["straight_between_s"], angle
+            )
+            await turn_phase(
+                "turn_right", vehicle["turn_right_s"], angle, -angle
+            )
+        else:
+            raise ValueError(f"unsupported trajectory_profile: {profile}")
         direct_offboard.set_velocity(0.0, 0.0, 0.0, 0.0)
         hover_end_start = mark("hover_after")
         log("hover_after", "mavlink.velocity_setpoint", 0, 0, 0, 0)

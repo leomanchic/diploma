@@ -19,6 +19,14 @@ STATE_COLUMNS = ("sim_time_s", "x_m", "y_m", "z_m", "qw", "qx", "qy", "qz",
 PHASE_ORDER = ("preflight", "takeoff", "hover_before", "straight", "turn",
                "hover_after", "land", "landed")
 REPORT_PHASES = ("hover_before", "straight", "turn", "hover_after")
+OPPOSITE_TURN_PHASE_ORDER = (
+    "preflight", "takeoff", "hover_before", "straight_before", "turn_left",
+    "straight_between", "turn_right", "hover_after", "land", "landed",
+)
+OPPOSITE_TURN_REPORT_PHASES = (
+    "hover_before", "straight_before", "turn_left", "straight_between",
+    "turn_right", "hover_after",
+)
 
 
 def _sha(path: Path) -> str:
@@ -32,7 +40,9 @@ def _system_name() -> str:
         return platform.platform()
 
 
-def phase_intervals(rows: list[dict], period_s: float) -> list[dict]:
+def phase_intervals(
+    rows: list[dict], period_s: float, trajectory_profile: str = "single_turn"
+) -> list[dict]:
     if not rows:
         raise ValueError("empty X500 flight recording")
     changes: list[tuple[str, float]] = []
@@ -41,7 +51,12 @@ def phase_intervals(rows: list[dict], period_s: float) -> list[dict]:
         if not changes or phase != changes[-1][0]:
             changes.append((phase, float(row["sim_time_s"])))
     names = [name for name, _ in changes]
-    if names != list(PHASE_ORDER) and names != list(PHASE_ORDER[1:]):
+    expected = (
+        OPPOSITE_TURN_PHASE_ORDER
+        if trajectory_profile == "opposite_turns"
+        else PHASE_ORDER
+    )
+    if names != list(expected) and names != list(expected[1:]):
         raise ValueError(f"flight phases incomplete or out of order: {names}")
     end = float(rows[-1]["sim_time_s"]) + period_s
     return [{"name": name, "start_s": start,
@@ -89,13 +104,37 @@ def finalize(directory: Path, *, px4_root: Path = Path.home() / "projects/PX4-Au
         raise ValueError("invalid X500 Gazebo quaternion")
     if np.max(np.linalg.norm(numeric[:, 8:11], axis=1)) >= 343.0:
         raise ValueError("X500 ground-truth speed is not subsonic")
-    intervals = phase_intervals(rows, period)
+    profile = plan["vehicle"].get("trajectory_profile", "single_turn")
+    if profile not in {"single_turn", "opposite_turns"}:
+        raise ValueError(f"unsupported trajectory_profile: {profile}")
+    intervals = phase_intervals(rows, period, profile)
     phases = {item["name"]: item for item in intervals}
-    for name in REPORT_PHASES:
+    report_phases = (
+        OPPOSITE_TURN_REPORT_PHASES
+        if profile == "opposite_turns"
+        else REPORT_PHASES
+    )
+    for name in report_phases:
         if phases[name]["end_s"] - phases[name]["start_s"] < 1.0:
             raise ValueError(f"flight phase {name} is too short")
-    for name, plan_key in (("hover_before", "hover_before_s"), ("straight", "straight_s"),
-                           ("turn", "turn_s"), ("hover_after", "hover_after_s")):
+    duration_keys = (
+        (
+            ("hover_before", "hover_before_s"),
+            ("straight_before", "straight_before_s"),
+            ("turn_left", "turn_left_s"),
+            ("straight_between", "straight_between_s"),
+            ("turn_right", "turn_right_s"),
+            ("hover_after", "hover_after_s"),
+        )
+        if profile == "opposite_turns"
+        else (
+            ("hover_before", "hover_before_s"),
+            ("straight", "straight_s"),
+            ("turn", "turn_s"),
+            ("hover_after", "hover_after_s"),
+        )
+    )
+    for name, plan_key in duration_keys:
         observed = phases[name]["end_s"] - phases[name]["start_s"]
         requested = float(plan["vehicle"][plan_key])
         if abs(observed-requested) > max(0.25, 3*period):
@@ -186,10 +225,16 @@ def finalize(directory: Path, *, px4_root: Path = Path.home() / "projects/PX4-Au
         raise ValueError("recording lacks acoustic propagation history or tail")
     audio["reception_start_s"] = start
     audio["duration_s"] = end-start
-    config["processing"]["evaluation_phases"] = [phases[name] for name in REPORT_PHASES]
+    config["processing"]["evaluation_phases"] = [
+        phases[name] for name in report_phases
+    ]
     tracker = config["processing"]["tracker"]
-    tracker["manoeuvre_start_s"] = phases["turn"]["start_s"]
-    tracker["manoeuvre_end_s"] = phases["turn"]["end_s"]
+    if profile == "opposite_turns":
+        tracker["manoeuvre_start_s"] = phases["turn_left"]["start_s"]
+        tracker["manoeuvre_end_s"] = phases["turn_right"]["end_s"]
+    else:
+        tracker["manoeuvre_start_s"] = phases["turn"]["start_s"]
+        tracker["manoeuvre_end_s"] = phases["turn"]["end_s"]
     (directory / "processing_config.json").write_text(json.dumps(config, indent=2) + "\n")
     manifest["artifact_sha256"]["processing_config.json"] = _sha(directory / "processing_config.json")
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

@@ -22,7 +22,12 @@ from px4.create_probe import create_probe
 from px4.finalize_recording import finalize, phase_intervals
 from px4.launch_gazebo import launch
 from px4.mavlink_offboard import DirectOffboard
-from px4.run_flight import planned_turn_displacement, smooth_turn_velocity
+from px4.run_flight import (
+    planned_route,
+    planned_turn_displacement,
+    smooth_heading_change_velocity,
+    smooth_turn_velocity,
+)
 from simulation.gazebo_offline import load_gazebo_recording
 from validation.gazebo_experiment import create_experiment, initialize_experiment, verify_results
 from validation.gazebo_offline_run import process_recording
@@ -60,6 +65,31 @@ def test_turn_command_is_continuous_and_uses_ned() -> None:
     np.testing.assert_allclose(end, [3, 0, 0], atol=1e-12)
     north, east = planned_turn_displacement(5, 3, math.pi/2)
     assert 8 < north < 12 and 8 < east < 12
+
+
+def test_opposite_turn_plan_returns_to_east_heading() -> None:
+    root = Path(__file__).resolve().parents[1]
+    plan = json.loads((root / "px4/flight_plan_opposite_turns.json").read_text())
+    vehicle = plan["vehicle"]
+    angle = vehicle["turn_angle_rad"]
+    left_end = smooth_heading_change_velocity(
+        vehicle["turn_left_s"], vehicle["turn_left_s"], 3.0, 0.0, angle
+    )
+    right_end = smooth_heading_change_velocity(
+        vehicle["turn_right_s"], vehicle["turn_right_s"], 3.0, angle, -angle
+    )
+    np.testing.assert_allclose(left_end, [3.0, 0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(right_end, [0.0, 3.0, 90.0], atol=1e-12)
+    names = (
+        "takeoff", "hover_before", "straight_before", "turn_left",
+        "straight_between", "turn_right", "hover_after", "landed",
+    )
+    starts = {name: float(index) for index, name in enumerate(names)}
+    route = planned_route(plan, starts, starts["landed"])
+    assert {row["flight_phase"] for row in route} >= {
+        "turn_left", "turn_right", "straight_between"
+    }
+    assert route[-1]["flight_phase"] == "land"
 
 
 def test_direct_mavlink_velocity_setpoint_has_ned_axes_and_yaw_radians(
@@ -264,3 +294,19 @@ def test_init_rejects_phase_labels_that_disagree_with_recording(
 def test_phase_order_must_complete() -> None:
     with pytest.raises(ValueError, match="incomplete or out of order"):
         phase_intervals([{"sim_time_s": "0", "flight_phase": "hover_before"}], 0.02)
+
+
+def test_opposite_turn_phase_order_is_explicit() -> None:
+    names = (
+        "preflight", "takeoff", "hover_before", "straight_before",
+        "turn_left", "straight_between", "turn_right", "hover_after",
+        "land", "landed",
+    )
+    rows = [
+        {"sim_time_s": str(index), "flight_phase": name}
+        for index, name in enumerate(names)
+    ]
+    intervals = phase_intervals(rows, 0.02, "opposite_turns")
+    assert [item["name"] for item in intervals] == list(names)
+    with pytest.raises(ValueError, match="incomplete or out of order"):
+        phase_intervals(rows[:-2], 0.02, "opposite_turns")
