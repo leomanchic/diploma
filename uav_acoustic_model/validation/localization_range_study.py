@@ -70,6 +70,7 @@ MAXIMUM_RANGE_M = 1300.0
 HISTORY_WINDOW_S = 4.25
 HISTORY_STEP_S = 0.25
 MAXIMUM_TRANSPORT_DELAY_S = 0.10
+MAXIMUM_BATCH_OPTIMIZATIONS_PER_GENERATION = 128
 PASS_P95_THRESHOLDS_M = (2.0, 5.0, 10.0)
 SCHEMA_VERSION = 1
 
@@ -147,6 +148,9 @@ def _processing_snapshot() -> tuple[dict, Any]:
     tracker["history_window_s"] = HISTORY_WINDOW_S
     tracker["history_step_s"] = HISTORY_STEP_S
     tracker["maximum_transport_delay_s"] = MAXIMUM_TRANSPORT_DELAY_S
+    tracker["recovery"]["maximum_batch_optimizations_per_generation"] = (
+        MAXIMUM_BATCH_OPTIMIZATIONS_PER_GENERATION
+    )
     return processing, experiment
 
 
@@ -556,6 +560,11 @@ def _method_metrics(
         "failure_reasons": dict(failures),
         "update_rejection_reasons": dict(rejection_reasons),
         "tracker_runtime_s": float(sequence["tracker_runtime_s"]),
+        "batch_optimization_count": int(sequence["batch_optimization_count"]),
+        "batch_optimization_runtime_s": float(
+            sequence["batch_optimization_runtime_s"]
+        ),
+        "batch_optimization_budget": sequence["batch_optimization_budget"],
         "maximum_history_memory_bytes": int(sequence["maximum_history_memory_bytes"]),
     }
     for threshold in PASS_P95_THRESHOLDS_M:

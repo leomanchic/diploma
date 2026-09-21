@@ -78,6 +78,25 @@ cmake --build build/px4-observer -j2
 .venv/bin/python -m px4.create_scene "$RUN_DIR" --px4-root "$PX4_ROOT"
 ```
 
+Для программы с двумя последовательными противоположными поворотами создайте
+другой пустой каталог и явно передайте второй план:
+
+```bash
+cd ~/projects/diploma-gazebo/uav_acoustic_model
+export RUN_DIR="$PWD/results/px4_flight/opposite_turn_002"
+export PX4_ROOT="$HOME/projects/PX4-Autopilot"
+.venv/bin/python -m px4.create_scene "$RUN_DIR" \
+  --plan px4/flight_plan_opposite_turns.json \
+  --px4-root "$PX4_ROOT"
+```
+
+Остальные команды трёх терминалов и финализации те же. Эта программа после
+прямого участка задаёт плавный левый поворот, короткий прямой участок и
+плавный правый поворот. Принятая запись `opposite_turn_001` содержит 4106
+post-step отсчётов при 50 Гц; наблюдаемые изменения направления скорости в
+двух фазах равны примерно `+79.24°` и `−80.09°`. Её CSV SHA-256:
+`59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2`.
+
 Terminal A starts Gazebo **with its GUI** and passes the seed from the frozen
 flight plan. The launcher writes `gazebo_launch.json` with the exact arguments
 and environment before starting Gazebo. Add `--headless` for server-only mode:

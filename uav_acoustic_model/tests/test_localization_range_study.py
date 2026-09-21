@@ -13,6 +13,7 @@ from validation.localization_range_study import (
     DISTANCES_M,
     HISTORY_STEP_S,
     HISTORY_WINDOW_S,
+    MAXIMUM_BATCH_OPTIMIZATIONS_PER_GENERATION,
     MAXIMUM_RANGE_M,
     MAXIMUM_TRANSPORT_DELAY_S,
     RECORDINGS,
@@ -45,6 +46,11 @@ def test_initialization_freezes_geometry_source_support_and_unique_ids(tmp_path)
     manifest = initialize(output)
     assert manifest["run_count"] == 120
     assert manifest["fixed_background"]["no_per_stream_normalization"] is True
+    assert (
+        manifest["processing"]["tracker"]["recovery"]
+        ["maximum_batch_optimizations_per_generation"]
+        == MAXIMUM_BATCH_OPTIMIZATIONS_PER_GENERATION
+    )
 
     stations = stations_from_experiment({"processing": manifest["processing"]})
     centroid = np.mean([station.position_world_m for station in stations], axis=0)
@@ -58,7 +64,9 @@ def test_initialization_freezes_geometry_source_support_and_unique_ids(tmp_path)
         bank_stop = bank["start_time_s"] + bank["sample_count"] / bank["sampling_rate_hz"]
         source = np.load(output / bank["path"], allow_pickle=False)
         assert source.shape == (bank["sample_count"],)
-        assert np.sqrt(np.mean(source**2)) == 1.0
+        np.testing.assert_allclose(
+            np.sqrt(np.mean(source**2)), 1.0, rtol=0.0, atol=2e-15
+        )
         for distance in DISTANCES_M:
             trajectory, _ = _translated(
                 recording, stations, info["reception_start_s"], distance,

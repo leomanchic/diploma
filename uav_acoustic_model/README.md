@@ -7,6 +7,54 @@
 из Gazebo, обработкой существующим GCC/SRP/tracker и интерактивным 3D-просмотром:
 [gazebo/README.md](gazebo/README.md). В нём приведены точные команды запуска.
 
+## Исследование условного диапазона по двум полётам PX4
+
+Зафиксированный протокол находится в
+[LOCALIZATION_RANGE_PROTOCOL.md](LOCALIZATION_RANGE_PROTOCOL.md). Исследование
+использует неизменённую запись `pilot_003` и отдельную фактическую запись
+`opposite_turn_001` с последовательными поворотами примерно на +90° и −90°.
+Каждая запись только переносится в ENU на шесть начальных расстояний; эти
+переносы помечены как преобразования двух полётов, а не как новые независимые
+полёты Gazebo.
+
+Команды для полного воспроизведения в **новом** каталоге:
+
+```bash
+cd ~/projects/diploma-gazebo/uav_acoustic_model
+source .venv/bin/activate
+export OUT="$PWD/results/localization_range_study_replay_001"
+test ! -e "$OUT"
+
+python -m validation.localization_range_study init --output "$OUT"
+python -m validation.localization_range_study probe --output "$OUT"
+python -m validation.localization_range_study run-all --output "$OUT"
+python -m validation.localization_range_study aggregate --output "$OUT"
+
+RANGE_STUDY_RESULTS="$OUT" python -m jupyter nbconvert \
+  --to notebook --execute --inplace \
+  --ExecutePreprocessor.timeout=300 \
+  notebooks/localization_range_study.ipynb
+```
+
+`init` до вычислений сохраняет SHA двух Gazebo CSV, полный processing snapshot,
+матрицу 120 запусков, переносы, seeds, калибровку и два общих непрерывных
+source stream. `run-all` выполняет запуски последовательно в отдельных
+процессах, проверяет уже готовые результаты и продолжает с первого
+незавершённого индекса. Один элемент матрицы можно запустить отдельно:
+
+```bash
+python -m validation.localization_range_study run-one --index 24 --output "$OUT"
+```
+
+Исходные записи и принятый каталог результатов не перезаписываются.
+
+Контроль геометрии поддерживает принятый SNR каждой станции равным +10 дБ.
+Основной опыт использует амплитуду `1/r`, одинаковый уровень источника и шум,
+мощность которого не зависит от расстояния; задаются `SNR_ref=0/10/20 dB` при
+`r_ref=100 m`. В нём нет калибровки абсолютной акустической мощности, поэтому
+результаты не являются SPL, слышимостью или дальностью обнаружения реального
+БПЛА. Ветер, отражения, новые шумы и изменение фильтра в этот этап не входят.
+
 Конечная цель — воспроизводимая система из трёх пространственно разнесённых
 микрофонных станций, определяющая 3D-координаты движущегося БПЛА. Статический
 фундамент S7B, retarded-time measurement model S7C-A, причинный event stream

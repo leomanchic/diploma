@@ -43,6 +43,7 @@ bearing-измерениям определяет и затем причинно
 | S8-GZ | Done (integration pilot) | Записать две заданные траектории одного видимого источника в Gazebo и обработать офлайн тремя станциями | общая ENU-сцена, post-step pose CSV, finite-support адаптер, фиксированный GCC/SRP/tracker, 3D viewer | Gazebo→CSV доказан, прямая/поворот и 50→100 Гц сравнены численно, отказы показаны | S6, synthetic S7C pilot |
 | S8-GZ-R | Done (replay contract) | Сделать повторную обработку Gazebo независимой от текущего scene JSON и разделить event IDs опытов | версия `experiment.json`, SHA записи/кода/результатов, переносимый `run_id`, явные init/migration/new, проверяемый viewer | новый каталог проходит запись→init→обработку→viewer без старых результатов; два исходных CSV сохранены, bearing/tracking/RMSE совпали с `03dc7d7` и `b6a20f8` в `1e-12`; Linux/Windows CI | S8-GZ |
 | S8-GZ-PX4 | Done (one-flight integration pilot) | Записать один полёт X500 под PX4 SITL и обработать его прежней акустической системой | read-only Gazebo observer, MAVSDK actions/telemetry, MAVLink Offboard setpoints, flight manifest, phases, offline replay и viewer | `pilot_003`: фактические взлёт/прямая/поворот/посадка, 3954 отсчёта без пропусков, 17.02 с аудио, 141/150 валидных публикаций каждого метода, прежние два контроля численно совпали | S8-GZ-R |
+| S8-GZ-RANGE | Done (conditional range study) | Завершить PX4/Gazebo integration pilot условным исследованием влияния геометрии, ослабления и манёвра | вторая запись с противоположными поворотами, фиксированный протокол, режим `1/r` с фиксированным фоном, 120 последовательных аудиозапусков, таблицы и notebook | SHA всех входов/результатов, общий source/noise pairing, фактический station SNR, confirmation/availability/P95/failures, пороги 2/5/10 м без экстраполяции | S8-GZ-PX4 |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -58,6 +59,10 @@ S8 recorded-source validation, S7C-C/D или уровень полевой зр
 S8-GZ-PX4 отдельно добавляет динамический полёт X500 под PX4 и фактическую
 запись Gazebo. Его акустический источник остаётся синтетическим broadband;
 один полёт не меняет статус S8 или уровень полевой зрелости.
+S8-GZ-RANGE завершает текущую PX4/Gazebo ветвь двумя физическими записями и
+условным диапазонным исследованием их переносов. Оно не повышает зрелость до
+полевой: source level не калиброван, фон синтетический, а три реализации шума
+не оценивают редкие отказы.
 
 | Уровень | Определение |
 |---|---|
