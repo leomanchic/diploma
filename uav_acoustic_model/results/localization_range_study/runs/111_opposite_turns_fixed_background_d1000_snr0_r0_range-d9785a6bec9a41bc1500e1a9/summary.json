@@ -1,0 +1,184 @@
+{
+  "actual_station_snr_db": {
+    "S0": -20.465833241273543,
+    "S1": -19.890186057254354,
+    "S2": -19.904324617069012
+  },
+  "audio_synthesis_wall_runtime_s": 24.29285750699637,
+  "bearing_frontend_wall_runtime_s": 34.524510121002095,
+  "duration_s": 18.14,
+  "geometry": {
+    "maximum_station_distance_m": 1078.3399806760588,
+    "minimum_height_m": 179.64817766693034,
+    "minimum_station_distance_m": 978.3218504161983,
+    "station_ranges_m": {
+      "S0": {
+        "maximum_m": 1078.3399806760588,
+        "minimum_m": 1046.6333198287646
+      },
+      "S1": {
+        "maximum_m": 1009.8013879409417,
+        "minimum_m": 978.3218504161983
+      },
+      "S2": {
+        "maximum_m": 1010.9262772360793,
+        "minimum_m": 979.2536532937272
+      }
+    }
+  },
+  "methods": {
+    "all_6_equal_gcc_wls": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 545.5285095569925,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "failure_reasons": {
+        "computational_budget_exceeded": 147,
+        "initialization_failed:no_observable_hypothesis": 15
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 162,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 545.5671572020001,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 0
+    },
+    "equal_weight_srp_phat": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 559.2749850919645,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "equal_weight_srp_phat",
+      "failure_reasons": {
+        "computational_budget_exceeded": 147,
+        "initialization_failed:no_observable_hypothesis": 15
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 162,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 559.3117435520035,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 0
+    }
+  },
+  "peak_rss_bytes": 1209344000,
+  "reception_start_s": 40.852,
+  "recording_manifest_sha256": "903bc5a7b838a1263d23f5ff53d16e955d67c39e6d454a82e14f157635b6edd1",
+  "recording_state_sha256": "59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2",
+  "run_id": "range-d9785a6bec9a41bc1500e1a9",
+  "schema_version": 1,
+  "sequence_id": "range-d9785a6bec9a41bc1500e1a9",
+  "source_sample_count": 1005618,
+  "source_signal_sha256": "258d4ca5d81101c774540c7f530a15650ee96723fdff82674a0c9a4c121b795c",
+  "source_start_time_s": 37.79555380211412,
+  "spec": {
+    "distance_m": 1000,
+    "experiment": "fixed_background",
+    "geometric_attenuation": true,
+    "index": 111,
+    "noise_model": "fixed_reference_snr",
+    "noise_seed": 10842582477406169521,
+    "replicate": 0,
+    "snr_db": 0.0,
+    "source_seed": 17044596600568832310,
+    "trajectory": "opposite_turns",
+    "trajectory_index": 1
+  },
+  "standardized_noise_sha256": "05f9cbdb316947c33dfb1616f87cf9f8234b206623a98cba58938818dd2a7a0a",
+  "station_angular_metrics": [
+    {
+      "angular_p95_deg": 156.75350427973063,
+      "angular_rmse_deg": 94.14798901474899,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 159.94573937787237,
+      "angular_rmse_deg": 92.80013953014242,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 158.11256330906912,
+      "angular_rmse_deg": 93.27747280438275,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 146.55911341227565,
+      "angular_rmse_deg": 88.41346607802848,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 142.2466506180543,
+      "angular_rmse_deg": 86.59943502435743,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 145.9674863290497,
+      "angular_rmse_deg": 89.38398458339985,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    }
+  ],
+  "station_noise_rms": {
+    "S0": 0.009998456796083114,
+    "S1": 0.010003285183156775,
+    "S2": 0.01000651800834476
+  },
+  "total_wall_runtime_s": 1163.8587434330038,
+  "translation_enu_m": [
+    698.0346990509596,
+    691.4015818105161,
+    163.77801844652802
+  ]
+}

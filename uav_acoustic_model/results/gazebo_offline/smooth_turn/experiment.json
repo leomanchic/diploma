@@ -1,11 +1,11 @@
 {
   "code": {
     "git_commit_sha_at_creation": "03dc7d7408bc53c783af38279b622bfba8458f6c",
-    "git_commit_sha_at_last_refresh": "91a61e2b97fc1436abb4859de12f6300202f0cfc",
-    "sha256": "134c3ad7380698db0589805e5b1f6c475e9472a925aecc34c91fef4891e97c2a"
+    "git_commit_sha_at_last_refresh": "ab0ab30ee1b854349e3d64ca3f41c5a0e765da4c",
+    "sha256": "344ac04bf9a4c74aa7e447c2533f746c99bc623da5227adc346c3833efddcd0a"
   },
   "comparison_group_id": null,
-  "config_sha256": "6f26e90bcb518a36cd3e2d9ef7f3881684e87130fd8c8a4895b9b6599d0c5aec",
+  "config_sha256": "58a4fb10c392e23c57a6f8fdaa8878d22024233409fb91e1da6ed5958aa7dd61",
   "processing": {
     "audio": {
       "base_seed": 20260920,
@@ -346,6 +346,13 @@
         "previous_git_commit_sha": "91a61e2b97fc1436abb4859de12f6300202f0cfc",
         "previous_results_manifest_sha256": "da3e506c7a5c3a233e5979c79f92ca3735ad16b43e9f81ff1789d1b5335dcc00",
         "previous_run_id": "gzrun-07425c17257cb92015f7714e"
+      },
+      {
+        "previous_code_sha256": "134c3ad7380698db0589805e5b1f6c475e9472a925aecc34c91fef4891e97c2a",
+        "previous_config_sha256": "6f26e90bcb518a36cd3e2d9ef7f3881684e87130fd8c8a4895b9b6599d0c5aec",
+        "previous_git_commit_sha": "ab0ab30ee1b854349e3d64ca3f41c5a0e765da4c",
+        "previous_results_manifest_sha256": "e3040c3984d9e35c833ddaef74420c9c727d4de4be4bdf84bdee8f15bfcac02b",
+        "previous_run_id": "gzrun-6f26e90bcb518a36cd3e2d9e"
       }
     ],
     "migrated_from": "03dc7d7408bc53c783af38279b622bfba8458f6c"
@@ -428,6 +435,6 @@
     "manifest_sha256": "84f93ce17590d558a510c881bd118bb1ad3abb3401f4b5b43592fb1ee3fe6e72",
     "state_sha256": "f0801e86e4241112f79b19edaf59ef2c9b59381cc6e87ebbaf806605af688a34"
   },
-  "run_id": "gzrun-6f26e90bcb518a36cd3e2d9e",
+  "run_id": "gzrun-58a4fb10c392e23c57a6f8fd",
   "schema_version": 2
 }

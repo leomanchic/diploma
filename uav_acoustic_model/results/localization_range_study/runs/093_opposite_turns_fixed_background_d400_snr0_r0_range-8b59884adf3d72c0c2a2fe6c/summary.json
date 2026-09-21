@@ -1,0 +1,188 @@
+{
+  "actual_station_snr_db": {
+    "S0": -13.219260351505575,
+    "S1": -11.887450519041508,
+    "S2": -11.92102087174451
+  },
+  "audio_synthesis_wall_runtime_s": 25.131897546998516,
+  "bearing_frontend_wall_runtime_s": 36.07581179599947,
+  "duration_s": 18.14,
+  "geometry": {
+    "maximum_station_distance_m": 478.4569645459752,
+    "minimum_height_m": 75.45927106677213,
+    "minimum_station_distance_m": 381.8399191642702,
+    "station_ranges_m": {
+      "S0": {
+        "maximum_m": 478.4569645459752,
+        "minimum_m": 446.6808582612187
+      },
+      "S1": {
+        "maximum_m": 412.8057842010976,
+        "minimum_m": 381.8399191642702
+      },
+      "S2": {
+        "maximum_m": 413.7910386883785,
+        "minimum_m": 382.3181314851693
+      }
+    }
+  },
+  "methods": {
+    "all_6_equal_gcc_wls": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 91.04311903598864,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "failure_reasons": {
+        "computational_budget_exceeded": 147,
+        "initialization_failed:no_observable_hypothesis": 15
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 162,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 91.08129584999551,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 0
+    },
+    "equal_weight_srp_phat": {
+      "accepted_update_count": 1,
+      "availability_after_3s_fraction": 0.25925925925925924,
+      "availability_fraction": 0.21604938271604937,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 94,
+      "batch_optimization_runtime_s": 18.37759396700858,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "equal_weight_srp_phat",
+      "failure_reasons": {
+        "consistency_lost_reinitialization_required": 1,
+        "initialization_failed:no_observable_hypothesis": 11,
+        "tentative_initialization_unconfirmed": 115
+      },
+      "final_confirmed": true,
+      "final_failure_reason": "",
+      "final_valid": true,
+      "first_confirmation_time_s_absolute": 46.00331249999999,
+      "first_confirmation_time_s_relative": 5.151312499999996,
+      "maximum_history_memory_bytes": 440232,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": 70.7286456723584,
+      "position_rmse_m_conditional": 44.354110895725235,
+      "publication_count": 162,
+      "recovery_count": 1,
+      "rejected_update_count": 33,
+      "reset_count": 1,
+      "track_loss_count": 1,
+      "tracker_runtime_s": 73.49051917599718,
+      "update_rejection_reasons": {
+        "emission_outside_history": 24,
+        "pre_update_nis_gate": 9
+      },
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 35
+    }
+  },
+  "peak_rss_bytes": 1208864768,
+  "reception_start_s": 40.852,
+  "recording_manifest_sha256": "903bc5a7b838a1263d23f5ff53d16e955d67c39e6d454a82e14f157635b6edd1",
+  "recording_state_sha256": "59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2",
+  "run_id": "range-8b59884adf3d72c0c2a2fe6c",
+  "schema_version": 1,
+  "sequence_id": "range-8b59884adf3d72c0c2a2fe6c",
+  "source_sample_count": 1005618,
+  "source_signal_sha256": "258d4ca5d81101c774540c7f530a15650ee96723fdff82674a0c9a4c121b795c",
+  "source_start_time_s": 37.79555380211412,
+  "spec": {
+    "distance_m": 400,
+    "experiment": "fixed_background",
+    "geometric_attenuation": true,
+    "index": 93,
+    "noise_model": "fixed_reference_snr",
+    "noise_seed": 10842582477406169521,
+    "replicate": 0,
+    "snr_db": 0.0,
+    "source_seed": 17044596600568832310,
+    "trajectory": "opposite_turns",
+    "trajectory_index": 1
+  },
+  "standardized_noise_sha256": "05f9cbdb316947c33dfb1616f87cf9f8234b206623a98cba58938818dd2a7a0a",
+  "station_angular_metrics": [
+    {
+      "angular_p95_deg": 137.1818686837215,
+      "angular_rmse_deg": 65.6390260400901,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 102.00713227395848,
+      "angular_rmse_deg": 46.29324513077235,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 104.34924186306796,
+      "angular_rmse_deg": 47.091368283263606,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 102.79764185757745,
+      "angular_rmse_deg": 38.92167418385941,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 4.197476182468122,
+      "angular_rmse_deg": 16.224667285435245,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 3.6846491798171543,
+      "angular_rmse_deg": 15.574454430809334,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    }
+  ],
+  "station_noise_rms": {
+    "S0": 0.009998456796083114,
+    "S1": 0.010003285183156775,
+    "S2": 0.01000651800834476
+  },
+  "total_wall_runtime_s": 225.95566120899457,
+  "translation_enu_m": [
+    280.21615485894824,
+    273.58303761850476,
+    59.58911184636981
+  ]
+}

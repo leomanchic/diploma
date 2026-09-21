@@ -138,7 +138,7 @@ def test_recorded_source_reuses_continuous_propagation_reproducibly():
     assert not first.frames_resynthesized_independently
 
 
-def test_external_source_requires_explicit_recorded_signal_model():
+def test_external_source_requires_compatible_explicit_signal_model():
     clip = load_recorded_source_clip(MANIFEST, RECORDING_ID, "evaluation")
     with pytest.raises(ValueError, match="external_source_signal requires"):
         synthesize_multistation_audio(
@@ -146,6 +146,6 @@ def test_external_source_requires_explicit_recorded_signal_model():
             trajectory_for_audio_pilot("constant_velocity", 0),
             duration_s=0.02,
             reception_start_time_s=0.5,
-            signal_model="random_broadband",
+            signal_model="deterministic_multisine",
             external_source_signal=clip.samples,
         )

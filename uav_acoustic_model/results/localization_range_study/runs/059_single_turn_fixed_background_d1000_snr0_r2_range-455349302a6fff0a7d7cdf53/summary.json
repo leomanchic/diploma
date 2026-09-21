@@ -1,0 +1,184 @@
+{
+  "actual_station_snr_db": {
+    "S0": -20.449962969434175,
+    "S1": -19.867696163490034,
+    "S2": -19.887124458803537
+  },
+  "audio_synthesis_wall_runtime_s": 23.351109223003732,
+  "bearing_frontend_wall_runtime_s": 33.31452287900174,
+  "duration_s": 17.020000000000003,
+  "geometry": {
+    "maximum_station_distance_m": 1070.475640740024,
+    "minimum_height_m": 179.64817766693034,
+    "minimum_station_distance_m": 978.306774003398,
+    "station_ranges_m": {
+      "S0": {
+        "maximum_m": 1070.475640740024,
+        "minimum_m": 1046.6166802474959
+      },
+      "S1": {
+        "maximum_m": 1001.3495516783576,
+        "minimum_m": 978.306774003398
+      },
+      "S2": {
+        "maximum_m": 1003.5969428375626,
+        "minimum_m": 979.2369650638403
+      }
+    }
+  },
+  "methods": {
+    "all_6_equal_gcc_wls": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 220.26158181401843,
+      "bearing_frame_count": 4782,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "failure_reasons": {
+        "computational_budget_exceeded": 135,
+        "initialization_failed:no_observable_hypothesis": 15
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 150,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 220.3000364920008,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 4782,
+      "valid_publication_count": 0
+    },
+    "equal_weight_srp_phat": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 484.8885795820315,
+      "bearing_frame_count": 4782,
+      "estimator_variant": "equal_weight_srp_phat",
+      "failure_reasons": {
+        "computational_budget_exceeded": 135,
+        "initialization_failed:no_observable_hypothesis": 15
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 150,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 484.92489658100385,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 4782,
+      "valid_publication_count": 0
+    }
+  },
+  "peak_rss_bytes": 1142190080,
+  "reception_start_s": 45.964,
+  "recording_manifest_sha256": "18969eef11ee382e2676639a571eedade232fd5409a2c92c9d16cdd92eeb462a",
+  "recording_state_sha256": "6f882b300b24c9204ffdd9b8a2df11e68954dfa02a36a59c8442ab1e8edf12ea",
+  "run_id": "range-455349302a6fff0a7d7cdf53",
+  "schema_version": 1,
+  "sequence_id": "range-455349302a6fff0a7d7cdf53",
+  "source_sample_count": 953491,
+  "source_signal_sha256": "459ecce68ea37eae095bdc54bc7620de8b0fc2011a87b7a0888eb8c51f87546a",
+  "source_start_time_s": 42.90739636374886,
+  "spec": {
+    "distance_m": 1000,
+    "experiment": "fixed_background",
+    "geometric_attenuation": true,
+    "index": 59,
+    "noise_model": "fixed_reference_snr",
+    "noise_seed": 12116302050623080632,
+    "replicate": 2,
+    "snr_db": 0.0,
+    "source_seed": 6150486506043246942,
+    "trajectory": "single_turn",
+    "trajectory_index": 0
+  },
+  "standardized_noise_sha256": "d53fc7503f8807e34990d9dd62538947976861de66e5e0c5e9e6bb00beb066b5",
+  "station_angular_metrics": [
+    {
+      "angular_p95_deg": 160.7496536157717,
+      "angular_rmse_deg": 94.54786473461944,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1594,
+      "station_id": "S0",
+      "valid_frame_count": 1594
+    },
+    {
+      "angular_p95_deg": 160.78483040998879,
+      "angular_rmse_deg": 94.41249270998317,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1594,
+      "station_id": "S1",
+      "valid_frame_count": 1594
+    },
+    {
+      "angular_p95_deg": 161.7685154079571,
+      "angular_rmse_deg": 95.09145056235118,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1594,
+      "station_id": "S2",
+      "valid_frame_count": 1594
+    },
+    {
+      "angular_p95_deg": 144.63773668320027,
+      "angular_rmse_deg": 87.20397849458959,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1594,
+      "station_id": "S0",
+      "valid_frame_count": 1594
+    },
+    {
+      "angular_p95_deg": 143.19585543810925,
+      "angular_rmse_deg": 87.23731039062189,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1594,
+      "station_id": "S1",
+      "valid_frame_count": 1594
+    },
+    {
+      "angular_p95_deg": 147.1288297816977,
+      "angular_rmse_deg": 89.44089737310321,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1594,
+      "station_id": "S2",
+      "valid_frame_count": 1594
+    }
+  ],
+  "station_noise_rms": {
+    "S0": 0.00999826944829667,
+    "S1": 0.009998781429183685,
+    "S2": 0.010004786516725043
+  },
+  "total_wall_runtime_s": 762.0560259040067,
+  "translation_enu_m": [
+    698.0821993827918,
+    691.3904656672435,
+    163.75691489895394
+  ]
+}

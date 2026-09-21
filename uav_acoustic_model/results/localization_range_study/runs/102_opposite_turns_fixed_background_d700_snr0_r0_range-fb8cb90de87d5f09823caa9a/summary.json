@@ -1,0 +1,184 @@
+{
+  "actual_station_snr_db": {
+    "S0": -17.581098248076763,
+    "S1": -16.772117895974244,
+    "S2": -16.791352345183736
+  },
+  "audio_synthesis_wall_runtime_s": 25.32072704500024,
+  "bearing_frontend_wall_runtime_s": 36.57680507800251,
+  "duration_s": 18.14,
+  "geometry": {
+    "maximum_station_distance_m": 778.3759312976575,
+    "minimum_height_m": 127.55372436685123,
+    "minimum_station_distance_m": 679.3067668105298,
+    "station_ranges_m": {
+      "S0": {
+        "maximum_m": 778.3759312976575,
+        "minimum_m": 746.6475391082326
+      },
+      "S1": {
+        "maximum_m": 710.6712866337797,
+        "minimum_m": 679.3067668105298
+      },
+      "S2": {
+        "maximum_m": 711.7565950803637,
+        "minimum_m": 680.1120757461313
+      }
+    }
+  },
+  "methods": {
+    "all_6_equal_gcc_wls": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 464.2310365010708,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "failure_reasons": {
+        "computational_budget_exceeded": 146,
+        "initialization_failed:no_observable_hypothesis": 16
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 162,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 464.27177316899906,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 0
+    },
+    "equal_weight_srp_phat": {
+      "accepted_update_count": 0,
+      "availability_after_3s_fraction": 0.0,
+      "availability_fraction": 0.0,
+      "batch_optimization_budget": 128,
+      "batch_optimization_count": 128,
+      "batch_optimization_runtime_s": 783.0114835360291,
+      "bearing_frame_count": 5097,
+      "estimator_variant": "equal_weight_srp_phat",
+      "failure_reasons": {
+        "computational_budget_exceeded": 146,
+        "initialization_failed:no_observable_hypothesis": 16
+      },
+      "final_confirmed": false,
+      "final_failure_reason": "computational_budget_exceeded",
+      "final_valid": false,
+      "first_confirmation_time_s_absolute": null,
+      "first_confirmation_time_s_relative": null,
+      "maximum_history_memory_bytes": 0,
+      "pass_p95_10m": false,
+      "pass_p95_2m": false,
+      "pass_p95_5m": false,
+      "position_p95_m_conditional": null,
+      "position_rmse_m_conditional": null,
+      "publication_count": 162,
+      "recovery_count": 0,
+      "rejected_update_count": 0,
+      "reset_count": 0,
+      "track_loss_count": 0,
+      "tracker_runtime_s": 783.0532713120047,
+      "update_rejection_reasons": {},
+      "valid_bearing_frame_count": 5097,
+      "valid_publication_count": 0
+    }
+  },
+  "peak_rss_bytes": 1209425920,
+  "reception_start_s": 40.852,
+  "recording_manifest_sha256": "903bc5a7b838a1263d23f5ff53d16e955d67c39e6d454a82e14f157635b6edd1",
+  "recording_state_sha256": "59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2",
+  "run_id": "range-fb8cb90de87d5f09823caa9a",
+  "schema_version": 1,
+  "sequence_id": "range-fb8cb90de87d5f09823caa9a",
+  "source_sample_count": 1005618,
+  "source_signal_sha256": "258d4ca5d81101c774540c7f530a15650ee96723fdff82674a0c9a4c121b795c",
+  "source_start_time_s": 37.79555380211412,
+  "spec": {
+    "distance_m": 700,
+    "experiment": "fixed_background",
+    "geometric_attenuation": true,
+    "index": 102,
+    "noise_model": "fixed_reference_snr",
+    "noise_seed": 10842582477406169521,
+    "replicate": 0,
+    "snr_db": 0.0,
+    "source_seed": 17044596600568832310,
+    "trajectory": "opposite_turns",
+    "trajectory_index": 1
+  },
+  "standardized_noise_sha256": "05f9cbdb316947c33dfb1616f87cf9f8234b206623a98cba58938818dd2a7a0a",
+  "station_angular_metrics": [
+    {
+      "angular_p95_deg": 157.6739590161833,
+      "angular_rmse_deg": 90.98047423365131,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 158.40860699698257,
+      "angular_rmse_deg": 86.52553305531985,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 159.3812149614038,
+      "angular_rmse_deg": 90.63762746909961,
+      "estimator_variant": "all_6_equal_gcc_wls",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 143.30823845668556,
+      "angular_rmse_deg": 84.58799451342576,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S0",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 140.11156991107495,
+      "angular_rmse_deg": 78.51370554295328,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S1",
+      "valid_frame_count": 1699
+    },
+    {
+      "angular_p95_deg": 145.91700265035226,
+      "angular_rmse_deg": 80.92204757286834,
+      "estimator_variant": "equal_weight_srp_phat",
+      "frame_count": 1699,
+      "station_id": "S2",
+      "valid_frame_count": 1699
+    }
+  ],
+  "station_noise_rms": {
+    "S0": 0.009998456796083114,
+    "S1": 0.010003285183156775,
+    "S2": 0.01000651800834476
+  },
+  "total_wall_runtime_s": 1309.3921649339973,
+  "translation_enu_m": [
+    489.1254269549539,
+    482.49230971451044,
+    111.6835651464489
+  ]
+}

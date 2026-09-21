@@ -1,0 +1,54 @@
+{
+  "evaluation_run": false,
+  "purpose": "expanded technical cost probe before bounded official evaluation",
+  "reason_for_exclusion": "unbounded initialization made the predeclared 120-run sequential volume computationally impractical; no numerical result from this probe is used to tune acoustic or accuracy settings",
+  "runs": [
+    {
+      "index": 39,
+      "methods": {
+        "all_6_equal_gcc_wls": {
+          "availability_after_3s_fraction": 0.0,
+          "batch_optimization_count": 2137,
+          "final_status": "uninitialized",
+          "tracker_runtime_s": 3785.460061558999
+        },
+        "equal_weight_srp_phat": {
+          "availability_after_3s_fraction": 0.13821138211382114,
+          "batch_optimization_count": 37,
+          "final_status": "tentative",
+          "tracker_runtime_s": 126.77357388199744
+        }
+      },
+      "run_id": "range-afef357e9d15f5c83c6752a7",
+      "total_wall_runtime_s": 3967.351586812998
+    },
+    {
+      "index": 40,
+      "methods": {
+        "all_6_equal_gcc_wls": {
+          "availability_after_3s_fraction": 0.0,
+          "batch_optimization_count": 2138,
+          "final_status": "uninitialized",
+          "tracker_runtime_s": 2871.0142470490027
+        },
+        "equal_weight_srp_phat": {
+          "availability_after_3s_fraction": 0.4146341463414634,
+          "batch_optimization_count": 7,
+          "final_status": "tentative",
+          "tracker_runtime_s": 8.512658610998187
+        }
+      },
+      "run_id": "range-115ab3e0813bbafbc0f841d9",
+      "total_wall_runtime_s": 2937.030633204995
+    },
+    {
+      "index": 41,
+      "run_id": "range-1036c5710e8e90ec17cb05c3",
+      "status": "manually stopped after more than 70 minutes; no result published"
+    }
+  ],
+  "schema_version": 1,
+  "unbounded_setting": {
+    "maximum_batch_optimizations_per_generation": null
+  }
+}

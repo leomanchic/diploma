@@ -1,0 +1,33 @@
+{
+  "bearing_rows": 552,
+  "component_runtime_s": {
+    "audio_synthesis": 1.6078598660024,
+    "bearing_frontend": 1.8980233459951705
+  },
+  "evaluation_run": false,
+  "peak_rss_bytes": 201564160,
+  "purpose": "predeclared one-second technical time/memory probe",
+  "schema_version": 1,
+  "spec": {
+    "distance_m": 100,
+    "experiment": "fixed_background",
+    "geometric_attenuation": true,
+    "index": 24,
+    "noise_model": "fixed_reference_snr",
+    "noise_seed": 932098837148280395,
+    "replicate": 0,
+    "snr_db": 10.0,
+    "source_seed": 6150486506043246942,
+    "trajectory": "single_turn",
+    "trajectory_index": 0
+  },
+  "tracking_rows": {
+    "all_6_equal_gcc_wls": 9,
+    "equal_weight_srp_phat": 9
+  },
+  "update_rows": {
+    "all_6_equal_gcc_wls": 0,
+    "equal_weight_srp_phat": 0
+  },
+  "wall_runtime_s": 3.7731786200019997
+}

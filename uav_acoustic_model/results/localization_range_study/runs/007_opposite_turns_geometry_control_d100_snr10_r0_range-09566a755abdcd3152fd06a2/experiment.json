@@ -1,0 +1,42 @@
+{
+  "configuration_frozen_before_processing": true,
+  "identity": {
+    "code_sha256": "344ac04bf9a4c74aa7e447c2533f746c99bc623da5227adc346c3833efddcd0a",
+    "processing_sha256": "7a1f64919d5eeaaf41bbe5ffd39ed3043f37b880016d6cf6b35bb55e23b468d6",
+    "protocol_sha256": "9ca7ffb9b80be6ef0412fb2726ad6751e390ef83ca86bbb1f9a03ec399ab32ac",
+    "recording_manifest_sha256": "903bc5a7b838a1263d23f5ff53d16e955d67c39e6d454a82e14f157635b6edd1",
+    "recording_state_sha256": "59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2",
+    "schema_version": 1,
+    "source_signal_sha256": "258d4ca5d81101c774540c7f530a15650ee96723fdff82674a0c9a4c121b795c",
+    "spec": {
+      "distance_m": 100,
+      "experiment": "geometry_control",
+      "geometric_attenuation": false,
+      "index": 7,
+      "noise_model": "received_snr",
+      "noise_seed": 6618330909616730145,
+      "replicate": 0,
+      "snr_db": 10.0,
+      "source_seed": 17044596600568832310,
+      "trajectory": "opposite_turns",
+      "trajectory_index": 1
+    },
+    "translation_enu_m": [
+      71.30688276294256,
+      64.67376552249908,
+      7.49465854629071
+    ]
+  },
+  "result_sha256": {
+    "angular_errors.csv.gz": "985896e110ada3eb8f2f8353d7821557d2756eaab52cdb7d6664ab98c09007bf",
+    "summary.json": "69bb429c11522ab28094a0c118c7e8a88602d3fe20914655ac9f17bdaec817a6",
+    "tracking_all_6_equal_gcc_wls.csv.gz": "411f71a09d7fa32285250a434436b1cd9e0c85d48eb847fa98d4ffcc984743d6",
+    "tracking_equal_weight_srp_phat.csv.gz": "d4f3a83efece5ec03a0798981af52a211e62388434da0176a796a084524ba86b",
+    "updates_all_6_equal_gcc_wls.csv.gz": "89a5a48ffce305e9e6befaaefb213b6c3c6f1a40758d598fcb8c45b46f58bda1",
+    "updates_equal_weight_srp_phat.csv.gz": "0afb2d5908aea65738ab2901f045642139fb2efe10d119cc47d795dcee66b743"
+  },
+  "run_id": "range-09566a755abdcd3152fd06a2",
+  "schema_version": 1,
+  "sequence_id": "range-09566a755abdcd3152fd06a2",
+  "status": "complete"
+}

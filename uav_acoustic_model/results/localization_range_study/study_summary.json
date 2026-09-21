@@ -1,0 +1,15 @@
+{
+  "audio_run_count": 120,
+  "completed_run_ids_sha256": "6c7704f02e499976c25028c9a328cc1fcc52d851384ca989275cacf3f76bbd4c",
+  "maximum_peak_rss_bytes": 1209602048,
+  "method_result_count": 240,
+  "schema_version": 1,
+  "station_method_result_count": 720,
+  "tables": {
+    "group_summary.csv": "11190f40e0b86501992d1402dfa88c536d11d2bc65f1aa3c4193f5a08e5026eb",
+    "range_boundaries.csv": "1f15b0dc0b5f0fc89e451415f0729314e925335a4e4cc7ba69c98b7c1cdb1848",
+    "run_summary.csv": "e683ee48c2519beafb266b518ea9e55867dd5b79292b271d22ec6c7ea2f28f74",
+    "station_summary.csv": "10c4e5a48cfdebc166633c8dca49d3395e04bfaf205f4090733374cb235d68f4"
+  },
+  "total_measured_wall_runtime_s": 21274.20641604402
+}
