@@ -7,6 +7,8 @@
 *.patch text eol=lf
 *.log text eol=lf
 *.txt text eol=lf
+# This published protocol is a byte-exact, SHA-pinned research artifact.
+LOCALIZATION_RANGE_PROTOCOL.md binary
 # A git-format patch contains a single-space context marker on blank lines.
 px4/*.patch whitespace=-blank-at-eol
 results/px4_flight/*/*.patch whitespace=-blank-at-eol
