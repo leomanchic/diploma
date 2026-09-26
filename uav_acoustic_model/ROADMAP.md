@@ -44,6 +44,7 @@ bearing-измерениям определяет и затем причинно
 | S8-GZ-R | Done (replay contract) | Сделать повторную обработку Gazebo независимой от текущего scene JSON и разделить event IDs опытов | версия `experiment.json`, SHA записи/кода/результатов, переносимый `run_id`, явные init/migration/new, проверяемый viewer | новый каталог проходит запись→init→обработку→viewer без старых результатов; два исходных CSV сохранены, bearing/tracking/RMSE совпали с `03dc7d7` и `b6a20f8` в `1e-12`; Linux/Windows CI | S8-GZ |
 | S8-GZ-PX4 | Done (one-flight integration pilot) | Записать один полёт X500 под PX4 SITL и обработать его прежней акустической системой | read-only Gazebo observer, MAVSDK actions/telemetry, MAVLink Offboard setpoints, flight manifest, phases, offline replay и viewer | `pilot_003`: фактические взлёт/прямая/поворот/посадка, 3954 отсчёта без пропусков, 17.02 с аудио, 141/150 валидных публикаций каждого метода, прежние два контроля численно совпали | S8-GZ-R |
 | S8-GZ-RANGE | Done (conditional range study) | Завершить PX4/Gazebo integration pilot условным исследованием влияния геометрии, ослабления и манёвра | вторая запись с противоположными поворотами, фиксированный протокол, режим `1/r` с фиксированным фоном, 120 последовательных аудиозапусков, таблицы и notebook | SHA всех входов/результатов, общий source/noise pairing, фактический station SNR, confirmation/availability/P95/failures, пороги 2/5/10 м без экстраполяции | S8-GZ-PX4 |
+| S8-GZ-ATTR | Done (known-case diagnostic) | Разделить наблюдаемые механизмы ошибок опубликованного range study без изменения алгоритмов | восемь зафиксированных аудиопотоков, original/ideal-bearing/zero-bias replay, журналы initialization/update/lifecycle, локальный geometry benchmark и notebook | точное воспроизведение 16 original method cases; SHA входов; 8 audio restores; 48 вариантов; причинные выводы с явными границами интерпретации | S8-GZ-RANGE |
 | S9 | Planned | Проверить сложный акустический фон | цветной/коррелированный noise и interferers | контролируемые сценарии и failure reporting | S8 |
 | S10 | Planned | Добавить физику среды | температура, ветер и пространственно меняющийся `c` | независимые limiting-case tests | S3, S8 |
 | S11 | Planned | Добавить отражения и многолучёвость | room/ground reflection scenarios | direct-path baseline и bias/tail analysis | S9–S10 |
@@ -73,6 +74,14 @@ P95 ≤5 m наибольшая прошедшая точка фиксирова
 Контроль с принятым SNR +10 dB также проходит до 200 m, показывая ограничение
 геометрии на следующей точке. Точные границы для P95 2/5/10 m, явные отказы и
 ограничения приведены в `LOCALIZATION_RANGE_REPORT.md`.
+
+S8-GZ-ATTR использует восемь известных случаев опубликованной серии для
+диагностики, а не для независимого подтверждения качества. Сравнение с
+ideal-bearing и zero-bias показывает взаимодействие акустических ошибок,
+радиально слабой геометрии, инициализации и update starvation; разности между
+вариантами не являются аддитивным разложением. Рабочие GCC, SRP и tracker не
+изменены. Следующее изменение должно быть заморожено на отдельных development
+cases и проверено на held-out streams до любого заявления об улучшении.
 
 | Уровень | Определение |
 |---|---|

@@ -1,11 +1,15 @@
 """Frozen selection and truth-boundary tests for localization diagnostics."""
+import csv
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 
 from analysis.localization_error_attribution import (
-    SELECTED_INDEXES, SOURCE_MANIFEST_SHA256, SOURCE_STUDY, VARIANTS,
-    _diagnostic_id, _geometry_rows, _make_measurements, initialize,
+    SELECTED_INDEXES, SOURCE_MANIFEST_SHA256, SOURCE_RUN_IDS_SHA256,
+    SOURCE_STUDY, VARIANTS,
+    _diagnostic_id, _geometry_rows, _load_diagnostic, _make_measurements, initialize,
 )
 from model.bearing_events import bearing_event_id
 from model.measurements import BearingMeasurement
@@ -89,3 +93,47 @@ def test_static_geometry_benchmark_is_full_rank_and_labeled() -> None:
     assert all(np.isfinite(row["condition_number"]) and row["condition_number"] > 1.0 for row in rows)
     assert all(0.0 <= row["weak_direction_radial_alignment_abs"] <= 1.0 for row in rows)
     assert all(row["benchmark_kind"] == "local_static_Gaussian_linearization" for row in rows)
+
+
+EXPECTED_RESULT_TABLES = {
+    "bearing_station_summary.csv": "0367eb4383b576d44f89d95e8405502e021fed4f1b2775468eef9847ae120862",
+    "geometry_summary.csv": "a476813d0d1c2a1b67d8b60fb9907b5b67767309620afdcc582a5d0b86cdb4dc",
+    "reproduction_summary.csv": "1ba1e737c914791b6a82a8020b506dbb2cd7356ae5f2a5a7b3d46eb5d55625c6",
+    "variant_summary.csv": "bb311e4e301191206cf0c7fac0c9a1f526e8d8d02f7fbf305c19357cffb7b420",
+}
+
+
+def test_checked_in_diagnostic_is_complete_and_byte_verified() -> None:
+    output = Path("results/localization_error_attribution")
+    manifest = _load_diagnostic(output)
+    summary = json.loads((output / "study_summary.json").read_text())
+    assert summary["case_count"] == 8
+    assert summary["method_variant_count"] == 48
+    assert summary["audio_restoration_count"] == 8
+    assert summary["all_original_reproductions_passed"] is True
+    assert summary["source_manifest_sha256"] == SOURCE_MANIFEST_SHA256
+    assert summary["source_completed_run_ids_sha256"] == SOURCE_RUN_IDS_SHA256
+    assert summary["tables"] == EXPECTED_RESULT_TABLES
+    assert all(sha256(output / name) == digest
+               for name, digest in EXPECTED_RESULT_TABLES.items())
+
+    for case in manifest["cases"]:
+        prefix = f"{int(case['index']):03d}_{case['source_run_id']}_{case['diagnostic_id']}"
+        directory = output / "cases" / prefix
+        experiment = json.loads((directory / "experiment.json").read_text())
+        assert experiment["status"] == "complete"
+        assert experiment["audio_restoration_count"] == 1
+        assert all(sha256(directory / name) == digest
+                   for name, digest in experiment["result_sha256"].items())
+
+    with (output / "reproduction_summary.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == 16
+    assert all(row["passed"] == "True" and row["exact_mismatch_count"] == "0"
+               for row in rows)
+    numeric_fields = (
+        "maximum_bearing_error_difference_deg",
+        "maximum_tracking_numeric_difference",
+        "maximum_tracking_time_difference_s",
+    )
+    assert all(float(row[field]) == 0.0 for row in rows for field in numeric_fields)

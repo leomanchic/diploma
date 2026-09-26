@@ -1,0 +1,26 @@
+{
+  "actual_station_snr_db": {
+    "S0": 9.997046356636135,
+    "S1": 10.00111859992417,
+    "S2": 9.997978337323953
+  },
+  "audio_restoration_count": 1,
+  "audio_synthesis_wall_runtime_s": 25.673943129000236,
+  "bearing_frontend_wall_runtime_s": 34.642535252000016,
+  "bearing_record_count": 10194,
+  "bearing_records_sha256": "5679c842df69a664a4dfafdb68d59f4939e83203b4f4a6da327e1d4958a1846c",
+  "diagnostic_id": "attr-5c8c21abf23fc08ef2f0731f",
+  "duration_s": 18.14,
+  "reception_start_s": 40.852,
+  "recording_manifest_sha256": "903bc5a7b838a1263d23f5ff53d16e955d67c39e6d454a82e14f157635b6edd1",
+  "recording_state_sha256": "59453269365901293c26fab31c14cc8874412ad9a5a8484fee9962046f3cb5a2",
+  "schema_version": 1,
+  "source_run_id": "range-d50f18cf1a39e2e16bab8348",
+  "source_signal_sha256": "258d4ca5d81101c774540c7f530a15650ee96723fdff82674a0c9a4c121b795c",
+  "standardized_noise_sha256": "4d20ab9b8a7744b6eae8d5a838827d98f080af941c5816f4a8d3490bb66e8e88",
+  "translation_enu_m": [
+    280.21615485894824,
+    273.58303761850476,
+    59.58911184636981
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "all_original_reproductions_passed": true,
+  "audio_restoration_count": 8,
+  "case_count": 8,
+  "method_variant_count": 48,
+  "schema_version": 1,
+  "source_completed_run_ids_sha256": "6c7704f02e499976c25028c9a328cc1fcc52d851384ca989275cacf3f76bbd4c",
+  "source_manifest_sha256": "00f3e2e259885d34abd9e2247e1aa1ed0f74c201ad63d4981dfd6fe8b5d194e6",
+  "tables": {
+    "bearing_station_summary.csv": "0367eb4383b576d44f89d95e8405502e021fed4f1b2775468eef9847ae120862",
+    "geometry_summary.csv": "a476813d0d1c2a1b67d8b60fb9907b5b67767309620afdcc582a5d0b86cdb4dc",
+    "reproduction_summary.csv": "1ba1e737c914791b6a82a8020b506dbb2cd7356ae5f2a5a7b3d46eb5d55625c6",
+    "variant_summary.csv": "bb311e4e301191206cf0c7fac0c9a1f526e8d8d02f7fbf305c19357cffb7b420"
+  }
+}
