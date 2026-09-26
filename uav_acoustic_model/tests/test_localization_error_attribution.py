@@ -1,0 +1,91 @@
+"""Frozen selection and truth-boundary tests for localization diagnostics."""
+from types import SimpleNamespace
+
+import numpy as np
+
+from analysis.localization_error_attribution import (
+    SELECTED_INDEXES, SOURCE_MANIFEST_SHA256, SOURCE_STUDY, VARIANTS,
+    _diagnostic_id, _geometry_rows, _make_measurements, initialize,
+)
+from model.bearing_events import bearing_event_id
+from model.measurements import BearingMeasurement
+from simulation.gazebo_offline import shared_stations
+from validation.gazebo_experiment import canonical_sha256, sha256
+from validation.localization_range_study import _load_study, _run_id
+
+EXPECTED_IDS = (
+    "range-272dde7dd08ac45c22d609f9", "range-78be84b1f71af5d1f2e0b5f9",
+    "range-858892c886a576ff30a1e939", "range-a8865603f5b0100fb597490c",
+    "range-d50f18cf1a39e2e16bab8348", "range-62f93e0cb51c04249c66dded",
+    "range-6226b1780a8e2d97ad7ffbc1", "range-61aa70fe53f59e5908252f7b",
+)
+
+
+def test_initialization_freezes_exact_published_cases(tmp_path) -> None:
+    source = _load_study(SOURCE_STUDY)
+    assert sha256(SOURCE_STUDY / "study_manifest.json") == SOURCE_MANIFEST_SHA256
+    assert tuple(_run_id(source, source["runs"][i]) for i in SELECTED_INDEXES) == EXPECTED_IDS
+    manifest = initialize(tmp_path / "diagnostic")
+    assert manifest["configuration_frozen_before_processing"] is True
+    assert manifest["case_count"] == manifest["audio_restoration_limit"] == 8
+    assert tuple(item["source_run_id"] for item in manifest["cases"]) == EXPECTED_IDS
+    assert len({item["diagnostic_id"] for item in manifest["cases"]}) == 8
+    assert manifest["processing_snapshot_sha256"] == canonical_sha256(source["processing"])
+    assert all(item["diagnostic_id"] == _diagnostic_id(item["source_run_id"])
+               for item in manifest["cases"])
+
+
+def _row(frame_index: int, *, valid: bool) -> dict:
+    truth = np.asarray([1.0, 0.0, 0.0])
+    estimate = np.asarray([0.99995, 0.01, 0.0])
+    estimate /= np.linalg.norm(estimate)
+    probe = BearingMeasurement(
+        station_id="S0", sequence_id="source-run", frame_index=frame_index,
+        reception_center_timestamp_s=1.0 + frame_index,
+        available_timestamp_s=1.1 + frame_index, direction_local=truth,
+        covariance_tangent_rad2=np.eye(2), calibration_bias_tangent_rad=np.zeros(2),
+        estimator_variant="all_6_equal_gcc_wls",
+    )
+    return {
+        "station_id": "S0", "sequence_id": "source-run", "frame_index": frame_index,
+        "frame_center_reception_time_s": 1.0 + frame_index,
+        "available_timestamp_s": 1.1 + frame_index,
+        "estimator_variant": "all_6_equal_gcc_wls", "quality_metadata": {"score": 2.0},
+        "truth_local": truth, "estimate_local": estimate, "valid": valid,
+        "invalid_reason": "" if valid else "audio_bearing_invalid",
+        "event_id": bearing_event_id(probe),
+    }
+
+
+def test_variants_share_schedule_and_keep_truth_out_of_measurement() -> None:
+    rows = [_row(0, valid=True), _row(1, valid=False)]
+    calibration = SimpleNamespace(
+        covariance_rad2=np.diag([1e-4, 2e-4]),
+        mean_residual_rad=np.asarray([0.02, -0.01]),
+    )
+    calibrations = {("S0", "all_6_equal_gcc_wls"): calibration}
+    built = {variant: _make_measurements(
+        rows, calibrations, "all_6_equal_gcc_wls", variant, 1
+    ) for variant in VARIANTS}
+    schedules = [[(m.station_id, m.frame_index, m.reception_center_timestamp_s,
+                   m.available_timestamp_s) for m in measurements]
+                 for measurements in built.values()]
+    assert schedules[0] == schedules[1] == schedules[2]
+    assert built["original"][0].calibration_bias_tangent_rad.tolist() == [0.02, -0.01]
+    assert built["original"][1].valid is False
+    assert built["zero_bias"][1].valid is False
+    assert all(m.valid for m in built["ideal_bearing"])
+    assert all(np.array_equal(m.calibration_bias_tangent_rad, np.zeros(2))
+               for variant in ("ideal_bearing", "zero_bias") for m in built[variant] if m.valid)
+    assert not hasattr(built["ideal_bearing"][0], "truth_position")
+    assert not hasattr(built["ideal_bearing"][0], "true_emission_time_s")
+
+
+def test_static_geometry_benchmark_is_full_rank_and_labeled() -> None:
+    stations = shared_stations()
+    trajectory = SimpleNamespace(q=lambda time: np.asarray([300.0 + time, 280.0, 80.0]))
+    rows = _geometry_rows(stations, trajectory, [0.0, 1.0])
+    assert [row["rank"] for row in rows] == [3, 3]
+    assert all(np.isfinite(row["condition_number"]) and row["condition_number"] > 1.0 for row in rows)
+    assert all(0.0 <= row["weak_direction_radial_alignment_abs"] <= 1.0 for row in rows)
+    assert all(row["benchmark_kind"] == "local_static_Gaussian_linearization" for row in rows)

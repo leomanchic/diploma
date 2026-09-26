@@ -14,3 +14,5 @@ px4/*.patch whitespace=-blank-at-eol
 results/px4_flight/*/*.patch whitespace=-blank-at-eol
 # Keep PX4 console logs byte-for-byte; the program emits trailing tabs/spaces.
 results/px4_flight/*/*.log whitespace=-blank-at-eol
+# The diagnostic protocol is also immutable and verified byte-for-byte.
+LOCALIZATION_ERROR_ATTRIBUTION_PROTOCOL.md binary
