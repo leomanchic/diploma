@@ -38,6 +38,33 @@ range cases, Monte Carlo и старые notebooks не запускались.
 gates и budget 128. Truth не входит в `BearingMeasurement`, и трек не
 инициализируется истинным состоянием.
 
+## Ошибка состояния и согласованность ковариации при подтверждении
+
+`first_confirmation_summary.csv` содержит все 48 комбинаций
+`case × method × variant`. Для 44 подтверждённых треков в нём явно сохранены
+ошибки положения и скорости, радиальная/поперечная компоненты, position NEES,
+максимальный локальный P95 scale ковариации и признак покрытия. Четыре строки
+без подтверждения — GCC original и zero-bias в fixed-background случаях 400 и
+1000 м; их значения состояния корректно оставлены пустыми.
+
+| Случай | Вариант | Ошибка положения при confirmation | Ошибка скорости | Position NEES / covariance P95 scale |
+|---|---|---:|---:|---:|
+| single-turn 700 м, GCC/SRP | original | 34,44 / 34,54 м | 12,11 / 12,09 м/с | 0,152 / 0,150; 308,52 / 307,66 м |
+| opposite-turns 700 м, GCC/SRP | original | 43,23 / 42,78 м | 17,94 / 17,85 м/с | 0,219 / 0,216; 364,24 / 362,96 м |
+| fixed 400 м, SRP | original | 21,58 м | 4,68 м/с | 31,12; 32,97 м, truth вне P95 region |
+| fixed 400 м, SRP | ideal-bearing | 0,309 м | 0,243 м/с | 0,0092; 72,01 м, truth покрыт |
+| fixed 1000 м, SRP | original | 224,70 м | 46,70 м/с | 29,07; 153,73 м, truth вне P95 region |
+| fixed 1000 м, SRP | ideal-bearing | 1,267 м | 0,588 м/с | 0,0066; 914,33 м, truth покрыт |
+
+`uncertainty_error_summary.csv` сопоставляет фактическую ошибку с posterior
+NEES, coverage и локальным масштабом covariance по всей допустимой части
+каждого трека. Например, для исходного SRP на 1000 м P95 фактической ошибки
+равен 2147,65 м, median covariance maximum-axis P95 scale — 5366,62 м,
+position coverage — 0,71. При подтверждении covariance слишком уверенная и
+не покрывает truth; после потери полезных updates она сильно расширяется.
+Поэтому позднее покрытие большой ковариацией не является признаком точной
+локализации.
+
 ## Главные численные результаты
 
 ### Контроль постоянного принятого SNR +10 dB
@@ -138,6 +165,7 @@ bias или EKF update: ideal bearings устраняют оба budget failure,
 Основные таблицы находятся в `results/localization_error_attribution`:
 
 - `variant_summary.csv`, `phase_summary.csv`, `update_summary.csv`;
+- `first_confirmation_summary.csv`, `uncertainty_error_summary.csv`;
 - `initialization_summary.csv`, `bearing_station_summary.csv`;
 - `geometry_summary.csv`, `geometry_case_summary.csv`;
 - `diagnosis_table.csv`, `analysis_summary.json`;

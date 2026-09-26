@@ -3,9 +3,11 @@
   "case_count": 8,
   "derived_tables": {
     "diagnosis_table.csv": "fabd96776d16c141be6e2c490c0d0e4a533fdb225dd24cc7db50ea2155f41987",
+    "first_confirmation_summary.csv": "d76a91758c8c33bc0cfc8e39bb0c3c01ab6a9b0533b5887873e7955fb86f9107",
     "geometry_case_summary.csv": "e3aa7ae963e355792e6c447dd3d9e0c2c419095c375489b9078c34617e941578",
     "initialization_summary.csv": "e97ac4ada5dc15ad17a9d515656feecb545ef059531d333a7b25a854eba083b5",
     "phase_summary.csv": "1c6f5cae690372312c9f0f9812ca85b5ac2efa6a1a9c67f8bd020b956d7a9b89",
+    "uncertainty_error_summary.csv": "28e39f62fd4d29d6be07818a4428acc857f3001abad23e85c34644eeb3b40e1b",
     "update_summary.csv": "dde1d1cdb30e7a8cec79c85ef4622f8c70236b01379352410f6171d78e31cd20"
   },
   "interpretation": "diagnostic known-case attribution; effects are interacting and non-additive",

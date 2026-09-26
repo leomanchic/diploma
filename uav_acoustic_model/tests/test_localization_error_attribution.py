@@ -102,6 +102,16 @@ EXPECTED_RESULT_TABLES = {
     "variant_summary.csv": "bb311e4e301191206cf0c7fac0c9a1f526e8d8d02f7fbf305c19357cffb7b420",
 }
 
+EXPECTED_DERIVED_TABLES = {
+    "diagnosis_table.csv": "fabd96776d16c141be6e2c490c0d0e4a533fdb225dd24cc7db50ea2155f41987",
+    "first_confirmation_summary.csv": "d76a91758c8c33bc0cfc8e39bb0c3c01ab6a9b0533b5887873e7955fb86f9107",
+    "geometry_case_summary.csv": "e3aa7ae963e355792e6c447dd3d9e0c2c419095c375489b9078c34617e941578",
+    "initialization_summary.csv": "e97ac4ada5dc15ad17a9d515656feecb545ef059531d333a7b25a854eba083b5",
+    "phase_summary.csv": "1c6f5cae690372312c9f0f9812ca85b5ac2efa6a1a9c67f8bd020b956d7a9b89",
+    "uncertainty_error_summary.csv": "28e39f62fd4d29d6be07818a4428acc857f3001abad23e85c34644eeb3b40e1b",
+    "update_summary.csv": "dde1d1cdb30e7a8cec79c85ef4622f8c70236b01379352410f6171d78e31cd20",
+}
+
 
 def test_checked_in_diagnostic_is_complete_and_byte_verified() -> None:
     output = Path("results/localization_error_attribution")
@@ -137,3 +147,23 @@ def test_checked_in_diagnostic_is_complete_and_byte_verified() -> None:
         "maximum_tracking_time_difference_s",
     )
     assert all(float(row[field]) == 0.0 for row in rows for field in numeric_fields)
+
+
+    analysis = json.loads((output / "analysis_summary.json").read_text())
+    assert analysis["derived_tables"] == EXPECTED_DERIVED_TABLES
+    assert all(sha256(output / name) == digest
+               for name, digest in EXPECTED_DERIVED_TABLES.items())
+
+    with (output / "first_confirmation_summary.csv").open(newline="") as stream:
+        confirmations = list(csv.DictReader(stream))
+    assert len(confirmations) == 48
+    confirmed = [row for row in confirmations if row["confirmed"] == "True"]
+    failed = [row for row in confirmations if row["confirmed"] == "False"]
+    assert len(confirmed) == 44 and len(failed) == 4
+    assert all(row["first_confirmation_velocity_error_mps"] for row in confirmed)
+    assert all(not row["first_confirmation_velocity_error_mps"] for row in failed)
+
+    with (output / "uncertainty_error_summary.csv").open(newline="") as stream:
+        uncertainty = list(csv.DictReader(stream))
+    assert len(uncertainty) == 48
+    assert sum(int(row["valid_publication_count"]) == 0 for row in uncertainty) == 4
