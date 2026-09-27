@@ -227,3 +227,43 @@ def test_truth_changes_only_evaluation_and_position_nees_is_independent():
         json.loads(sample["position_nominal_95_axes_m_json"]),
         np.sqrt(CHI3 * np.linalg.eigvalsh(covariance)), rtol=0, atol=1e-10)
     assert sample["position_nominal_95_covered"] == (expected_nees <= CHI3)
+
+
+def test_published_evaluation_has_12_unique_streams_and_48_checked_replays():
+    import csv
+    import gzip
+    import json
+    from pathlib import Path
+
+    from analysis.robust_track_confirmation import _load
+    from validation.gazebo_experiment import sha256
+
+    root = Path(__file__).resolve().parents[1] / "results" / "robust_track_confirmation"
+    manifest = _load(root)
+    assert len(manifest["specs"]) == manifest["audio_stream_limit"] == 12
+    assert len({spec["run_id"] for spec in manifest["specs"]}) == 12
+    all_events = set()
+    replay_count = 0
+    audio_restoration_count = 0
+    for directory in sorted((root / "runs").iterdir()):
+        experiment = json.loads((directory / "experiment.json").read_text())
+        assert experiment["status"] == "complete"
+        for filename, digest in experiment["result_sha256"].items():
+            assert sha256(directory / filename) == digest
+        summary = json.loads((directory / "summary.json").read_text())
+        assert summary["run_id"] == experiment["run_id"]
+        assert len(summary["method_variants"]) == 4
+        assert {(item["estimator_variant"], item["confirmation_variant"])
+                for item in summary["method_variants"]} == {
+                    (method, variant) for method in manifest["methods"] for variant in manifest["variants"]}
+        replay_count += len(summary["method_variants"])
+        audio_restoration_count += summary["audio_restoration_count"]
+        with gzip.open(directory / "bearing_records.csv.gz", "rt", newline="") as file:
+            identities = [row["event_id"] for row in csv.DictReader(file)]
+        stream_events = set(identities)
+        assert len(stream_events) == len(identities) and stream_events
+        assert not (stream_events & all_events)
+        assert all(identity.startswith(experiment["run_id"] + "|") for identity in stream_events)
+        all_events.update(stream_events)
+    assert replay_count == manifest["tracker_replay_limit"] == 48
+    assert audio_restoration_count == 12

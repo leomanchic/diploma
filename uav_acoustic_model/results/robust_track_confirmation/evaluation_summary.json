@@ -1,0 +1,20 @@
+{
+  "audio_stream_count": 12,
+  "baseline_availability": 0.6933760683760684,
+  "baseline_confirmed_count": 21,
+  "baseline_severe_confirmation_count": 13,
+  "limitations": "same two motion types and source banks; 12 new noise streams only",
+  "new_availability": 0.6704059829059829,
+  "new_confirmed_count": 21,
+  "new_severe_confirmation_count": 11,
+  "paired_method_stream_count": 24,
+  "schema_version": 1,
+  "shared_confirmation_median_time_change_s": 0.0,
+  "tables": {
+    "method_summary.csv": "bb11c03281b3b8cc6d8e613adfad6ba1926f9dd9a68e6317b33973ce2e159fd2",
+    "paired_summary.csv": "d942f35e228fe76cb65cfb885580710ded703aba3b66c5e3a6604067418d0b82",
+    "run_summary.csv": "674cdab4b40fa66438a2b0c5c61490553a881e15298c6672f8e5a918a3ca3719"
+  },
+  "tracker_replay_count": 48,
+  "verdict": "improvement_confirmed_in_limited_protocol"
+}

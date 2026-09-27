@@ -16,3 +16,5 @@ results/px4_flight/*/*.patch whitespace=-blank-at-eol
 results/px4_flight/*/*.log whitespace=-blank-at-eol
 # The diagnostic protocol is also immutable and verified byte-for-byte.
 LOCALIZATION_ERROR_ATTRIBUTION_PROTOCOL.md binary
+# The robust-confirmation evaluation protocol is SHA-pinned before all new runs.
+ROBUST_TRACK_CONFIRMATION_PROTOCOL.md binary
