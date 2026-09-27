@@ -98,8 +98,9 @@ updates. Геометрический и tracking-вклады этим опыт
 GCC original и zero-bias исчерпывают 128 batch fits в `47.7019791667 s` и ни
 разу не инициализируются. Ideal-bearing подтверждается после 2 fits через
 `1.0553125 s`, P95 равен `4,7568 м`. Максимальный station angular P95 исходного
-GCC достигает `136,22°`. Это подтверждает, что отказ вызывается акустически
-повреждёнными bearings, а не самим budget или calibration bias.
+GCC достигает `136,22°`. Это показывает существенную роль повреждённых bearings. Успех ideal-bearing
+при том же лимите не исключает, что budget 128 дополнительно усугубляет
+отказ на шумных данных; влияние budget здесь отдельно не оценивалось.
 
 SRP original подтверждается поздно, через `5.1513125 s`, уже с ошибкой
 `21,58 м`, затем имеет два reset и заканчивает invalid. Его conditional P95
@@ -116,9 +117,10 @@ SRP original подтверждается через `4.4836458333 s` уже с 
 возрастает до `2222,83 м`; P95 `2147,65 м`. Принято только 3 updates,
 отклонено 96: 90 `emission_outside_history` и 6 NIS gate. Три принятых updates
 имеют NIS `0,77–7,65`, хотя текущая ошибка координат составляет `280–339 м`.
-Это прямой пример того, что геометрически слабое радиальное смещение может
-иметь небольшой bearing residual и пройти update gate при сильно ошибочной
-позиции.
+Это прямой пример принятия update при сильно ошибочной позиции и
+невысоком *нормированном* NIS. Угловой residual в исходном журнале не
+сохранялся; по одному NIS его величину определить нельзя, поскольку NIS
+зависит также от innovation covariance.
 
 Ideal-bearing подтверждается через `1.0553125 s` с ошибкой `1,27 м`, принимает
 113 updates и даёт P95 `11,58 м`. Значит большая исходная ошибка присутствует
@@ -139,26 +141,28 @@ Ideal-bearing подтверждается через `1.0553125 s` с ошиб�
 |---|---|---|---|
 | control 200 м | P95 original 2,46–2,70 м | Геометрия ещё умеренная; acoustic вклад меньше | ideal P95 2,22–2,63 м, condition ≈12 |
 | control 400 м | P95 original 5,13–7,32 м | Геометрия и tracking уже ограничивают точность; bearings усиливаются | ideal P95 4,30–4,76 м, condition ≈51–52 |
-| control 700 м | 34–43 м ошибки уже при confirmation, почти радиально | **Подтверждено:** слабая радиальная геометрия усиливает малые bearing errors | ideal first error 0,63–0,65 м; condition ≈164–166 |
-| fixed 400 м GCC | 128 fits, initialization отсутствует | **Подтверждено:** gross acoustic bearings разрушают initialization | ideal: 2 fits; zero-bias также 128 |
-| fixed 400 м SRP | late bad confirmation, resets, final invalid | **Подтверждено:** acoustic error создаёт плохую initialization и дальнейшие потери | original P95 73,25 м; ideal 4,76 м |
-| fixed 1000 м GCC | 128 fits, initialization отсутствует | **Подтверждено:** acoustic corruption при слабой геометрии блокирует initialization | ideal: 2 fits, P95 11,58 м |
-| fixed 1000 м SRP | 224,70 м при confirmation → 2222,83 м | **Подтверждено:** bad initialization взаимодействует с радиальной неоднозначностью и update starvation | ideal first 1,27 м; только 3/99 updates приняты |
+| control 700 м | 34–43 м ошибки уже при confirmation, почти радиально | **Наблюдается:** большая радиальная ошибка при слабой геометрии; геометрический вклад отдельно не выделен | ideal first error 0,63–0,65 м; condition ≈164–166 |
+| fixed 400 м GCC | 128 fits, initialization отсутствует | **Наблюдается:** сильно повреждённые bearings и конечный budget сопровождают отказ инициализации | ideal: 2 fits; zero-bias также 128 |
+| fixed 400 м SRP | late bad confirmation, resets, final invalid | **Наблюдается:** большая начальная ошибка и дальнейшие потери сопровождения | original P95 73,25 м; ideal 4,76 м |
+| fixed 1000 м GCC | 128 fits, initialization отсутствует | **Наблюдается:** шумные bearings и конечный budget совместно ограничивают initialization | ideal: 2 fits, P95 11,58 м |
+| fixed 1000 м SRP | 224,70 м при confirmation → 2222,83 м | **Наблюдается:** ошибка уже при confirmation и затем update starvation; вклады не разделены | ideal first 1,27 м; только 3/99 updates приняты |
 | zero-bias | статусы отказов не меняются | **Подтверждено:** bias не является основной причиной | original против zero-bias |
 
 ## Следующее изменение
 
-Приоритетное направление — **observable-data-only robust gate согласованности
-пеленгов до bounded candidate search инициализации**. Он должен исключать
-грубые angular outliers до расходования 128 nonlinear fits, сохранять event IDs
-и причины исключения и не использовать truth, range или coordinate error.
+Отдельный замороженный протокол `ROBUST_TRACK_CONFIRMATION_PROTOCOL.md`
+проверяет один opt-in вариант: три подтверждающие станции вместо двух в
+существующем consensus/refit. Его оценка проводится на 12 новых аудиопотоках;
+восемь известных случаев выше используются только для диагностики и
+регрессии. Это не переписывает исторические численные результаты.
 
-Текущая диагностика показывает, почему это направление приоритетнее изменения
-bias или EKF update: ideal bearings устраняют оба budget failure, а zero-bias
-нет. Она ещё не доказывает, что существующие quality metadata достаточно
-надёжно распознают выбросы. До реализации порог и score нужно заморозить на
-отдельных development cases и проверить на held-out streams. Само улучшение в
-этой ветке не реализовано.
+Версионированные исправления к диагностике находятся в
+`results/robust_track_confirmation/historical_corrections_v2/`.
+`variant_summary_v2.csv` берёт время budget exhaustion из batch-fit журнала и
+сверяет его с lifecycle; `residual_availability_v2.csv` явно помечает
+исторический angular residual как `not_recorded_in_v1`. Для новых запусков
+хранятся фактический residual до update и innovation covariance, из которых
+можно независимо восстановить NIS. Старые таблицы и ID сохранены.
 
 ## Артефакты и повторный просмотр
 

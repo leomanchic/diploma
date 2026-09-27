@@ -34,8 +34,19 @@ def _inputs_only(source: Path, target: Path) -> Path:
     return target
 
 
+def _current_code_inputs(source: Path, target: Path, config_path: Path) -> Path:
+    """Create a new experiment for current code from archived recording bytes."""
+    target.mkdir()
+    for name in ("gazebo_state.csv", "manifest.json"):
+        shutil.copy2(source / name, target / name)
+    archived = load_experiment(source)
+    config_path.write_text(json.dumps({"schema_version": 1, "processing": archived["processing"]}))
+    initialize_experiment(target, config_path)
+    return target
+
+
 def test_replay_uses_saved_audio_configuration_after_scene_json_changes(tmp_path, monkeypatch):
-    directory = _inputs_only(STRAIGHT, tmp_path / "copy")
+    directory = _current_code_inputs(STRAIGHT, tmp_path / "copy", tmp_path / "frozen-config.json")
     config = json.loads(gazebo_offline.CONFIG_PATH.read_text())
     config["snr_db"], config["seed"] = -17, 123456
     changed_scene = tmp_path / "scene.json"
@@ -166,7 +177,8 @@ def test_code_refresh_preserves_recording_and_prior_run_provenance(tmp_path, mon
 
 
 def test_run_id_changes_for_material_inputs(tmp_path):
-    original = load_experiment(STRAIGHT)
+    source = _current_code_inputs(STRAIGHT, tmp_path / "source", tmp_path / "source-config.json")
+    original = load_experiment(source, check_code=True)
     for change in ("recording", "seed", "snr", "calibration"):
         modified = json.loads(json.dumps(original))
         if change == "recording":
@@ -179,13 +191,13 @@ def test_run_id_changes_for_material_inputs(tmp_path):
             modified["processing"]["calibration"]["values"][0]["bias_rad"][0] += 1e-5
         assert finalize_experiment(modified)["run_id"] != original["run_id"]
     destination = tmp_path / "new"
-    created = create_experiment(STRAIGHT, destination, seed=23, snr_db=5.0,
+    created = create_experiment(source, destination, seed=23, snr_db=5.0,
                                 comparison_group_id="paired-example")
     assert created["run_id"] != original["run_id"]
     assert created["comparison_group_id"] == "paired-example"
     assert sha256(destination / "gazebo_state.csv") == sha256(STRAIGHT / "gazebo_state.csv")
     with pytest.raises(FileExistsError):
-        create_experiment(STRAIGHT, destination, seed=24)
+        create_experiment(source, destination, seed=24)
 
 
 def test_straight_and_turn_event_ids_do_not_intersect():
