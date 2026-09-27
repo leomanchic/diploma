@@ -108,6 +108,9 @@ class ManoeuvreUpdateDiagnostic:
     runtime_s: float
     history_node_count: int
     history_memory_bytes: int
+    residual_tangent_rad: tuple[float, float] | None = None
+    residual_unavailable_reason: str | None = None
+    innovation_covariance_tangent_rad2: tuple[tuple[float, float], tuple[float, float]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +394,8 @@ class AugmentedMotionHistory:
         nis = float("nan")
         applied = False
         reason: str | None = None
+        residual_tangent: tuple[float, float] | None = None
+        innovation_tangent: tuple[tuple[float, float], tuple[float, float]] | None = None
         try:
             r = np.asarray(measurement.covariance_tangent_rad2, dtype=float)
             np.linalg.cholesky(0.5 * (r + r.T))
@@ -398,9 +403,11 @@ class AugmentedMotionHistory:
                 station, measurement, insert_emission_node=True
             )
             emission = predicted.emission_time_s
+            residual_tangent = tuple(float(value) for value in predicted.residual_tangent_rad)
             h = predicted.jacobian_augmented
             s = h @ self.covariance @ h.T + r
             np.linalg.cholesky(0.5 * (s + s.T))
+            innovation_tangent = tuple(tuple(float(value) for value in row) for row in s)
             nis = float(predicted.residual_tangent_rad @ np.linalg.solve(
                 s, predicted.residual_tangent_rad
             ))
@@ -434,6 +441,9 @@ class AugmentedMotionHistory:
             runtime_s=time.perf_counter() - started,
             history_node_count=self.node_count,
             history_memory_bytes=self.memory_bytes,
+            residual_tangent_rad=residual_tangent,
+            residual_unavailable_reason=(reason or "residual_not_computed") if residual_tangent is None else None,
+            innovation_covariance_tangent_rad2=innovation_tangent,
         )
 
 

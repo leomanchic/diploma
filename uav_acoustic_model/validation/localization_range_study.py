@@ -73,6 +73,8 @@ MAXIMUM_TRANSPORT_DELAY_S = 0.10
 MAXIMUM_BATCH_OPTIMIZATIONS_PER_GENERATION = 128
 PASS_P95_THRESHOLDS_M = (2.0, 5.0, 10.0)
 SCHEMA_VERSION = 1
+PUBLISHED_MANIFEST_SHA256 = "00f3e2e259885d34abd9e2247e1aa1ed0f74c201ad63d4981dfd6fe8b5d194e6"
+PUBLISHED_CODE_SHA256 = "344ac04bf9a4c74aa7e447c2533f746c99bc623da5227adc346c3833efddcd0a"
 
 
 @dataclass(frozen=True)
@@ -395,7 +397,12 @@ def _load_study(output: Path, *, check_code: bool = True) -> dict:
     if sha256(PROTOCOL) != manifest["protocol_sha256"]:
         raise ValueError("range-study protocol changed after initialization")
     if check_code and code_sha256() != manifest["code_sha256"]:
-        raise ValueError("processing code changed after study initialization")
+        # The 120-run publication is an archived artifact. Its original code
+        # fingerprint remains pinned; current opt-in diagnostics have a new
+        # fingerprint. This path permits verification, never silent replay.
+        if not (sha256(output / "study_manifest.json") == PUBLISHED_MANIFEST_SHA256
+                and manifest["code_sha256"] == PUBLISHED_CODE_SHA256):
+            raise ValueError("processing code changed after study initialization")
     if sha256(output / "run_matrix.csv") != manifest["run_matrix_sha256"]:
         raise ValueError("run matrix SHA-256 mismatch")
     for name, info in manifest["recordings"].items():
@@ -747,6 +754,13 @@ def run_one(output: Path, index: int) -> dict:
         raise IndexError("run index lies outside the frozen matrix")
     spec = manifest["runs"][int(index)]
     run_id = _run_id(manifest, spec)
+    if code_sha256() != manifest["code_sha256"]:
+        directory = _run_directory(output, spec, run_id)
+        if (directory / "experiment.json").exists():
+            existing = json.loads((directory / "experiment.json").read_text())
+            if existing.get("status") == "complete":
+                return _verify_completed(directory)
+        raise ValueError("archived run cannot be recomputed with changed processing code")
     directory = _run_directory(output, spec, run_id)
     identity = _run_identity(manifest, spec)
     experiment_path = directory / "experiment.json"
@@ -856,6 +870,8 @@ def run_all(output: Path) -> dict:
                 _verify_completed(directory)
                 skipped += 1
                 continue
+        if code_sha256() != manifest["code_sha256"]:
+            raise ValueError("archived run is incomplete; changed code may only verify completed runs")
         subprocess.run(
             [
                 sys.executable, "-m", "validation.localization_range_study",
