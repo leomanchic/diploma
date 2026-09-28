@@ -1,0 +1,5 @@
+estimator_variant,confirmation_variant,stream_count,total_executed_optimizations,sum_final_generation_optimizations,maximum_single_generation_optimizations,attempts_rejected_before_optimization,streams_with_reset
+all_6_equal_gcc_wls,baseline,12,633,568,128,3,2
+all_6_equal_gcc_wls,three_station_confirmation,12,690,625,128,3,2
+equal_weight_srp_phat,baseline,12,379,263,47,0,4
+equal_weight_srp_phat,three_station_confirmation,12,467,422,81,0,2
