@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "recording_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+  "export_rate_hz": 50.0,
+  "maximum_gap_s": 0.020000000000010232,
+  "maximum_observed_speed_mps": 4.156046302515871,
+  "maximum_interpolated_speed_mps": 4.156053298717518,
+  "maximum_interpolated_acceleration_mps2": 45.296357936420804,
+  "velocity_error_rms_50hz_mps": 0.004110148788571148,
+  "velocity_error_p95_50hz_mps": 0.0020496819954194407,
+  "velocity_error_rms_25hz_mps": 0.006361277558844069,
+  "comparison_sample_count": 7275,
+  "cadence_assessment": "50 Hz derivative compared with observed Gazebo velocity; 25 Hz is a downsample of the same flight"
+}

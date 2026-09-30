@@ -1,0 +1,23 @@
+{
+  "actual_station_snr_db": {
+    "S0": -7.607726259248004,
+    "S1": -6.814704032788475,
+    "S2": -6.820096850776132
+  },
+  "audio_synthesis_count": 1,
+  "audio_wall_s": 37.11839721800061,
+  "bearing_record_count": 11250,
+  "bearing_records_sha256": "064920cbf19a1a62189ba443c47e326e1087c78f66d42e6e4b1217dbb5e1d3a3",
+  "frontend_wall_s": 41.837700226999004,
+  "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+  "run_id": "unseen-2cd64bc7d4a4f5ce9c8de478",
+  "schema_version": 1,
+  "source_signal_sha256": "228394ccec9a13c05914bc2f34e1fe081b2716f6f7ca74df4059c6c956abba3c",
+  "standardized_noise_sha256": "04a3b949688aa70ca3918e42861e866333b807f84af21ea26b469fa8ba6c1390",
+  "time_origin_gazebo_s": 115.968,
+  "translation_enu_m": [
+    489.11513708315493,
+    482.43445003778515,
+    111.66065535459697
+  ]
+}

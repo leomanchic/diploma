@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "world_frame": "ENU",
+  "world_name": "px4_acoustic",
+  "ground_height_m": 0.0,
+  "stations": [
+    {
+      "id": "S0",
+      "position_m": [
+        0.0,
+        0.0,
+        5.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S1",
+      "position_m": [
+        100.0,
+        0.0,
+        10.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S2",
+      "position_m": [
+        10.0,
+        90.0,
+        3.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "gazebo": {
+    "physics_step_s": 0.004,
+    "export_period_s": 0.02,
+    "seed": 20261001
+  },
+  "acoustics": {
+    "reception_lead_s": 0.5,
+    "reception_tail_s": 0.5,
+    "base_seed": 20261001,
+    "snr_db": 10.0
+  },
+  "vehicle": {
+    "model": "x500",
+    "gazebo_model_name": "x500_0",
+    "source_point": "canonical base_link origin (zero offset in body FLU)",
+    "trajectory_profile": "radial_approach_depart",
+    "spawn_enu_m": [
+      35.0,
+      35.0,
+      0.0
+    ],
+    "takeoff_altitude_m": 16.0,
+    "takeoff_reached_altitude_m": 15.0,
+    "horizontal_speed_mps": 3.0,
+    "hover_before_s": 2.0,
+    "approach_s": 3.0,
+    "radial_pause_s": 1.5,
+    "depart_s": 4.0,
+    "lateral_turn_s": 3.0,
+    "lateral_s": 2.0,
+    "hover_after_s": 2.0,
+    "offboard_setpoint_period_s": 0.05,
+    "maximum_wall_wait_s": 240.0
+  }
+}

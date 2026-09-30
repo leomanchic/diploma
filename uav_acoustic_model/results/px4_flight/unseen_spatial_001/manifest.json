@@ -1,0 +1,249 @@
+{
+  "schema_version": 2,
+  "kind": "px4_flight",
+  "frame": "ENU x=East y=North z=Up, metres, seconds",
+  "quaternion_order": "w,x,y,z",
+  "body_frame": "Gazebo base_link FLU; PX4 body FRD",
+  "world_ned_from_enu": [
+    [
+      0,
+      1,
+      0
+    ],
+    [
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      -1
+    ]
+  ],
+  "body_frd_from_flu": [
+    [
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      -1,
+      0
+    ],
+    [
+      0,
+      0,
+      -1
+    ]
+  ],
+  "source_point": "canonical base_link origin (zero offset in body FLU)",
+  "source_offset_body_flu_m": [
+    0,
+    0,
+    0
+  ],
+  "output_state": "post-physics Gazebo ECM world pose and world velocity of canonical X500 base_link",
+  "velocity": "Gazebo WorldLinearVelocity at base_link origin, m/s in ENU",
+  "recording_start_s": 48.908,
+  "recording_end_s": 194.408,
+  "duration_s": 145.5,
+  "export_period_s": 0.02,
+  "physics_step_s": 0.004,
+  "maximum_export_gap_s": 0.020000000000010232,
+  "station_config": [
+    {
+      "id": "S0",
+      "position_m": [
+        0.0,
+        0.0,
+        5.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S1",
+      "position_m": [
+        100.0,
+        0.0,
+        10.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "id": "S2",
+      "position_m": [
+        10.0,
+        90.0,
+        3.0
+      ],
+      "rpy_rad": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "phase_intervals": [
+    {
+      "name": "preflight",
+      "start_s": 48.908,
+      "end_s": 97.588
+    },
+    {
+      "name": "takeoff",
+      "start_s": 97.588,
+      "end_s": 116.468
+    },
+    {
+      "name": "hover_before",
+      "start_s": 116.468,
+      "end_s": 118.468
+    },
+    {
+      "name": "climbing_turn",
+      "start_s": 118.468,
+      "end_s": 124.468
+    },
+    {
+      "name": "descending_turn",
+      "start_s": 124.468,
+      "end_s": 130.468
+    },
+    {
+      "name": "exit",
+      "start_s": 130.468,
+      "end_s": 133.488
+    },
+    {
+      "name": "hover_after",
+      "start_s": 133.488,
+      "end_s": 135.488
+    },
+    {
+      "name": "land",
+      "start_s": 135.488,
+      "end_s": 153.188
+    },
+    {
+      "name": "landed",
+      "start_s": 153.188,
+      "end_s": 194.428
+    }
+  ],
+  "flight_program": {
+    "model": "x500",
+    "gazebo_model_name": "x500_0",
+    "source_point": "canonical base_link origin (zero offset in body FLU)",
+    "trajectory_profile": "spatial_manoeuvre",
+    "spawn_enu_m": [
+      35.0,
+      35.0,
+      0.0
+    ],
+    "takeoff_altitude_m": 16.0,
+    "takeoff_reached_altitude_m": 15.0,
+    "horizontal_speed_mps": 3.0,
+    "hover_before_s": 2.0,
+    "climbing_turn_s": 6.0,
+    "descending_turn_s": 6.0,
+    "exit_s": 3.0,
+    "hover_after_s": 2.0,
+    "offboard_setpoint_period_s": 0.05,
+    "maximum_wall_wait_s": 240.0
+  },
+  "gazebo_seed_requested": 20260930,
+  "gazebo_seed_applied": 20260930,
+  "audio_seed": 20260930,
+  "px4_git_sha": "d6f12ad1c4f70ad3230afd7d86e971421e02fef4",
+  "px4_gz_submodule_sha": "b6127f4ec20de867e215fb5f78ae88b80f371909",
+  "px4_submodule_status": [
+    " f47ce7b5fbbb3aa43d33d2be1f6cd3746b13d5bf Tools/simulation/flightgear/flightgear_bridge (heads/master)",
+    " cbdb2fc7dd44331da1dcd04a891ed7f8c27b1ef0 Tools/simulation/flightgear/flightgear_bridge/models/Rascal (remotes/origin/electric-14-gcbdb2fc)",
+    " fdb6dd685f55097230c0eb29aa7e9f5b8d0abf1e Tools/simulation/flightgear/flightgear_bridge/models/TF-G1 (heads/master)",
+    " 99529413531106836f4303c5389928a4fef04b05 Tools/simulation/flightgear/flightgear_bridge/models/TF-G2 (9952941)",
+    " 158e429a0110589b1e2adfe868e166271470e144 Tools/simulation/flightgear/flightgear_bridge/models/TF-R1 (heads/master)",
+    " 6697ab169ceab512dc706acea63df4c882662c60 Tools/simulation/gazebo-classic/sitl_gazebo-classic (6697ab1)",
+    " 28ef45c1fcb532b2bfd54c16b059c6a545143b2f Tools/simulation/gazebo-classic/sitl_gazebo-classic/external/OpticalFlow (28ef45c)",
+    " 9b5b567ae77f93d1ef4d36151529ba2506a46e7a Tools/simulation/gazebo-classic/sitl_gazebo-classic/external/OpticalFlow/external/klt_feature_tracker (heads/master)",
+    " b6127f4ec20de867e215fb5f78ae88b80f371909 Tools/simulation/gz (b6127f4)",
+    " 66b764ada522893c05224950aa6268c809f8e48a Tools/simulation/jmavsim/jMAVSim (66b764a)",
+    " c08380767b21938391bec676a43b36b837af9ba4 Tools/simulation/jmavsim/jMAVSim/jMAVlib (heads/master)",
+    " f37ec259bd7a43565fe0ff4722465b7a303200f6 Tools/simulation/jsbsim/jsbsim_bridge (heads/master)",
+    " 40571cd808a204f4062128daeb6bb6db8c134c48 Tools/simulation/jsbsim/jsbsim_bridge/models/ATI-Resolution (2019.1)",
+    " d0d1db1961549e557885002cf9c3cff40cc27be2 Tools/simulation/jsbsim/jsbsim_bridge/models/Rascal (remotes/origin/preserve-this-branch-for-px4-submodules)",
+    " 85151aaf6ba8b24ce82b387e088452c63f7e2096 boards/modalai/voxl2/libfc-sensor-api (85151aa)",
+    " e37940d8535f603a16b8f6f21c21edaf584218aa platforms/nuttx/NuttX/apps (nuttx-11.0.0-5-ge37940d85)",
+    " fb2fadf6f599c1406f052db013efd00a2518e72c platforms/nuttx/NuttX/nuttx (nuttx-8.2-10680-gfb2fadf6f5)",
+    " c488af4e8807de80739aa48efd2ea51614dd8195 src/drivers/actuators/vertiq_io/iq-module-communication-cpp (c488af4)",
+    " 36a01e428b110ff84c8babe5b65667b5e3037d5e src/drivers/cyphal/legacy_data_types (remotes/origin/legacy)",
+    " 5c69d451ab0787a81dcb615692d707f2a286f5e5 src/drivers/cyphal/libcanard (3.0.1-1-g5c69d45)",
+    " d0bd6516dac8ff61287fe49a9f2c75e7d4dc1b8e src/drivers/cyphal/public_regulated_data_types (d0bd651)",
+    " 0b9695881bd1e8f830ab4538ab3acc0050019eba src/drivers/gps/devices (remotes/origin/backport-release/1.13-74-g0b96958)",
+    " 35596994b60ba89fe02f71ce5127baa5e7ff2bbf src/drivers/ins/microstrain/mip_sdk (remotes/origin/feature/px4_compilation)",
+    " 80b121c7714083cc4868c0fdb8c41623c7ef9c93 src/drivers/ins/sbgecom/sbgECom (heads/main)",
+    " 993be80a62ec957c01fb41115b83663959a49f46 src/drivers/uavcan/libdronecan/dsdl (heads/master)",
+    " 19fdf2e5b383243ccdb1094edae0603cf11469e8 src/drivers/uavcan/libdronecan/libuavcan/dsdl_compiler/pydronecan (1.0.16-2-g19fdf2e)",
+    " 314887ca403c2fb0a0316add22672102936ed36c src/lib/cdrstream/cyclonedds (314887ca)",
+    " bf5682e4747843d1d5133b9a2b54ce6f12f166c7 src/lib/cdrstream/rosidl (remotes/origin/v4.9.3)",
+    " 673f5ce29015a9bba3c96792920a10601b5b0718 src/lib/crypto/libtomcrypt (1.17-2055-g673f5ce2)",
+    " fd73d7630b9d3ed5a79d613ff680a549e9780de7 src/lib/crypto/libtommath (v1.2.0-247-gfd73d76)",
+    " baca5d31259c598540e4d1284bc8d8f793abf83a src/lib/crypto/monocypher (3.1.2)",
+    " 9ef591c447fe0386d698bf6fb9a6d27e43988ee4 src/lib/events/libevents (9ef591c)",
+    " 052e6de72f67f1777198bce98f3de62f7f3c16a0 src/lib/heatshrink/heatshrink (heads/main)",
+    " 3c0b1e3091e4ea423e1bf9da89d41d09517eb0c9 src/lib/tensorflow_lite_micro/tflite_micro (heads/main)",
+    " 33af200d25ec6f0925b49b1ba82bbf1294ea5f72 src/modules/mavlink/mavlink (1.0.12-821-g33af200d)",
+    " fcaa2c7d25e3169dc66155929c338487941555e9 src/modules/mavlink/mavlink/pymavlink (v2.4.47-63-gfcaa2c7d)",
+    " 711aef423edd1820347b866d1e4164832df35d04 src/modules/uxrce_dds_client/Micro-XRCE-DDS-Client (711aef4)",
+    " 6ec4dc1995f185330e4f6faa8c719eb86f180deb src/modules/zenoh/zenoh-pico (0.5.0-beta.9-1620-g6ec4dc19)",
+    " 1e47f9d7437de5c3ee4cb0ac860d5ec875478059 test/fuzztest (2024-10-25-254-g1e47f9d)"
+  ],
+  "px4_build_patch_sha256": "bc74975b776c518ccfd74d8079a78dd3f8891c28318a212f26c6c651474760f9",
+  "px4_build_patch_applied": true,
+  "px4_x500_model_sdf_sha256": "cfe92f98360967faa895b77aa8a6fff3fc9b290286e94e45297c4bdd7b62fbf9",
+  "observer_source_sha256": "35622160e157169892b3557a2c97ba3a0f0b1cb91f4804cd590ca10d7754a761",
+  "pilot_source_sha256": {
+    "__init__.py": "9da0135bf04e9a0a98133fab43ee7bda546051c747aa03fb495ff246cb8a1427",
+    "assess_recording.py": "24b46673cc4a1651d47349b3fa4489a50824e53cf59515ce64cceb733a730da3",
+    "coordinates.py": "7f71aaf6305e0afc0ede7e88853929f783cc68b35d3af692957add60ccc424f6",
+    "create_probe.py": "28dc05d017f8c3dd2172cd2ae5b810a49f6ee8f4111d9fbd0faec4aa70389d84",
+    "create_scene.py": "22068724b649b4215b62105a7eada588ea3f0c2b6339db46d272c9d12e49d25a",
+    "finalize_recording.py": "1bc1ec0890e40b6159d69dab2874ccc06da5cb7ab88199128c2ff512c820053b",
+    "launch_gazebo.py": "6cf01621b608f4ecb831a14049037b1b1c1ad710099ecdf31c146825295589fd",
+    "mavlink_offboard.py": "5e226b6b9efdee15cdde9fbc153ab2e97e378159eb564738abb25603c68a355e",
+    "run_flight.py": "cd181e65bfcc7a39ed346ddd3c2ae6e8d0450228b1da9923bb2e5b6d772f2efc"
+  },
+  "acoustic_git_sha_at_scene_creation": "186aebb847bc5db2824205bb87b82448ed33c68e",
+  "gazebo_sim_version": "8.15.0",
+  "ubuntu": "Ubuntu 24.04.5 LTS",
+  "mavsdk_python_version": "3.10.0",
+  "controller_runtime_versions": {
+    "python_version": "3.12.3",
+    "mavsdk_version": "3.10.0",
+    "grpcio_version": "1.84.0",
+    "protobuf_version": "7.36.2",
+    "pymavlink_version": "2.4.49"
+  },
+  "artifact_sha256": {
+    "flight_plan.json": "7a9bef5b4513336521b58a2ca17b0f1cc53ff8d2d5f653a15e7a071a03c91cc6",
+    "preflight.json": "a89f1c3f5601d9c894f7ceda52f4f1160d0b8b57bfdb789f2c2a072620932007",
+    "scene.sdf": "a0cb9c07c9c9c12458b1782e73bbac3278013ab31c77913541597838e23b5ff0",
+    "flight_commands.csv": "ac258a01f851e4730a2051de80ed258174402ab4a0938b776cf783025fdc372c",
+    "planned_route.csv": "f65458795e7a1af2f1c6271df317244c18b1f99bf1bfa299dd449fc11b1a1339",
+    "flight_program_status.json": "f23a184970f19d0002b01423f1f337758498147aab5cbb59aa831bcd84a983a2",
+    "autopilot_parameters.json": "e42aa2d93dfffc3bdc3dda9aa4877c6e22e31951ff3f263bf11cee40af7faa4b",
+    "gazebo_launch.json": "f6cf354db72852773d54825b514631799c67f7f571b848be4c77323f303915fa",
+    "px4-v1.17.0-minimal-sitl.patch": "bc74975b776c518ccfd74d8079a78dd3f8891c28318a212f26c6c651474760f9",
+    "processing_config.json": "46613254155ae1aec87f97c8c40eb06a8d9562da08de8714b311337e1d519b1d"
+  },
+  "physical_replay_claim": "same saved recording is reproducible; a new flight is not claimed byte-identical"
+}

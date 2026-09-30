@@ -1,0 +1,3 @@
+# Extra measurement dependency for the separate unseen transfer evaluation runner.
+# Install after the project requirements.txt; it is not part of the core model.
+psutil==7.2.2

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "kind": "technical_smoke_failure_before_audio_or_tracker",
+  "smoke_index": 8,
+  "audio_synthesis_completed": 0,
+  "tracker_replays_completed": 0,
+  "reason": "absolute Gazebo time near 116 s caused 48 kHz reception grid np.diff tolerance failure (maximum floating discrepancy 2.42e-14 s)",
+  "resolution": "rebase offline processing time to reception start; map back by stored time_origin_gazebo_s; no physical/model change",
+  "original_evaluation_manifest_sha256": "8d2ee859f23c788816605882ca1883ac63ab0acfdd91b9eededcb3a9c1505c25"
+}

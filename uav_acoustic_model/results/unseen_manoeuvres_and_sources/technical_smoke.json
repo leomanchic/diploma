@@ -1,0 +1,25 @@
+{
+  "accuracy_reviewed_for_tuning": false,
+  "bearing_manifest_sha256": "1bc5252a14ae98852ad6c885a55501dd343bfab55694b223f5eb9f11f01cc3d6",
+  "projected_matrix_wall_s": 19792.925538216048,
+  "run_id": "unseen-29ee6504e139de5c4e01b24c",
+  "run_result": {
+    "audio_synthesized_now": true,
+    "index": 8,
+    "run_id": "unseen-29ee6504e139de5c4e01b24c",
+    "status": "completed",
+    "stream_sampled_peak_rss_bytes": 1298169856,
+    "stream_wall_s": 824.705230759002,
+    "tracker_replays_now": 4
+  },
+  "schema_version": 1,
+  "smoke_index": 8,
+  "stream_sampled_peak_rss_bytes": 1298169856,
+  "stream_wall_s": 824.705230759002,
+  "technical_cost_pass": true,
+  "technical_limits": {
+    "max_extrapolated_matrix_wall_s": 28800,
+    "max_peak_rss_bytes": 8589934592,
+    "max_wall_s_per_stream": 1800
+  }
+}

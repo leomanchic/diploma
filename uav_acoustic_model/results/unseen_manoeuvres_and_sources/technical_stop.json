@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status": "stopped_by_frozen_technical_limit",
+  "observed_at_utc": "2026-09-30 17:35:23 UTC",
+  "limit_wall_s_per_stream": 1800,
+  "trigger_index": 11,
+  "trigger_run_id": "unseen-0b6f93f9e1d8fd7abca61d86",
+  "trigger_observed_elapsed_wall_s_lower_bound": 1812,
+  "trigger_completed_tracker_replays": 3,
+  "mass_run_stopped": true,
+  "accuracy_used_for_tuning": false,
+  "note": "The first 15 completed streams and three interrupted stream directories are preserved. The matrix is incomplete; no 24-stream or 96-tracker evaluation is claimed."
+}

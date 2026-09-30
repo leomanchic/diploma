@@ -1,0 +1,18 @@
+{
+  "run_id": "unseen-0b6f93f9e1d8fd7abca61d86",
+  "schema_version": 1,
+  "spec": {
+    "distance_m": 1000,
+    "index": 11,
+    "noise_seed": 16026791942979344471,
+    "replicate": 1,
+    "run_id": "unseen-0b6f93f9e1d8fd7abca61d86",
+    "snr_ref_db": 10.0,
+    "source_class": "nonstationary_harmonic",
+    "source_index": 1,
+    "source_seed": 11333897786129283087,
+    "trajectory": "spatial_manoeuvre",
+    "trajectory_index": 0
+  },
+  "status": "running"
+}

@@ -1,0 +1,840 @@
+{
+  "audio_stream_count": 24,
+  "fixed_background": {
+    "amplitude_law": "1/r at microphone emission range",
+    "no_per_distance_normalization": true,
+    "noise_sigma": 0.0031622776601683794,
+    "reference_distance_m": 100.0,
+    "reference_snr_db": 10.0,
+    "reference_source_rms": 1.0
+  },
+  "geometry": {
+    "initial_azimuth_deg": 45.0,
+    "initial_distances_m": [
+      200,
+      700,
+      1000
+    ],
+    "initial_elevation_deg": 10.0
+  },
+  "processing": {
+    "audio": {
+      "base_seed": 20260920,
+      "chunk_size_samples": 4096,
+      "duration_s": 17.020000000000003,
+      "fir_length": 129,
+      "geometric_attenuation": false,
+      "noise_model": "independent_station_stream_AWGN",
+      "reception_start_s": 45.964,
+      "sampling_rate_hz": 48000.0,
+      "signal_model": "random_broadband",
+      "snr_db": 10.0,
+      "sound_speed_mps": 343.0,
+      "source_maximum_frequency_hz": 10000.0,
+      "source_minimum_frequency_hz": 300.0,
+      "source_seed": 7695369920107171460,
+      "source_taper_fraction": 0.0,
+      "station_noise_seeds": {
+        "S0": 4325937063107916634,
+        "S1": 4694909611747425658,
+        "S2": 6076579060007146674
+      }
+    },
+    "calibration": {
+      "origin": {
+        "evaluation_used": false,
+        "sha256": "37b7dd7718393a32a5ef5c0b0b3d0801a968ed338b98e645f73e71b5d7fb7a19",
+        "source_name": "three_station_audio_calibration.csv",
+        "split": "calibration"
+      },
+      "values": [
+        {
+          "bias_rad": [
+            6.166287983504802e-05,
+            0.00014821960417930454
+          ],
+          "covariance_rad2": [
+            [
+              1.6993658198970995e-05,
+              -1.2837557059374698e-06
+            ],
+            [
+              -1.2837557059374698e-06,
+              1.8569274437897742e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            7.059071953500783e-05,
+            0.00015039751407343332
+          ],
+          "covariance_rad2": [
+            [
+              1.6947967836974178e-05,
+              -1.4129751478731665e-06
+            ],
+            [
+              -1.4129751478731665e-06,
+              1.8464658588564294e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            -0.00046496264038545557,
+            0.00019931132385448409
+          ],
+          "covariance_rad2": [
+            [
+              1.7205689584438466e-05,
+              -7.911004987111703e-07
+            ],
+            [
+              -7.911004987111703e-07,
+              1.7478219181667276e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            -0.0004739526377976617,
+            0.00018981801409856185
+          ],
+          "covariance_rad2": [
+            [
+              1.709719944671609e-05,
+              -7.939804850809974e-07
+            ],
+            [
+              -7.939804850809974e-07,
+              1.7305298516393538e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            0.0001583631663769137,
+            -4.829092222711812e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8660236630218435e-05,
+              5.297797678846075e-07
+            ],
+            [
+              5.297797678846075e-07,
+              1.912144519176803e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S2"
+        },
+        {
+          "bias_rad": [
+            0.0001533524895824084,
+            -3.262762430540808e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8656417133848722e-05,
+              6.539832088848626e-07
+            ],
+            [
+              6.539832088848626e-07,
+              1.909837179103141e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S2"
+        }
+      ]
+    },
+    "evaluation_phases": [
+      {
+        "end_s": 49.464,
+        "name": "hover_before",
+        "start_s": 46.464
+      },
+      {
+        "end_s": 54.464,
+        "name": "straight",
+        "start_s": 49.464
+      },
+      {
+        "end_s": 59.464,
+        "name": "turn",
+        "start_s": 54.464
+      },
+      {
+        "end_s": 62.484,
+        "name": "hover_after",
+        "start_s": 59.464
+      }
+    ],
+    "frontend": {
+      "frame_length": 1024,
+      "gcc": {
+        "delay_bound": "baseline_over_c_plus_2_samples",
+        "interpolation_factor": 2,
+        "maximum_frequency_hz": 10000.0,
+        "minimum_frequency_hz": 200.0,
+        "pair_selection": "all_6_oriented_pairs",
+        "relative_spectral_floor": 1e-08,
+        "wls_sigma_tdoa_s": "one_sample"
+      },
+      "hop_length": 512,
+      "methods": [
+        "all_6_equal_gcc_wls",
+        "equal_weight_srp_phat"
+      ],
+      "modeled_processing_delay_s": 0.01,
+      "srp": {
+        "pair_weighting": "equal",
+        "search_steps_deg": [
+          5.0,
+          1.0,
+          0.25
+        ]
+      },
+      "station_delivery_delay_s": {
+        "S0": 0.0,
+        "S1": 0.015,
+        "S2": 0.03
+      }
+    },
+    "stations": [
+      {
+        "id": "S0",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          0.0,
+          0.0,
+          5.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S1",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          100.0,
+          0.0,
+          10.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S2",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          10.0,
+          90.0,
+          3.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "tracker": {
+      "frame_stride": 32,
+      "history_step_s": 0.25,
+      "history_window_s": 4.25,
+      "manoeuvre_end_s": 59.464,
+      "manoeuvre_start_s": 54.464,
+      "maximum_range_m": 1300.0,
+      "maximum_transport_delay_s": 0.1,
+      "position_coverage_threshold": 12.591587243743977,
+      "qc_m2_s3": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "recovery": {
+        "confirmation_measurement_count": 3,
+        "confirmation_reception_span_s": 0.05,
+        "confirmation_station_count": 2,
+        "construction_measurement_count": 6,
+        "fit_nis_threshold": 10.596634733096073,
+        "inconsistency_reception_span_s": 0.5,
+        "inconsistency_rejection_count": 4,
+        "inconsistency_station_count": 2,
+        "maximum_batch_optimizations_per_generation": 128,
+        "maximum_candidate_count": 16,
+        "maximum_confirmation_age_s": 3.0,
+        "maximum_confirmation_events": 180,
+        "maximum_confirmation_failures": 20,
+        "maximum_hypotheses_per_generation": 8,
+        "maximum_initialization_buffer_events": 360,
+        "pre_update_nis_threshold": 9.210340371976184
+      }
+    }
+  },
+  "processing_code_sha256": "26600ff6ba008c0ac9b2f958a3178600affe6002b68db911d6d8ca7eeb9f7c4b",
+  "processing_sha256": "7a1f64919d5eeaaf41bbe5ffd39ed3043f37b880016d6cf6b35bb55e23b468d6",
+  "protocol_manifest_sha256": "bfdb2ee141705a9aa230a1d0ebc097abda9971a540b6ab3b7d88798b26ff61c6",
+  "protocol_sha256": "db8fb78b14d6bd09d1bd8686e490f43267d13d94373795d3e78c3c25bd3a4a22",
+  "recordings": {
+    "radial_approach_depart": {
+      "duration_s": 18.639999999999986,
+      "evaluation_phases": [
+        {
+          "end_s": 110.944,
+          "name": "hover_before",
+          "start_s": 108.924
+        },
+        {
+          "end_s": 113.944,
+          "name": "approach",
+          "start_s": 110.944
+        },
+        {
+          "end_s": 115.484,
+          "name": "radial_pause",
+          "start_s": 113.944
+        },
+        {
+          "end_s": 119.504,
+          "name": "depart",
+          "start_s": 115.484
+        },
+        {
+          "end_s": 122.484,
+          "name": "lateral_turn",
+          "start_s": 119.504
+        },
+        {
+          "end_s": 124.524,
+          "name": "lateral",
+          "start_s": 122.484
+        },
+        {
+          "end_s": 126.564,
+          "name": "hover_after",
+          "start_s": 124.524
+        }
+      ],
+      "export_assessment_sha256": "5948fcd73a92f18adae4dbd1cc4db364867b8893163418f0384f20bfce99e256",
+      "export_rate_hz": 50.0,
+      "flight_plan_sha256": "3f0d7d22755c76a06f4935891bc130fde7fdf7d0e6f09ae64743457054f83513",
+      "manifest_sha256": "6decdfec843532e450d4c14e6771c5feaf5bf9cbeff97be155f7a46f70fa5245",
+      "path": "results/px4_flight/unseen_radial_001",
+      "reception_start_s": 108.424,
+      "state_sha256": "3c03ebc3b83ac7ebd9500179d6074f0900ed89cf0d70efa43854e849c14c28f1"
+    },
+    "spatial_manoeuvre": {
+      "duration_s": 20.019999999999996,
+      "evaluation_phases": [
+        {
+          "end_s": 118.468,
+          "name": "hover_before",
+          "start_s": 116.468
+        },
+        {
+          "end_s": 124.468,
+          "name": "climbing_turn",
+          "start_s": 118.468
+        },
+        {
+          "end_s": 130.468,
+          "name": "descending_turn",
+          "start_s": 124.468
+        },
+        {
+          "end_s": 133.488,
+          "name": "exit",
+          "start_s": 130.468
+        },
+        {
+          "end_s": 135.488,
+          "name": "hover_after",
+          "start_s": 133.488
+        }
+      ],
+      "export_assessment_sha256": "6a8f53df96b11d02ce2a40af4caaa46eddd48e11f07930bc32c915a84168ede1",
+      "export_rate_hz": 50.0,
+      "flight_plan_sha256": "7a9bef5b4513336521b58a2ca17b0f1cc53ff8d2d5f653a15e7a071a03c91cc6",
+      "manifest_sha256": "1bd9f1894573d5d83d1a1bbebe1950951ad3e7ebc0e8ad738d8a030c61138d96",
+      "path": "results/px4_flight/unseen_spatial_001",
+      "reception_start_s": 115.968,
+      "state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4"
+    }
+  },
+  "runner_sha256": "e7bb46835b02ff2325f5a973636d60d4f72742ff5332333a9895759eb9bec502",
+  "schema_version": 1,
+  "smoke_index": 8,
+  "software": {
+    "numpy": "2.4.6",
+    "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "scipy": "1.17.1"
+  },
+  "source_banks": {
+    "radial_approach_depart:broadband": {
+      "file_sha256": "5a675238e3a73b10870f1accbd5abaadfba1308cba4adc99b9ab4e2b6e26c77d",
+      "path": "source_banks/radial_approach_depart_broadband.npy",
+      "rms": 0.9999999999999999,
+      "sample_count": 1014789,
+      "sampling_rate_hz": 48000.0,
+      "seed": 3384187068832027585,
+      "signal_sha256": "99315c0dcc9e660cd39281d4fb9f25d32ec42ba7dc3a8326e0bd3943d1980b0b",
+      "source_class": "broadband",
+      "start_time_s": 105.36753171182484
+    },
+    "radial_approach_depart:nonstationary_harmonic": {
+      "file_sha256": "9dae91d125cb176fe3af6451d30b5972ae6c016d8b283b7f83c40ee614ddfc08",
+      "path": "source_banks/radial_approach_depart_nonstationary_harmonic.npy",
+      "rms": 1.0,
+      "sample_count": 1014789,
+      "sampling_rate_hz": 48000.0,
+      "seed": 1559099942287301584,
+      "signal_sha256": "90535649963fe20ca9f1eb0928d68755e6d233a3cfc806c06d67c4d184b06f66",
+      "source_class": "nonstationary_harmonic",
+      "start_time_s": 105.36753171182484
+    },
+    "spatial_manoeuvre:broadband": {
+      "file_sha256": "ebdf48448b34042d2be460daa2d7043a3d98719ea861fc03bc67d66d6034a9e3",
+      "path": "source_banks/spatial_manoeuvre_broadband.npy",
+      "rms": 1.0,
+      "sample_count": 1078928,
+      "sampling_rate_hz": 48000.0,
+      "seed": 13064008951418560119,
+      "signal_sha256": "228394ccec9a13c05914bc2f34e1fe081b2716f6f7ca74df4059c6c956abba3c",
+      "source_class": "broadband",
+      "start_time_s": 112.91156218524198
+    },
+    "spatial_manoeuvre:nonstationary_harmonic": {
+      "file_sha256": "4fc19173e9aa2fe1148d820597f2289ffcafae88ded4f20357b471fb88574c9a",
+      "path": "source_banks/spatial_manoeuvre_nonstationary_harmonic.npy",
+      "rms": 0.9999999999999998,
+      "sample_count": 1078928,
+      "sampling_rate_hz": 48000.0,
+      "seed": 11333897786129283087,
+      "signal_sha256": "53c4628037746bbf3323fc85bb1de610ecc11d479ef95f77ca1e8bb9230a6fb0",
+      "source_class": "nonstationary_harmonic",
+      "start_time_s": 112.91156218524198
+    }
+  },
+  "specs": [
+    {
+      "distance_m": 200,
+      "index": 0,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-97bfbb60206600dedf876d52",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 1,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-6876ebb208a8d02101eb19d6",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 2,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-2cd64bc7d4a4f5ce9c8de478",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 3,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-8aee8853eb80f719a698aa83",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 4,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-1d5c32a8f61ee7f96bbba02c",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 5,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-48031a617455e221e9cd326b",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 6,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-beffd269c4dc99056f925c98",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 7,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-f41f3b886c0055a873b24eef",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 8,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-29ee6504e139de5c4e01b24c",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 9,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-581b0732d300a9c3a3aa2afc",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 10,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "run_id": "unseen-2d92413b899465db766f76d6",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 11,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "run_id": "unseen-0b6f93f9e1d8fd7abca61d86",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 12,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-31f0199ba537bc0d8dad5fac",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 13,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-b4ad3452047687e7a0e11710",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 14,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-643fbeac25fd61af922610d7",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 15,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-5ea8c8a8341fa44aa2a80260",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 16,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-958ab0bd5d86535f4cccbdf7",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 17,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-df851454bbddf447edbefd62",
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 18,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-0840809a51ac1b2ebe460148",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 19,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-e893b2fb76bc86a1de234ed0",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 20,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-d7475593b4460a11bae1cb6d",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 21,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-dcb46e540898601acf67eae2",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 22,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "run_id": "unseen-704c8abe17d4b20eab0656cc",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 23,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "run_id": "unseen-d7a5683937305d3229e542b1",
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    }
+  ],
+  "technical_limits": {
+    "max_extrapolated_matrix_wall_s": 28800,
+    "max_peak_rss_bytes": 8589934592,
+    "max_wall_s_per_stream": 1800
+  },
+  "tracker_run_count": 96,
+  "variants": {
+    "baseline": {
+      "confirmation_station_count": 2
+    },
+    "three_station_confirmation": {
+      "confirmation_station_count": 3
+    }
+  }
+}

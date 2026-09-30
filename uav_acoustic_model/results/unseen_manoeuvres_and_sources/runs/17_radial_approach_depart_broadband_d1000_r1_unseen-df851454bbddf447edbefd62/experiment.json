@@ -1,0 +1,18 @@
+{
+  "run_id": "unseen-df851454bbddf447edbefd62",
+  "schema_version": 1,
+  "spec": {
+    "distance_m": 1000,
+    "index": 17,
+    "noise_seed": 17205416932572893990,
+    "replicate": 1,
+    "run_id": "unseen-df851454bbddf447edbefd62",
+    "snr_ref_db": 10.0,
+    "source_class": "broadband",
+    "source_index": 0,
+    "source_seed": 3384187068832027585,
+    "trajectory": "radial_approach_depart",
+    "trajectory_index": 1
+  },
+  "status": "running"
+}
