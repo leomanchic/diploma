@@ -1,0 +1,729 @@
+{
+  "audio_stream_count": 24,
+  "base_commit_sha": "a2f8fd052cd38f7da5a21a0d5b9238f9bb90892a",
+  "fixed_background": {
+    "amplitude_law": "1/r at microphone emission range",
+    "no_per_distance_normalization": true,
+    "noise_sigma": 0.0031622776601683794,
+    "reference_distance_m": 100.0,
+    "reference_snr_db": 10.0,
+    "reference_source_rms": 1.0
+  },
+  "flight_code_sha256": {
+    "px4/finalize_recording.py": "1bc1ec0890e40b6159d69dab2874ccc06da5cb7ab88199128c2ff512c820053b",
+    "px4/run_flight.py": "cd181e65bfcc7a39ed346ddd3c2ae6e8d0450228b1da9923bb2e5b6d772f2efc"
+  },
+  "flight_plans": {
+    "radial_approach_depart": {
+      "path": "px4/flight_plan_radial_approach_depart.json",
+      "recording_directory": "results/px4_flight/unseen_radial_001",
+      "sha256": "3f0d7d22755c76a06f4935891bc130fde7fdf7d0e6f09ae64743457054f83513"
+    },
+    "spatial_manoeuvre": {
+      "path": "px4/flight_plan_spatial_manoeuvre.json",
+      "recording_directory": "results/px4_flight/unseen_spatial_001",
+      "sha256": "7a9bef5b4513336521b58a2ca17b0f1cc53ff8d2d5f653a15e7a071a03c91cc6"
+    }
+  },
+  "geometry": {
+    "initial_azimuth_deg": 45.0,
+    "initial_distances_m": [
+      200,
+      700,
+      1000
+    ],
+    "initial_elevation_deg": 10.0
+  },
+  "matrix": [
+    {
+      "distance_m": 200,
+      "index": 0,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 1,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 2,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 3,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 4,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 5,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 13064008951418560119,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 6,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 7,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 8,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 700,
+      "index": 9,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 10,
+      "noise_seed": 7516693451476984514,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 1000,
+      "index": 11,
+      "noise_seed": 16026791942979344471,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 11333897786129283087,
+      "trajectory": "spatial_manoeuvre",
+      "trajectory_index": 0
+    },
+    {
+      "distance_m": 200,
+      "index": 12,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 13,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 14,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 15,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 16,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 17,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "broadband",
+      "source_index": 0,
+      "source_seed": 3384187068832027585,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 18,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 200,
+      "index": 19,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 20,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 700,
+      "index": 21,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 22,
+      "noise_seed": 1886287729421217250,
+      "replicate": 0,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    },
+    {
+      "distance_m": 1000,
+      "index": 23,
+      "noise_seed": 17205416932572893990,
+      "replicate": 1,
+      "snr_ref_db": 10.0,
+      "source_class": "nonstationary_harmonic",
+      "source_index": 1,
+      "source_seed": 1559099942287301584,
+      "trajectory": "radial_approach_depart",
+      "trajectory_index": 1
+    }
+  ],
+  "metric_contract": {
+    "budget_failure": "retained in every all-stream denominator",
+    "no_valid": "conditional error undefined; all-publication availability zero",
+    "nominal_coverage_probability": 0.95,
+    "nominal_precision_tolerance_m": 5.0,
+    "p95": "numpy percentile linear within each valid sequence",
+    "sequence_unit": "one complete audio stream",
+    "severe_first_error_m": 50.0,
+    "shared_times": "intersection of valid processing_time_s for paired variants"
+  },
+  "prior_evaluation_manifest_sha256": "62b3105697e6e95acc2d70b57572a10b31efd9e8646c4506edf105aed1d4f141",
+  "prior_processing_code_sha256": "26600ff6ba008c0ac9b2f958a3178600affe6002b68db911d6d8ca7eeb9f7c4b",
+  "prior_processing_sha256": "7a1f64919d5eeaaf41bbe5ffd39ed3043f37b880016d6cf6b35bb55e23b468d6",
+  "processing": {
+    "audio": {
+      "base_seed": 20260920,
+      "chunk_size_samples": 4096,
+      "duration_s": 17.020000000000003,
+      "fir_length": 129,
+      "geometric_attenuation": false,
+      "noise_model": "independent_station_stream_AWGN",
+      "reception_start_s": 45.964,
+      "sampling_rate_hz": 48000.0,
+      "signal_model": "random_broadband",
+      "snr_db": 10.0,
+      "sound_speed_mps": 343.0,
+      "source_maximum_frequency_hz": 10000.0,
+      "source_minimum_frequency_hz": 300.0,
+      "source_seed": 7695369920107171460,
+      "source_taper_fraction": 0.0,
+      "station_noise_seeds": {
+        "S0": 4325937063107916634,
+        "S1": 4694909611747425658,
+        "S2": 6076579060007146674
+      }
+    },
+    "calibration": {
+      "origin": {
+        "evaluation_used": false,
+        "sha256": "37b7dd7718393a32a5ef5c0b0b3d0801a968ed338b98e645f73e71b5d7fb7a19",
+        "source_name": "three_station_audio_calibration.csv",
+        "split": "calibration"
+      },
+      "values": [
+        {
+          "bias_rad": [
+            6.166287983504802e-05,
+            0.00014821960417930454
+          ],
+          "covariance_rad2": [
+            [
+              1.6993658198970995e-05,
+              -1.2837557059374698e-06
+            ],
+            [
+              -1.2837557059374698e-06,
+              1.8569274437897742e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            7.059071953500783e-05,
+            0.00015039751407343332
+          ],
+          "covariance_rad2": [
+            [
+              1.6947967836974178e-05,
+              -1.4129751478731665e-06
+            ],
+            [
+              -1.4129751478731665e-06,
+              1.8464658588564294e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S0"
+        },
+        {
+          "bias_rad": [
+            -0.00046496264038545557,
+            0.00019931132385448409
+          ],
+          "covariance_rad2": [
+            [
+              1.7205689584438466e-05,
+              -7.911004987111703e-07
+            ],
+            [
+              -7.911004987111703e-07,
+              1.7478219181667276e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            -0.0004739526377976617,
+            0.00018981801409856185
+          ],
+          "covariance_rad2": [
+            [
+              1.709719944671609e-05,
+              -7.939804850809974e-07
+            ],
+            [
+              -7.939804850809974e-07,
+              1.7305298516393538e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S1"
+        },
+        {
+          "bias_rad": [
+            0.0001583631663769137,
+            -4.829092222711812e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8660236630218435e-05,
+              5.297797678846075e-07
+            ],
+            [
+              5.297797678846075e-07,
+              1.912144519176803e-05
+            ]
+          ],
+          "estimator_variant": "all_6_equal_gcc_wls",
+          "station_id": "S2"
+        },
+        {
+          "bias_rad": [
+            0.0001533524895824084,
+            -3.262762430540808e-05
+          ],
+          "covariance_rad2": [
+            [
+              1.8656417133848722e-05,
+              6.539832088848626e-07
+            ],
+            [
+              6.539832088848626e-07,
+              1.909837179103141e-05
+            ]
+          ],
+          "estimator_variant": "equal_weight_srp_phat",
+          "station_id": "S2"
+        }
+      ]
+    },
+    "evaluation_phases": [
+      {
+        "end_s": 49.464,
+        "name": "hover_before",
+        "start_s": 46.464
+      },
+      {
+        "end_s": 54.464,
+        "name": "straight",
+        "start_s": 49.464
+      },
+      {
+        "end_s": 59.464,
+        "name": "turn",
+        "start_s": 54.464
+      },
+      {
+        "end_s": 62.484,
+        "name": "hover_after",
+        "start_s": 59.464
+      }
+    ],
+    "frontend": {
+      "frame_length": 1024,
+      "gcc": {
+        "delay_bound": "baseline_over_c_plus_2_samples",
+        "interpolation_factor": 2,
+        "maximum_frequency_hz": 10000.0,
+        "minimum_frequency_hz": 200.0,
+        "pair_selection": "all_6_oriented_pairs",
+        "relative_spectral_floor": 1e-08,
+        "wls_sigma_tdoa_s": "one_sample"
+      },
+      "hop_length": 512,
+      "methods": [
+        "all_6_equal_gcc_wls",
+        "equal_weight_srp_phat"
+      ],
+      "modeled_processing_delay_s": 0.01,
+      "srp": {
+        "pair_weighting": "equal",
+        "search_steps_deg": [
+          5.0,
+          1.0,
+          0.25
+        ]
+      },
+      "station_delivery_delay_s": {
+        "S0": 0.0,
+        "S1": 0.015,
+        "S2": 0.03
+      }
+    },
+    "stations": [
+      {
+        "id": "S0",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          0.0,
+          0.0,
+          5.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S1",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          100.0,
+          0.0,
+          10.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "id": "S2",
+        "microphones_local_m": [
+          [
+            0.07071067811865475,
+            0.07071067811865475,
+            0.07071067811865475
+          ],
+          [
+            0.07071067811865475,
+            -0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            0.07071067811865475,
+            -0.07071067811865475
+          ],
+          [
+            -0.07071067811865475,
+            -0.07071067811865475,
+            0.07071067811865475
+          ]
+        ],
+        "position_m": [
+          10.0,
+          90.0,
+          3.0
+        ],
+        "rpy_rad": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "tracker": {
+      "frame_stride": 32,
+      "history_step_s": 0.25,
+      "history_window_s": 4.25,
+      "manoeuvre_end_s": 59.464,
+      "manoeuvre_start_s": 54.464,
+      "maximum_range_m": 1300.0,
+      "maximum_transport_delay_s": 0.1,
+      "position_coverage_threshold": 12.591587243743977,
+      "qc_m2_s3": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "recovery": {
+        "confirmation_measurement_count": 3,
+        "confirmation_reception_span_s": 0.05,
+        "confirmation_station_count": 2,
+        "construction_measurement_count": 6,
+        "fit_nis_threshold": 10.596634733096073,
+        "inconsistency_reception_span_s": 0.5,
+        "inconsistency_rejection_count": 4,
+        "inconsistency_station_count": 2,
+        "maximum_batch_optimizations_per_generation": 128,
+        "maximum_candidate_count": 16,
+        "maximum_confirmation_age_s": 3.0,
+        "maximum_confirmation_events": 180,
+        "maximum_confirmation_failures": 20,
+        "maximum_hypotheses_per_generation": 8,
+        "maximum_initialization_buffer_events": 360,
+        "pre_update_nis_threshold": 9.210340371976184
+      }
+    }
+  },
+  "protocol_sha256": "db8fb78b14d6bd09d1bd8686e490f43267d13d94373795d3e78c3c25bd3a4a22",
+  "recorded_source_decision": {
+    "available_new_independent_session": false,
+    "interpretation": "spectral mismatch stress, not a real UAV recording",
+    "replacement": "nonstationary_harmonic"
+  },
+  "schema_version": 1,
+  "seed_root": 20260930,
+  "smoke_index": 8,
+  "source_generation": {
+    "broadband": {
+      "generator": "simulation.signals.random_bandlimited_signal",
+      "maximum_frequency_hz": 10000.0,
+      "minimum_frequency_hz": 300.0,
+      "normalized_rms": 1.0,
+      "taper_fraction": 0.0
+    },
+    "nonstationary_harmonic": {
+      "amplitude_power": -1.1,
+      "envelope": "0.65+0.25*sin(2*pi*0.37*t+0.4)+0.10*sin(2*pi*0.9*t)",
+      "fundamental_hz": "550+120*sin(2*pi*0.07*t)+2.5*t",
+      "harmonics": 5,
+      "initial_phase_seed": "source_seed",
+      "normalized_rms": 1.0,
+      "time_origin": "source_bank_start_s"
+    }
+  },
+  "status": "pre_evaluation_frozen",
+  "technical_limits": {
+    "max_extrapolated_matrix_wall_s": 28800,
+    "max_peak_rss_bytes": 8589934592,
+    "max_wall_s_per_stream": 1800
+  },
+  "tracker_run_count": 96,
+  "variants": {
+    "baseline": {
+      "confirmation_station_count": 2
+    },
+    "three_station_confirmation": {
+      "confirmation_station_count": 3
+    }
+  }
+}

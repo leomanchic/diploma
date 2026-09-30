@@ -27,6 +27,15 @@ OPPOSITE_TURN_REPORT_PHASES = (
     "hover_before", "straight_before", "turn_left", "straight_between",
     "turn_right", "hover_after",
 )
+SPATIAL_PHASE_ORDER = ("preflight", "takeoff", "hover_before", "climbing_turn",
+                       "descending_turn", "exit", "hover_after", "land", "landed")
+SPATIAL_REPORT_PHASES = ("hover_before", "climbing_turn", "descending_turn",
+                         "exit", "hover_after")
+RADIAL_PHASE_ORDER = ("preflight", "takeoff", "hover_before", "approach",
+                      "radial_pause", "depart", "lateral_turn", "lateral",
+                      "hover_after", "land", "landed")
+RADIAL_REPORT_PHASES = ("hover_before", "approach", "radial_pause", "depart",
+                        "lateral_turn", "lateral", "hover_after")
 
 
 def _sha(path: Path) -> str:
@@ -51,11 +60,12 @@ def phase_intervals(
         if not changes or phase != changes[-1][0]:
             changes.append((phase, float(row["sim_time_s"])))
     names = [name for name, _ in changes]
-    expected = (
-        OPPOSITE_TURN_PHASE_ORDER
-        if trajectory_profile == "opposite_turns"
-        else PHASE_ORDER
-    )
+    expected = {
+        "single_turn": PHASE_ORDER,
+        "opposite_turns": OPPOSITE_TURN_PHASE_ORDER,
+        "spatial_manoeuvre": SPATIAL_PHASE_ORDER,
+        "radial_approach_depart": RADIAL_PHASE_ORDER,
+    }[trajectory_profile]
     if names != list(expected) and names != list(expected[1:]):
         raise ValueError(f"flight phases incomplete or out of order: {names}")
     end = float(rows[-1]["sim_time_s"]) + period_s
@@ -105,35 +115,41 @@ def finalize(directory: Path, *, px4_root: Path = Path.home() / "projects/PX4-Au
     if np.max(np.linalg.norm(numeric[:, 8:11], axis=1)) >= 343.0:
         raise ValueError("X500 ground-truth speed is not subsonic")
     profile = plan["vehicle"].get("trajectory_profile", "single_turn")
-    if profile not in {"single_turn", "opposite_turns"}:
+    if profile not in {"single_turn", "opposite_turns", "spatial_manoeuvre",
+                       "radial_approach_depart"}:
         raise ValueError(f"unsupported trajectory_profile: {profile}")
     intervals = phase_intervals(rows, period, profile)
     phases = {item["name"]: item for item in intervals}
-    report_phases = (
-        OPPOSITE_TURN_REPORT_PHASES
-        if profile == "opposite_turns"
-        else REPORT_PHASES
-    )
+    report_phases = {
+        "single_turn": REPORT_PHASES,
+        "opposite_turns": OPPOSITE_TURN_REPORT_PHASES,
+        "spatial_manoeuvre": SPATIAL_REPORT_PHASES,
+        "radial_approach_depart": RADIAL_REPORT_PHASES,
+    }[profile]
     for name in report_phases:
         if phases[name]["end_s"] - phases[name]["start_s"] < 1.0:
             raise ValueError(f"flight phase {name} is too short")
-    duration_keys = (
-        (
-            ("hover_before", "hover_before_s"),
-            ("straight_before", "straight_before_s"),
-            ("turn_left", "turn_left_s"),
-            ("straight_between", "straight_between_s"),
-            ("turn_right", "turn_right_s"),
-            ("hover_after", "hover_after_s"),
-        )
-        if profile == "opposite_turns"
-        else (
-            ("hover_before", "hover_before_s"),
-            ("straight", "straight_s"),
-            ("turn", "turn_s"),
-            ("hover_after", "hover_after_s"),
-        )
-    )
+    duration_keys = {
+        "single_turn": (("hover_before", "hover_before_s"), ("straight", "straight_s"),
+                        ("turn", "turn_s"), ("hover_after", "hover_after_s")),
+        "opposite_turns": (("hover_before", "hover_before_s"),
+                           ("straight_before", "straight_before_s"),
+                           ("turn_left", "turn_left_s"),
+                           ("straight_between", "straight_between_s"),
+                           ("turn_right", "turn_right_s"),
+                           ("hover_after", "hover_after_s")),
+        "spatial_manoeuvre": (("hover_before", "hover_before_s"),
+                              ("climbing_turn", "climbing_turn_s"),
+                              ("descending_turn", "descending_turn_s"),
+                              ("exit", "exit_s"), ("hover_after", "hover_after_s")),
+        "radial_approach_depart": (("hover_before", "hover_before_s"),
+                                   ("approach", "approach_s"),
+                                   ("radial_pause", "radial_pause_s"),
+                                   ("depart", "depart_s"),
+                                   ("lateral_turn", "lateral_turn_s"),
+                                   ("lateral", "lateral_s"),
+                                   ("hover_after", "hover_after_s")),
+    }[profile]
     for name, plan_key in duration_keys:
         observed = phases[name]["end_s"] - phases[name]["start_s"]
         requested = float(plan["vehicle"][plan_key])
@@ -230,11 +246,15 @@ def finalize(directory: Path, *, px4_root: Path = Path.home() / "projects/PX4-Au
     ]
     tracker = config["processing"]["tracker"]
     if profile == "opposite_turns":
-        tracker["manoeuvre_start_s"] = phases["turn_left"]["start_s"]
-        tracker["manoeuvre_end_s"] = phases["turn_right"]["end_s"]
+        first_manoeuvre, last_manoeuvre = "turn_left", "turn_right"
+    elif profile == "spatial_manoeuvre":
+        first_manoeuvre, last_manoeuvre = "climbing_turn", "descending_turn"
+    elif profile == "radial_approach_depart":
+        first_manoeuvre, last_manoeuvre = "approach", "lateral_turn"
     else:
-        tracker["manoeuvre_start_s"] = phases["turn"]["start_s"]
-        tracker["manoeuvre_end_s"] = phases["turn"]["end_s"]
+        first_manoeuvre = last_manoeuvre = "turn"
+    tracker["manoeuvre_start_s"] = phases[first_manoeuvre]["start_s"]
+    tracker["manoeuvre_end_s"] = phases[last_manoeuvre]["end_s"]
     (directory / "processing_config.json").write_text(json.dumps(config, indent=2) + "\n")
     manifest["artifact_sha256"]["processing_config.json"] = _sha(directory / "processing_config.json")
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

@@ -94,8 +94,11 @@ def planned_route(plan: dict, phase_starts: dict[str, float],
                   landing_end_s: float) -> list[dict[str, float | str]]:
     """Requested spatial path and phase clock, kept separate from Gazebo truth."""
     vehicle = plan["vehicle"]
-    if vehicle.get("trajectory_profile", "single_turn") == "opposite_turns":
+    profile = vehicle.get("trajectory_profile", "single_turn")
+    if profile == "opposite_turns":
         return planned_opposite_turn_route(plan, phase_starts, landing_end_s)
+    if profile in {"spatial_manoeuvre", "radial_approach_depart"}:
+        raise ValueError("new profiles use the recorded command-integral planned route")
     x0, y0, z0 = vehicle["spawn_enu_m"]
     z = z0 + vehicle["takeoff_altitude_m"]
     speed = vehicle["horizontal_speed_mps"]
@@ -198,6 +201,30 @@ def planned_opposite_turn_route(
         "sim_time_s": float(landing_end_s), "x_m": x, "y_m": y,
         "z_m": z0, "flight_phase": "land",
     })
+    return points
+
+
+def planned_command_route(plan: dict, commands: list[dict[str, float | str]],
+                          landing_end_s: float) -> list[dict[str, float | str]]:
+    """Integrate requested ENU velocity for display, never as flight truth."""
+    x, y, z0 = (float(value) for value in plan["vehicle"]["spawn_enu_m"])
+    z = z0 + float(plan["vehicle"]["takeoff_altitude_m"])
+    records = [row for row in commands if row["command"] == "mavlink.velocity_setpoint"
+               and math.isfinite(float(row["north"]))]
+    if not records:
+        raise ValueError("no offboard setpoints for requested route")
+    points = [{"sim_time_s": float(records[0]["sim_time_s"]), "x_m": x,
+               "y_m": y, "z_m": z, "flight_phase": "hover_before"}]
+    for current, following in zip(records, records[1:]):
+        dt = max(0.0, float(following["sim_time_s"])-float(current["sim_time_s"]))
+        x += float(current["east"])*dt
+        y += float(current["north"])*dt
+        z -= float(current["down"])*dt
+        points.append({"sim_time_s": float(following["sim_time_s"]),
+                       "x_m": x, "y_m": y, "z_m": z,
+                       "flight_phase": str(following["flight_phase"])})
+    points.append({"sim_time_s": float(landing_end_s), "x_m": x,
+                   "y_m": y, "z_m": z0, "flight_phase": "landed"})
     return points
 
 
@@ -334,6 +361,45 @@ async def fly(directory: Path) -> None:
             await turn_phase(
                 "turn_right", vehicle["turn_right_s"], angle, -angle
             )
+        elif profile == "spatial_manoeuvre":
+            # Requested ENU motion: simultaneous yaw change, climb/descent,
+            # and changing horizontal speed. Gazebo/PX4 state is exported separately.
+            for name, duration, start_deg, change_deg, speed_start, speed_end, down in (
+                ("climbing_turn", vehicle["climbing_turn_s"], 0.0, 70.0, 2.2, 4.0, -0.55),
+                ("descending_turn", vehicle["descending_turn_s"], 70.0, 70.0, 4.0, 2.6, 0.55),
+            ):
+                started = mark(name)
+                next_command = started
+                while True:
+                    t = _latest_sample(state_path)[0]
+                    elapsed = t - started
+                    if elapsed >= duration:
+                        break
+                    if t >= next_command:
+                        u = max(0.0, min(1.0, elapsed / duration))
+                        smooth = 3*u*u - 2*u*u*u
+                        heading = math.radians(start_deg + change_deg*smooth)
+                        phase_speed = speed_start + (speed_end-speed_start)*smooth
+                        north, east = phase_speed*math.sin(heading), phase_speed*math.cos(heading)
+                        yaw = 90.0 - math.degrees(heading)
+                        direct_offboard.set_velocity(north, east, down, yaw)
+                        log(name, "mavlink.velocity_setpoint", north, east, down, yaw)
+                        next_command = t + command_period
+                    await asyncio.sleep(0.01)
+            await straight_phase("exit", vehicle["exit_s"], math.radians(140.0))
+        elif profile == "radial_approach_depart":
+            # The range-study translation starts the source on the 45-degree
+            # ray from the station centroid. Southwest is radial approach,
+            # northeast is departure, then northwest adds transverse motion.
+            await straight_phase("approach", vehicle["approach_s"], math.radians(225.0))
+            pause_start = mark("radial_pause")
+            direct_offboard.set_velocity(0.0, 0.0, 0.0, 0.0)
+            log("radial_pause", "mavlink.velocity_setpoint", 0, 0, 0, 0)
+            await wait_sim_time(state_path, pause_start + vehicle["radial_pause_s"], maximum_wait)
+            await straight_phase("depart", vehicle["depart_s"], math.radians(45.0))
+            await turn_phase("lateral_turn", vehicle["lateral_turn_s"],
+                             math.radians(45.0), math.radians(90.0))
+            await straight_phase("lateral", vehicle["lateral_s"], math.radians(135.0))
         else:
             raise ValueError(f"unsupported trajectory_profile: {profile}")
         direct_offboard.set_velocity(0.0, 0.0, 0.0, 0.0)
@@ -373,7 +439,10 @@ async def fly(directory: Path) -> None:
                 writer.writeheader()
                 writer.writerows(commands)
         if "landed" in phase_starts:
-            route = planned_route(plan, phase_starts, phase_starts["landed"])
+            if profile in {"spatial_manoeuvre", "radial_approach_depart"}:
+                route = planned_command_route(plan, commands, phase_starts["landed"])
+            else:
+                route = planned_route(plan, phase_starts, phase_starts["landed"])
             with (directory / "planned_route.csv").open("w", newline="") as file:
                 writer = csv.DictWriter(file, fieldnames=list(route[0]), lineterminator="\n")
                 writer.writeheader()
