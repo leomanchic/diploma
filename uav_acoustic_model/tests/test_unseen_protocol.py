@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -89,3 +90,11 @@ def test_new_flight_phases_have_distinct_order_and_planned_route_is_commands_onl
     assert route[1]["x_m"] == 39.0
     assert route[1]["z_m"] == 17.0
     assert route[-1]["z_m"] == 0.0
+
+
+def test_frozen_protocol_checkout_preserves_exact_bytes_on_windows():
+    result = subprocess.run(
+        ['git', 'check-attr', 'text', '--', 'UNSEEN_MANOEUVRES_PROTOCOL.md'],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    )
+    assert result.stdout.strip().endswith('text: unset')

@@ -18,3 +18,4 @@ results/px4_flight/*/*.log whitespace=-blank-at-eol
 LOCALIZATION_ERROR_ATTRIBUTION_PROTOCOL.md binary
 # The robust-confirmation evaluation protocol is SHA-pinned before all new runs.
 ROBUST_TRACK_CONFIRMATION_PROTOCOL.md binary
+UNSEEN_MANOEUVRES_PROTOCOL.md binary

@@ -31,7 +31,7 @@
   `UNSEEN_MANOEUVRES_RUNBOOK.md`; аудит —
   `results/unseen_manoeuvres_and_sources/partial_audit.json` и выполненный
   `notebooks/unseen_manoeuvres_and_sources.ipynb` (5/5 code cells).
-  Целевые тесты **11 passed**, полный pytest **577 passed**, `pip check`
+  Целевые тесты **12 passed**, полный pytest **578 passed**, `pip check`
   без конфликтов, `git diff --check` чист.
 - Следующий единственный этап: до продолжения переносимости отдельно
   заморозить и измерить вычислительную стоимость трудных harmonic/1000 м
