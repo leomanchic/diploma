@@ -105,3 +105,50 @@ def test_rejected_excluded_from_tracker_all_stages():
     final=ekf.advance_to(20)
     assert not final.valid
     assert not ekf.batch_fit_diagnostics and not final.event_uses and not final.update_diagnostics
+
+
+def test_actual_recording_keys_and_scenario_support():
+    from analysis.bearing_ambiguity_study import recording_key,scenario
+    from analysis.unseen_manoeuvres_and_sources import recording_inputs,_frozen_protocol
+    p=protocol();m={**p,'recordings':recording_inputs(_frozen_protocol())}
+    assert set(recording_key(s) for s in p['specs'])==set(m['recordings'])
+    for index in (0,8):
+        stations,trajectory,offset,info=scenario(m,p['specs'][index])
+        assert info['reception_start_s']==0
+        assert len(stations)==3 and np.all(np.isfinite(trajectory.q(0)))
+        assert trajectory.maximum_speed_mps<343
+
+
+def test_complete_checkpoint_rejects_substitution(tmp_path):
+    from analysis.bearing_ambiguity_study import complete,verify_completion
+    (tmp_path/'data.txt').write_text('recorded')
+    context=dict(kind='artifact',index=0,study_manifest_sha256='test')
+    complete(tmp_path,context);verify_completion(tmp_path,context)
+    (tmp_path/'data.txt').write_text('substituted')
+    with pytest.raises(ValueError,match='SHA mismatch'):verify_completion(tmp_path,context)
+
+
+def test_selection_uses_development_only_and_fixed_grid():
+    from analysis.bearing_ambiguity_report import select_thresholds
+    methods=('all_6_equal_gcc_wls','equal_weight_srp_phat')
+    rows=[dict(event_id=str(i),valid=True,geodesic_error_deg=e,frame_start_reception_time_s=i,frame_end_reception_time_s=i+.1) for i,e in enumerate([1]*8+[40]*2)]
+    f={str(i):ObservableFeatures(.8 if i<8 else .01,.8) for i in range(10)}
+    groups=[(dict(source_class=cls),method,'S0',rows,f) for cls in ('broadband','nonstationary_harmonic') for method in methods]
+    thresholds,tradeoff=select_thresholds(groups,dict(participation=[0,.1],margin=[0]))
+    assert all(c['minimum_participation']==.1 for c in thresholds.values())
+    assert len(tradeoff)==4
+
+
+def test_published_failure_loads_without_restarting():
+    from analysis.bearing_ambiguity_failure import audit_stop
+    r=audit_stop()
+    assert r['worker_attempts']==1
+    assert r['actual_audio_streams']==r['actual_replays']==0
+    assert not r['thresholds_selected'] and not r['evaluation_accessed']
+
+
+def test_stopped_study_cannot_resume():
+    from analysis.bearing_ambiguity_study import execute,OUT
+    with pytest.raises((ValueError,RuntimeError)):
+        execute(OUT,'development')
+    assert not (OUT/'worker.lock').exists()

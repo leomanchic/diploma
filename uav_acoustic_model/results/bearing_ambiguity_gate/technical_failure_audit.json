@@ -1,0 +1,13 @@
+{
+  "actual_audio_streams": 0,
+  "actual_replays": 0,
+  "effectiveness": "not evaluated; no scientific positive or negative result",
+  "evaluation_accessed": false,
+  "failure": "KeyError: spatial (recording key is spatial_manoeuvre)",
+  "planned_audio_streams": 16,
+  "planned_replays": 8,
+  "status": "technical_stop_user_declined_restart",
+  "thresholds_selected": false,
+  "worker_attempts": 1,
+  "worker_wall_s": 1.287010576999819
+}

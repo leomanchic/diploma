@@ -58,6 +58,10 @@ def load(output=OUT):
         raise ValueError('frozen processing/matrix changed')
     if m['recordings']!=recording_inputs(_frozen_protocol()):
         raise ValueError('recording SHA changed')
+    for meta in (output/'source_banks').glob('*.json'):
+        bank=json.loads(meta.read_text())
+        if sha256(meta.with_suffix('.npy'))!=bank['file_sha256']:
+            raise ValueError('source bank SHA mismatch')
     return m
 
 
@@ -70,6 +74,14 @@ def initialize(output=OUT):
     _write_json(output/'study_manifest.json',m)
     _write_json(output/'execution_ledger.json',{'attempts':[],'worker_wall_s':0,'stopped':False})
     return m
+
+
+def recording_key(spec):
+    return {'spatial':'spatial_manoeuvre','radial':'radial_approach_depart'}[spec['trajectory']]
+
+
+def scenario(manifest,spec):
+    return _scenario(manifest,{**spec,'trajectory':recording_key(spec)})
 
 
 def run_dir(output,index): return output/'runs'/f'{index:02d}'
@@ -92,10 +104,10 @@ def source_bank(output,m,spec):
         if sha256(path)!=b['file_sha256'] or b['seed']!=spec['source_seed']: raise ValueError('source bank changed')
         return np.load(path,allow_pickle=False),b
     stations=stations_from_experiment({'processing':m['processing']})
-    info=m['recordings'][spec['trajectory']]
+    info=m['recordings'][recording_key(spec)]
     recording=load_gazebo_recording(ROOT/info['path'])
     old={**_frozen_protocol(),'geometry':{'initial_distances_m':[200,700]}}
-    start,count=_bank_support(recording,stations,info,old,spec['trajectory'])
+    start,count=_bank_support(recording,stations,info,old,recording_key(spec))
     fs=m['processing']['audio']['sampling_rate_hz']
     if spec['source_class']=='broadband':
         x=random_bandlimited_signal(fs,count,np.random.default_rng(spec['source_seed']),minimum_frequency_hz=300,maximum_frequency_hz=10000,taper_fraction=0)
@@ -126,6 +138,15 @@ def verify_completion(directory,context):
     if c['status']!='complete_verified' or any(c.get(k)!=v for k,v in context.items()): raise ValueError('completion context mismatch')
     for name,digest in c['files_sha256'].items():
         if sha256(directory/name)!=digest: raise ValueError(f'completion SHA mismatch: {name}')
+    if context.get('kind')=='audio':
+        checkpoint=json.loads((directory/'checkpoint.json').read_text())
+        if checkpoint['status']!='complete' or checkpoint['actual_bearing_rows']!=checkpoint['expected_bearing_rows']:
+            raise ValueError('incomplete bearing schedule')
+        rows=_read_csv_gz(directory/'bearing_records.csv.gz');features=_read_csv_gz(directory/'features.csv.gz')
+        if len(rows)!=checkpoint['expected_bearing_rows'] or len(features)!=len(rows):
+            raise ValueError('incomplete feature/bearing rows')
+        if len({r['event_id'] for r in rows})!=len(rows) or {r['event_id'] for r in rows}!={r['event_id'] for r in features}:
+            raise ValueError('bearing/feature identity mismatch')
     return c
 
 
@@ -134,7 +155,7 @@ def audio_worker(output,index):
     if spec['split']=='evaluation': gate_manifest(output,m)
     directory=run_dir(output,index);directory.mkdir(parents=True,exist_ok=False)
     source,b=source_bank(output,m,spec)
-    stations,trajectory,offset,info=_scenario(m,spec)
+    stations,trajectory,offset,info=scenario(m,spec)
     audio,front=m['processing']['audio'],m['processing']['frontend']
     run_id='amb-'+canonical_sha256({'protocol':m['protocol_sha256'],'recording':info['state_sha256'],'spec':spec,'source_sha':b['signal_sha256'],'processing':m['processing'],'feature_sha':m['source_sha256']})[:24]
     _write_json(directory/'checkpoint.json',{'status':'synthesizing','run_id':run_id,'spec':spec,'expected_audio_samples':round(info['duration_s']*audio['sampling_rate_hz'])})
@@ -207,7 +228,7 @@ def replay_worker(output,index,method,mode):
     _write_csv_gz(directory/'gate_events.csv.gz',journal)
     history=ManoeuvreHistoryConfig(np.asarray(t['qc_m2_s3']),history_step_s=t['history_step_s'],history_window_s=t['history_window_s'],maximum_range_m=t['maximum_range_m'],maximum_transport_delay_s=t['maximum_transport_delay_s'])
     recovery=InitializationRecoveryConfig(**{**t['recovery'],'confirmation_station_count':3})
-    stations,trajectory,_,info=_scenario(m,spec)
+    stations,trajectory,_,info=scenario(m,spec)
     tracks,updates,diagnostics,summary=_run_tracker(stations,trajectory,measurements,method,'three_station_confirmation',history,recovery,0)
     rejected={r['event_id'] for r in journal if r['gate_rejected']}
     for row in diagnostics['event_uses']:
@@ -284,6 +305,9 @@ def main():
     elif a.command=='replay-worker':replay_worker(out,a.index,a.method,a.gate)
     elif a.command in ('development','evaluation','tracking'):execute(out,a.command)
     else:
+        if a.command in ('report','verify') and (out/'technical_failure_manifest.json').exists():
+            from analysis.bearing_ambiguity_failure import write_stop_report
+            write_stop_report(out);return
         from analysis.bearing_ambiguity_report import freeze,report,verify
         {'freeze':freeze,'report':report,'verify':verify}[a.command](out)
 

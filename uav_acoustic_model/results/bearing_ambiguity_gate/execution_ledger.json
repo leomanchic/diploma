@@ -1,0 +1,20 @@
+{
+  "attempts": [
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 0,
+      "key": "audio:0:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 1,
+      "status": "partial",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 1.287010576999819
+    }
+  ],
+  "stop_reason": "worker failure/timeout",
+  "stopped": true,
+  "worker_wall_s": 1.287010576999819
+}

@@ -1,5 +1,5 @@
 """Offline labels and reporting live here, outside the truth-free gate."""
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
 import json
 import numpy as np
@@ -94,7 +94,6 @@ def freeze(output=OUT):
 
 def availability(rows,features,config,window=3):
     ids=sorted({r['frame_index'] for r in rows})
-    centers={r['frame_index']:r['frame_center_reception_time_s'] for r in rows}
     frame_stations={i:set() for i in ids};events=[]
     for r in rows:
         if r['valid'] and decision(features[r['event_id']],config)[0]:
@@ -102,7 +101,13 @@ def availability(rows,features,config,window=3):
             events.append((r['available_timestamp_s'],r['station_id']))
     # Each publication epoch only sees events already available; delay is not future access.
     epochs=sorted({r['available_timestamp_s'] for r in rows})
-    counts=[len({station for t,station in events if epoch-window<=t<=epoch}) for epoch in epochs]
+    events.sort(); active=deque(); station_count=Counter(); counts=[]; cursor=0
+    for epoch in epochs:
+        while cursor<len(events) and events[cursor][0]<=epoch:
+            t,station=events[cursor];active.append((t,station));station_count[station]+=1;cursor+=1
+        while active and active[0][0]<epoch-window:
+            _,station=active.popleft();station_count[station]-=1
+        counts.append(sum(n>0 for n in station_count.values()))
     result={}
     for n in (2,3):
         result[f'instantaneous_{n}_stations_fraction']=float(np.mean([len(frame_stations[i])>=n for i in ids]))

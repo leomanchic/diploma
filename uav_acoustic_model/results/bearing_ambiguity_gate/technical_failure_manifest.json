@@ -1,0 +1,27 @@
+{
+  "actual_audio_streams": 0,
+  "actual_replays": 0,
+  "audio_synthesis_started": 0,
+  "files_sha256": {
+    "execution_ledger.json": "aac49cf5ae93f010b09144b988359902310e7878887cc76aa17b90de077644a4",
+    "execution_logs/audio_0_None_None.stderr": "559a570833ab4cd958d9bf38e50b2ced8e26ff5032f3114a912bd5c4c0cfca87",
+    "execution_logs/audio_0_None_None.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "startup_code_4404435/bearing_ambiguity_gate.py": "f541acf962f4a9088b01b38f2e57075d0ff0c81bf0318ca7566348a6f6d5130c",
+    "startup_code_4404435/bearing_ambiguity_report.py": "6e27602a79455f54075e73b5036588f00787ecf9f9d97144aa4cb534600bd97a",
+    "startup_code_4404435/bearing_ambiguity_study.py": "f10c9521a6eb97cad68e043add28ff2869276e64b9be33787eb81a7fa7f51f42",
+    "study_manifest.json": "e0b0b92b6a0c2b63d25b8e4e3cc489273a05cc92023ea89d7f61a7052dd9040f"
+  },
+  "origin_code_commit": "4404435",
+  "planned_audio_streams": 16,
+  "planned_replays": 8,
+  "protocol_commit": "07ad77b",
+  "schema_version": 1,
+  "source_snapshot": {
+    "analysis/bearing_ambiguity_gate.py": "startup_code_4404435/bearing_ambiguity_gate.py",
+    "analysis/bearing_ambiguity_report.py": "startup_code_4404435/bearing_ambiguity_report.py",
+    "analysis/bearing_ambiguity_study.py": "startup_code_4404435/bearing_ambiguity_study.py"
+  },
+  "status": "technical_stop_user_declined_restart",
+  "user_restart_decision": "declined",
+  "worker_attempts": 1
+}

@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/leo/projects/diploma-bearing-ambiguity-gate/uav_acoustic_model/analysis/bearing_ambiguity_study.py", line 290, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/home/leo/projects/diploma-bearing-ambiguity-gate/uav_acoustic_model/analysis/bearing_ambiguity_study.py", line 283, in main
+    elif a.command=='audio-worker':audio_worker(out,a.index)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/leo/projects/diploma-bearing-ambiguity-gate/uav_acoustic_model/analysis/bearing_ambiguity_study.py", line 136, in audio_worker
+    source,b=source_bank(output,m,spec)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/leo/projects/diploma-bearing-ambiguity-gate/uav_acoustic_model/analysis/bearing_ambiguity_study.py", line 95, in source_bank
+    info=m['recordings'][spec['trajectory']]
+         ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+KeyError: 'spatial'

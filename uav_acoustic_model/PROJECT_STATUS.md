@@ -2,6 +2,39 @@
 
 Последнее обновление: 2026-10-03
 
+## Экспериментальный bearing ambiguity gate: технический отказ
+
+- От `4ef0fb1` отдельная `feature/bearing-ambiguity-gate`, чистый исходный
+  worktree. Протокол до расчётов — `07ad77b`, реализация до первой попытки —
+  `4404435`. Заморожены 8 development (spatial) / 8 evaluation (radial)
+  потоков, новые source/noise seeds и разные harmonic параметры split,
+  grid/selection criteria, прежние bias/R/Qc/stride/budgets и 8 replay.
+- Opt-in адаптер: spectral participation + separated competitor margin,
+  только текущий кадр/raw outputs. Gate off возвращает исходное измерение;
+  gate reject сохраняет ID/time/reason и исключает invalid из всех стадий.
+  Основные GCC/SRP, calibration и tracker не менялись; default выключен.
+- **Первая попытка worker отказала до синтеза**: `KeyError: spatial`,
+  правильный ключ метаданных `spatial_manoeuvre`. Source bank/audio ещё
+  не созданы, evaluation не открыта. Пользователь явно отказался от
+  исправленного повторного запуска: **0/16 audio, 0/8 replay, 1 failed
+  startup worker (1,287 с)**. Старые исследования/полёты не повторялись.
+- Ошибка mapping исправлена и покрыта тестом обеих исходных записей.
+  Первоначальный manifest/ledger не переписан: snapshot исходных модулей
+  `startup_code_4404435` проверяется против прежних SHA; отдельный
+  `technical_failure_manifest.json` сохраняет происхождение отказа.
+  Read-only verify подтверждает stop и отсутствие результатов/thresholds.
+- Это **технический отказ, не отрицательный научный результат**: полезность
+  признаков и влияние gate на tracking пока неизвестны. Gate не включён
+  по умолчанию. Возобновление требует отдельного разрешения/нового каталога;
+  S8 остаётся In progress без нового обязательного подэтапа.
+- Отчёт `BEARING_AMBIGUITY_REPORT.md`, инструкция
+  `BEARING_AMBIGUITY_RUNBOOK.md`, новый выполненный notebook
+  `notebooks/bearing_ambiguity_gate.ipynb` (4 code cells, только аудит).
+  Целевые gate/checkout тесты **15 passed**, полный pytest **612 passed**,
+  `pip check` без конфликтов, `git diff --check` чист. CI итогового SHA
+  проверяется после обычного push; фактический статус передаётся вместе с SHA.
+  Локальная проверка не подменяет GitHub Actions.
+
 ## Исправление сохранения байтов при Windows checkout
 
 - От `19b1980` в той же `analysis/harmonic-tracking-failure`: корневой
