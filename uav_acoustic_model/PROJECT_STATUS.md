@@ -11,8 +11,10 @@
 - `tests/test_sha_checkout.py` выполняет настоящий свежий checkout с
   `core.autocrlf=true`, сравнивает каждый tracked blob, 529 исходных SHA и
   70 delivery SHA. Непустые stdout/stderr, смешанные LF/CRLF и неизвестное
-  расширение проверены дополнительными fixtures. Целевые тесты **32 passed**,
-  сохранённая harmonic диагностика проходит verify, `pip check` без конфликтов.
+  расширение проверены дополнительными fixtures; Git alternates записывается
+  с явным LF и на Windows. Целевые тесты **32 passed**, полный pytest
+  **598 passed**, сохранённая harmonic диагностика проходит verify,
+  `pip check` без конфликтов.
 - Прежний Windows CI `37130125607` упал на SHA `batch_logs/00.stdout`;
   Linux прошёл. Новый Linux/Windows CI проверяется после обычного push.
   Аудиосинтез, диагностические replay и остановленная матрица не повторялись.

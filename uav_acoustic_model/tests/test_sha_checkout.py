@@ -33,7 +33,9 @@ def test_autocrlf_checkout_preserves_every_tracked_blob_and_frozen_sha(tmp_path)
         REPOSITORY, 'rev-parse', '--path-format=absolute', '--git-path', 'objects'
     ).decode().strip())
     alternates = checkout / '.git/objects/info/alternates'
-    alternates.write_text(objects.as_posix() + '\n', encoding='utf-8')
+    # Git treats a CR in this control file as part of the pathname.
+    # Do not let Windows text-mode I/O append it.
+    alternates.write_bytes((objects.as_posix() + '\n').encode('utf-8'))
     _git(checkout, 'config', 'core.autocrlf', 'false')
     _git(checkout, 'read-tree', _git(REPOSITORY, 'rev-parse', 'HEAD').decode().strip())
     project = checkout / 'uav_acoustic_model'
