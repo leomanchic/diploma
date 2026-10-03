@@ -53,6 +53,11 @@ def stats(rows,features,config):
     return result
 
 
+def mean_or_none(values):
+    finite=[float(x) for x in values if x is not None and np.isfinite(x)]
+    return float(np.mean(finite)) if finite else None
+
+
 def select_thresholds(development,grid):
     candidates=[];thresholds={}
     for method in METHODS:
@@ -63,8 +68,8 @@ def select_thresholds(development,grid):
                 config=GateConfig(True,p,margin)
                 summaries=[(s,stats(r,f,config)) for s,_,_,r,f in groups]
                 retention=np.mean([x['retention'] for _,x in summaries])
-                loss={cls:np.mean([x['good_false_rejection_conditional'] for s,x in summaries if s['source_class']==cls and x['good_count']]) for cls in ('broadband','nonstationary_harmonic')}
-                ok=bool(retention>=.7 and all(np.isfinite(v) and v<=.05 for v in loss.values()))
+                loss={cls:mean_or_none([x['good_false_rejection_conditional'] for s,x in summaries if s['source_class']==cls and x['good_count']]) for cls in ('broadband','nonstationary_harmonic')}
+                ok=bool(retention>=.7 and all(v is not None and v<=.05 for v in loss.values()))
                 passed=np.mean([x['over_10_passed_all_valid'] for _,x in summaries])
                 row=dict(method=method,minimum_participation=p,minimum_margin=margin,retention=float(retention),over_10_passed_all_valid=float(passed),feasible=ok,good_false_rejection_by_class_json=json.dumps(loss,sort_keys=True))
                 candidates.append(row)
@@ -87,7 +92,7 @@ def freeze(output=OUT):
     files['development_tradeoff.csv.gz']=sha256(output/'development_tradeoff.csv.gz')
     g=dict(schema_version=1,status='frozen_before_evaluation',source_sha256=m['source_sha256'],
         processing_code_sha256=m['processing_code_sha256'],study_manifest_sha256=sha256(output/'study_manifest.json'),
-        thresholds=thresholds,development_sha256=files,selection_rule='frozen protocol v1',scores_are_probabilities=False)
+        thresholds=thresholds,development_selection_failed={method:not any(c['feasible'] for c in candidates if c['method']==method) for method in METHODS},development_sha256=files,selection_rule='frozen protocol v1',scores_are_probabilities=False)
     _write_json(output/'gate_manifest.json',g)
     print(json.dumps(thresholds,indent=2))
 
@@ -160,7 +165,7 @@ def report(output=OUT):
         for mode in ('off','on'):
             selected=[r for r in measurements if r['split']=='evaluation' and r['method']==method and r['gate']==mode and r['subset']=='all_frames']
             if not selected:continue
-            pooled.append(dict(method=method,gate=mode,retention=float(np.mean([r['retention'] for r in selected])),over_10_passed_all_valid=float(np.mean([r['over_10_passed_all_valid'] for r in selected])),good_false_rejection_conditional=float(np.mean([r['good_false_rejection_conditional'] for r in selected if r['good_count']]))))
+            pooled.append(dict(method=method,gate=mode,retention=float(np.mean([r['retention'] for r in selected])),over_10_passed_all_valid=float(np.mean([r['over_10_passed_all_valid'] for r in selected])),good_false_rejection_conditional=mean_or_none([r['good_false_rejection_conditional'] for r in selected if r['good_count']])))
     ledger=json.loads((output/'execution_ledger.json').read_text())
     _write_json(output/'aggregate.json',dict(evaluation_macro=pooled,thresholds=g['thresholds'],planned_audio=16,planned_replays=8,
         actual_audio_attempts=sum(a['kind']=='audio' for a in ledger['attempts']),actual_audio_complete=sum(a['kind']=='audio' and a['status']=='complete' for a in ledger['attempts']),

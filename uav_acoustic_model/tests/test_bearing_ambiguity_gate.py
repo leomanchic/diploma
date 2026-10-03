@@ -152,3 +152,38 @@ def test_stopped_study_cannot_resume():
     with pytest.raises((ValueError,RuntimeError)):
         execute(OUT,'development')
     assert not (OUT/'worker.lock').exists()
+
+
+def test_audio_worker_contract_without_resynthesis(monkeypatch,tmp_path):
+    """Inject a short stream fixture, exercise frame/serialization/completion APIs."""
+    from types import SimpleNamespace
+    from analysis import bearing_ambiguity_study as runner
+    from validation.gazebo_experiment import stations_from_experiment,sha256
+    from simulation.trajectory import StationaryTrajectory
+    p=protocol();spec=p['specs'][0];stations=stations_from_experiment({'processing':p['processing']})
+    fs=p['processing']['audio']['sampling_rate_hz'];samples=1536
+    x=np.random.default_rng(61).normal(size=(4,samples))
+    stream=SimpleNamespace(sampling_rate_hz=fs,reception_times_s=np.arange(samples)/fs,source_seed=spec['source_seed'],
+        stations=[SimpleNamespace(station_id=s.station_id,channels=x,noise=x,noise_seed=i+10,effective_snr_db=1) for i,s in enumerate(stations)])
+    m={**p,'source_sha256':runner.source_hashes()}
+    (tmp_path/'study_manifest.json').write_text(json.dumps(m))
+    monkeypatch.setattr(runner,'load',lambda output:m)
+    monkeypatch.setattr(runner,'source_bank',lambda *args:(np.ones(samples),dict(start_time_s=-2,signal_sha256='fixture')))
+    monkeypatch.setattr(runner,'scenario',lambda *args:(stations,StationaryTrajectory([200,10,80]),np.zeros(3),dict(duration_s=samples/fs,time_origin_gazebo_s=0,state_sha256='fixture')))
+    monkeypatch.setattr(runner,'synthesize_multistation_audio',lambda *args,**kwargs:stream)
+    runner.audio_worker(tmp_path,0)
+    c=runner.verify_completion(runner.run_dir(tmp_path,0),dict(kind='audio',index=0,study_manifest_sha256=sha256(tmp_path/'study_manifest.json')))
+    assert c['status']=='complete_verified'
+    assert len(runner._measurement_rows(runner.run_dir(tmp_path,0)/'bearing_records.csv.gz'))==12
+
+
+def test_absent_good_labels_are_explicit_development_failure():
+    from analysis.bearing_ambiguity_report import select_thresholds
+    from analysis.bearing_ambiguity_study import METHODS
+    rows=[dict(event_id='x',valid=True,geodesic_error_deg=90,frame_start_reception_time_s=0,frame_end_reception_time_s=.1)]
+    f={'x':ObservableFeatures(.5,.9)}
+    groups=[(dict(source_class=cls),method,'S0',rows,f) for method in METHODS for cls in ('broadband','nonstationary_harmonic')]
+    thresholds,candidates=select_thresholds(groups,dict(participation=[0,.1],margin=[0]))
+    assert all(t==dict(minimum_participation=0,minimum_margin=0) for t in thresholds.values())
+    assert not any(c['feasible'] for c in candidates)
+    assert all(json.loads(c['good_false_rejection_by_class_json'])==dict(broadband=None,nonstationary_harmonic=None) for c in candidates)

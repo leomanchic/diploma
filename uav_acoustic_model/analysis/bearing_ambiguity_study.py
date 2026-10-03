@@ -65,14 +65,32 @@ def load(output=OUT):
     return m
 
 
-def initialize(output=OUT):
+def initialize(output=OUT, *, authorization_path=None):
     p=protocol()
     if output.exists(): raise FileExistsError('new study directory required')
+    authorization=None
+    if authorization_path is not None:
+        authorization_path=Path(authorization_path)
+        authorization=json.loads(authorization_path.read_text())
+        if authorization['protocol_manifest_sha256']!=sha256(MANIFEST) or authorization['source_sha256']!=source_hashes():
+            raise ValueError('restart authorization protocol/code SHA mismatch')
+        if authorization['output_directory']!=output.resolve().relative_to(ROOT).as_posix():
+            raise ValueError('restart authorization output mismatch')
+        from analysis.bearing_ambiguity_failure import audit_stop
+        previous=audit_stop(ROOT/authorization['previous_output_directory'])
+        if previous['actual_audio_streams'] or previous['actual_replays']:
+            raise ValueError('restart would exceed frozen workload')
+        if previous['worker_wall_s']!=authorization['previous_worker_wall_s']:
+            raise ValueError('prior worker wall budget changed')
     output.mkdir(parents=True)
     m={**p,'recordings':recording_inputs(_frozen_protocol()),'source_sha256':source_hashes(),
        'protocol_manifest_sha256':sha256(MANIFEST),'code_git_sha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()}
+    if authorization is not None:
+        m['restart_authorization']=authorization
+        m['restart_authorization_sha256']=sha256(authorization_path)
     _write_json(output/'study_manifest.json',m)
-    _write_json(output/'execution_ledger.json',{'attempts':[],'worker_wall_s':0,'stopped':False})
+    _write_json(output/'execution_ledger.json',{'attempts':[],'worker_wall_s':authorization['previous_worker_wall_s'] if authorization else 0,
+        'previous_worker_wall_s':authorization['previous_worker_wall_s'] if authorization else 0,'stopped':False})
     return m
 
 
@@ -298,9 +316,9 @@ def execute(output,stage):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('command',choices=['initialize','development','freeze','evaluation','tracking','audio-worker','replay-worker','report','verify'])
-    parser.add_argument('--output',type=Path,default=OUT);parser.add_argument('--index',type=int);parser.add_argument('--method');parser.add_argument('--gate')
+    parser.add_argument('--output',type=Path,default=OUT);parser.add_argument('--index',type=int);parser.add_argument('--method');parser.add_argument('--gate');parser.add_argument('--authorization',type=Path)
     a=parser.parse_args();out=a.output
-    if a.command=='initialize':initialize(out)
+    if a.command=='initialize':initialize(out,authorization_path=a.authorization)
     elif a.command=='audio-worker':audio_worker(out,a.index)
     elif a.command=='replay-worker':replay_worker(out,a.index,a.method,a.gate)
     elif a.command in ('development','evaluation','tracking'):execute(out,a.command)

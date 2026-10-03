@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-03",
+  "limits": {
+    "audio_streams": 16,
+    "audio_timeout_s": 1200,
+    "replay_timeout_s": 600,
+    "total_worker_wall_s": 21600,
+    "tracker_replays": 8
+  },
+  "output_directory": "results/bearing_ambiguity_retry_001",
+  "preflight": [
+    {
+      "duration_s": 20.019999999999996,
+      "maximum_speed_mps": 4.156053298717518,
+      "recording_key": "spatial_manoeuvre",
+      "source_sample_count": 1036961,
+      "source_support_start_s": 113.78588270104248,
+      "split": "development"
+    },
+    {
+      "duration_s": 18.639999999999986,
+      "maximum_speed_mps": 3.230419551341577,
+      "recording_key": "radial_approach_depart",
+      "source_sample_count": 972819,
+      "source_support_start_s": 106.2418913688324,
+      "split": "evaluation"
+    }
+  ],
+  "previous_code_sha": "3282afa57320017bdd5b0b23dbf3e2bfb005d1c4",
+  "previous_failure_manifest_sha256": "75b381a4d37e7d2eb3c8929d44f33652f30d19d53e238f9807d63207287e8666",
+  "previous_files_immutable": true,
+  "previous_output_directory": "results/bearing_ambiguity_gate",
+  "previous_worker_wall_s": 1.287010576999819,
+  "protocol_manifest_sha256": "696fd03871a65308e45960589d21a4733ec3c47da1e6d7baa6a66493b60f2685",
+  "schema_version": 1,
+  "scientific_protocol_changed": false,
+  "source_sha256": {
+    "analysis/bearing_ambiguity_gate.py": "f541acf962f4a9088b01b38f2e57075d0ff0c81bf0318ca7566348a6f6d5130c",
+    "analysis/bearing_ambiguity_report.py": "4f16b9d937077ec71b2c4f97282a6a4c7cd39865ca5fad7a1392c23b34072dbd",
+    "analysis/bearing_ambiguity_study.py": "693870a20614e2fd47305a89b7bb372a40f0b1045efe5129dff9495e56d2bc13"
+  },
+  "status": "user_authorized_restart_before_synthesis",
+  "user_instruction": "\u0434\u0430\u0432\u0430\u0439 \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0435\u043c \u0435\u0449\u0435 \u0440\u0430\u0437"
+}
