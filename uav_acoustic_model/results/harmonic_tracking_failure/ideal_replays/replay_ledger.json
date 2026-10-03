@@ -1,0 +1,46 @@
+{
+  "attempt_count": 4,
+  "attempts": [
+    {
+      "confirmation_variant": "three_station_confirmation",
+      "directory": "ideal_replays/06_all_6_equal_gcc_wls",
+      "index": 6,
+      "input_variant": "ideal_bearing_zero_bias_same_R",
+      "method": "all_6_equal_gcc_wls",
+      "status": "completed",
+      "wall_s": 3.779481544000191
+    },
+    {
+      "confirmation_variant": "three_station_confirmation",
+      "directory": "ideal_replays/06_equal_weight_srp_phat",
+      "index": 6,
+      "input_variant": "ideal_bearing_zero_bias_same_R",
+      "method": "equal_weight_srp_phat",
+      "status": "completed",
+      "wall_s": 4.3504736560000765
+    },
+    {
+      "confirmation_variant": "three_station_confirmation",
+      "directory": "ideal_replays/08_all_6_equal_gcc_wls",
+      "index": 8,
+      "input_variant": "ideal_bearing_zero_bias_same_R",
+      "method": "all_6_equal_gcc_wls",
+      "status": "completed",
+      "wall_s": 3.3615027600001213
+    },
+    {
+      "confirmation_variant": "three_station_confirmation",
+      "directory": "ideal_replays/08_equal_weight_srp_phat",
+      "index": 8,
+      "input_variant": "ideal_bearing_zero_bias_same_R",
+      "method": "equal_weight_srp_phat",
+      "status": "completed",
+      "wall_s": 3.239179628999864
+    }
+  ],
+  "maximum_parallel_processes": 1,
+  "protocol_manifest_sha256": "6b08b70bad99a7049e55285929377c791b606c9f5cbf0548c53166776f7bd468",
+  "schema_version": 1,
+  "status": "finished",
+  "total_wall_s": 14.752706362000026
+}

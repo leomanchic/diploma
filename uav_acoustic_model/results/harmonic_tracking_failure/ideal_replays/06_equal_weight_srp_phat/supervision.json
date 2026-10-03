@@ -1,0 +1,8 @@
+{
+  "execution_version": 2,
+  "returncode": 0,
+  "stderr": "",
+  "stdout": "{\"schema_version\": 1, \"status\": \"complete\", \"index\": 6, \"method\": \"equal_weight_srp_phat\", \"input_variant\": \"ideal_bearing_zero_bias_same_R\", \"confirmation_variant\": \"three_station_confirmation\", \"source_run_id\": \"unseen-beffd269c4dc99056f925c98\", \"event_count\": 177, \"publication_count\": 177, \"valid_publication_count\": 168, \"first_confirmation_s\": 1.0553125, \"first_position_error_m\": 0.10315637189178067, \"position_rmse_m_conditional\": 1.4381439222762356, \"executed_optimizations\": 2, \"worker_wall_s\": 2.2423755459999484, \"processing_code_sha256\": \"26600ff6ba008c0ac9b2f958a3178600affe6002b68db911d6d8ca7eeb9f7c4b\", \"source_bearing_sha256\": \"53840172ab4f9e4cebf6c1e384fd3b69c8445f9c686d39a05a3e91b464a76b5e\", \"replay_code_sha256\": \"b01060294fd773183e4f4c67380d6d5837db2cbc70e63058a9ddac82e7b93457\", \"files_sha256\": {\"candidates.csv.gz\": \"acef41c66ef5bda982bb9e7740c03eec908994c62d94a7de3c4e3fc9a74c8d98\", \"tracking.csv.gz\": \"8f8a267c37c3136da7a3f3626ad246ef7ce1d65d05649ee87b5bdd14027b18a2\", \"ideal_inputs.csv.gz\": \"4a4f46d4e8dd96077f9a9e844978bf2898c46b90a65b22492c2b96c5e6c02b95\", \"batch_fits.csv.gz\": \"c124d9282e3464765fc37c0599287d411f5d38e01141e1d6a435852a76c3a8d5\", \"updates.csv.gz\": \"899e88764a4597e37bc54b35e4ce99c98bf3dbfaf2a6fcbb7b500a270208978b\", \"hypotheses.csv.gz\": \"1fb321d120dbf9ffda3a29985f5a183531e628b22a7be5789da4a5f532b9985e\", \"lifecycle.csv.gz\": \"c9b2a369f82dd376f75bdd57257898988fb55957a1be154e1eb90945f8dbdc8a\", \"event_uses.csv.gz\": \"47dd5edd4235847b455687776be76377f8b344680a71311bb06e7ea130e80561\"}}\n",
+  "timed_out": false,
+  "wall_s": 4.3504736560000765
+}

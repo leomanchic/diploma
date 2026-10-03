@@ -1,0 +1,62 @@
+[
+  {
+    "broadband_index": 0,
+    "distance_m": 200,
+    "event_ids_disjoint": true,
+    "harmonic_index": 6,
+    "matching_trajectory_geometry_noise_schedule": true,
+    "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+    "replicate": 0,
+    "row_count_each": 11250,
+    "source_seed_intentionally_different": true,
+    "standardized_noise_sha256": "04a3b949688aa70ca3918e42861e866333b807f84af21ea26b469fa8ba6c1390"
+  },
+  {
+    "broadband_index": 1,
+    "distance_m": 200,
+    "event_ids_disjoint": true,
+    "harmonic_index": 7,
+    "matching_trajectory_geometry_noise_schedule": true,
+    "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+    "replicate": 1,
+    "row_count_each": 11250,
+    "source_seed_intentionally_different": true,
+    "standardized_noise_sha256": "fa1adc59d5a796e35a8be7c819fe491209f96cdb7685752441115adb58a64b0b"
+  },
+  {
+    "broadband_index": 2,
+    "distance_m": 700,
+    "event_ids_disjoint": true,
+    "harmonic_index": 8,
+    "matching_trajectory_geometry_noise_schedule": true,
+    "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+    "replicate": 0,
+    "row_count_each": 11250,
+    "source_seed_intentionally_different": true,
+    "standardized_noise_sha256": "04a3b949688aa70ca3918e42861e866333b807f84af21ea26b469fa8ba6c1390"
+  },
+  {
+    "broadband_index": 3,
+    "distance_m": 700,
+    "event_ids_disjoint": true,
+    "harmonic_index": 9,
+    "matching_trajectory_geometry_noise_schedule": true,
+    "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+    "replicate": 1,
+    "row_count_each": 11250,
+    "source_seed_intentionally_different": true,
+    "standardized_noise_sha256": "fa1adc59d5a796e35a8be7c819fe491209f96cdb7685752441115adb58a64b0b"
+  },
+  {
+    "broadband_index": 4,
+    "distance_m": 1000,
+    "event_ids_disjoint": true,
+    "harmonic_index": 10,
+    "matching_trajectory_geometry_noise_schedule": true,
+    "recording_state_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+    "replicate": 0,
+    "row_count_each": 11250,
+    "source_seed_intentionally_different": true,
+    "standardized_noise_sha256": "04a3b949688aa70ca3918e42861e866333b807f84af21ea26b469fa8ba6c1390"
+  }
+]

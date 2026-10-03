@@ -1,0 +1,30 @@
+{
+  "confirmation_variant": "three_station_confirmation",
+  "event_count": 177,
+  "executed_optimizations": 2,
+  "files_sha256": {
+    "batch_fits.csv.gz": "2739476247e179489b60714e42900d03c8c6c23349595cb3a5b2eb8a0e49daf5",
+    "candidates.csv.gz": "253cc94a7caaaf4bab37eefaeef6cc57e1c27b7a03fb4e8e4ed75b166ec98800",
+    "event_uses.csv.gz": "648856e1265210011c97ce8ad7d03c80351918f422ed482707d03ab14a25a2e7",
+    "hypotheses.csv.gz": "609b0a6ec6b8676a7b7b8840b92b928093c15685ab4bf07b092c0c36d8e0016c",
+    "ideal_inputs.csv.gz": "40e1c6540c56b0af08510136454cb6b6a8b0cf8ce3dcc115ee7d537525521353",
+    "lifecycle.csv.gz": "6473c26fca108bd282bedd52e1762cafb90ca69c1e544621f20b2340e841b3a2",
+    "tracking.csv.gz": "73294f2b7ed6b38d2bc0c990cbb7fe6d0626ca27f718db4d540c8f75e7b81c81",
+    "updates.csv.gz": "d33d799d899c9908cfacd4a38b4dcb8b51784c1333081b90f8d30fd69ffaeb2b"
+  },
+  "first_confirmation_s": 1.0553125,
+  "first_position_error_m": 0.10315440778783314,
+  "index": 6,
+  "input_variant": "ideal_bearing_zero_bias_same_R",
+  "method": "all_6_equal_gcc_wls",
+  "position_rmse_m_conditional": 1.439850413304077,
+  "processing_code_sha256": "26600ff6ba008c0ac9b2f958a3178600affe6002b68db911d6d8ca7eeb9f7c4b",
+  "publication_count": 177,
+  "replay_code_sha256": "b01060294fd773183e4f4c67380d6d5837db2cbc70e63058a9ddac82e7b93457",
+  "schema_version": 1,
+  "source_bearing_sha256": "53840172ab4f9e4cebf6c1e384fd3b69c8445f9c686d39a05a3e91b464a76b5e",
+  "source_run_id": "unseen-beffd269c4dc99056f925c98",
+  "status": "complete",
+  "valid_publication_count": 168,
+  "worker_wall_s": 1.6489883209999334
+}

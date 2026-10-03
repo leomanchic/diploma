@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL = ROOT / 'UNSEEN_MANOEUVRES_PROTOCOL.md'
 PROTOCOL_MANIFEST = ROOT / 'UNSEEN_MANOEUVRES_PROTOCOL_MANIFEST.json'
 RUNNER = Path(__file__).resolve()
+FROZEN_RUNNER_V1 = ROOT / 'analysis/frozen/unseen_manoeuvres_and_sources_v1.py'
 DEFAULT_OUTPUT = ROOT / 'results' / 'unseen_manoeuvres_and_sources'
 SCHEMA_VERSION = 1
 BEFORE_FIT = 'computational_budget_exceeded_before_fit'
@@ -206,8 +207,10 @@ def _load(output: Path) -> dict[str,Any]:
     manifest=json.loads((Path(output)/'evaluation_manifest.json').read_text(encoding='utf-8'))
     if manifest['schema_version']!=SCHEMA_VERSION or manifest['protocol_sha256']!=frozen['protocol_sha256']:
         raise ValueError('evaluation schema/protocol mismatch')
+    # Old manifests refer to the exact preserved v1 bytes; new ones to this version.
+    runner_source = (FROZEN_RUNNER_V1 if manifest['runner_sha256'] == sha256(FROZEN_RUNNER_V1) else RUNNER)
     for path,expected,label in ((PROTOCOL_MANIFEST,manifest['protocol_manifest_sha256'],'protocol manifest'),
-                                (RUNNER,manifest['runner_sha256'],'runner')):
+                                (runner_source,manifest['runner_sha256'],'runner')):
         if sha256(path)!=expected:
             raise ValueError(f'{label} SHA mismatch')
     if manifest['processing_code_sha256']!=code_sha256() or manifest['processing_sha256']!=canonical_sha256(manifest['processing']):
@@ -401,82 +404,19 @@ def paired_shared(left:list[dict],right:list[dict]) -> dict[str,Any]:
 
 
 def run_one(output:Path,index:int) -> dict[str,Any]:
-    output=Path(output);manifest=_load(output)
-    if not 0<=index<len(manifest['specs']): raise IndexError('outside frozen matrix')
-    spec=manifest['specs'][index];directory=_directory(output,spec);directory.mkdir(parents=True,exist_ok=True)
-    experiment_path=directory/'experiment.json'
-    if experiment_path.exists():
-        experiment=json.loads(experiment_path.read_text())
-        if experiment.get('run_id')!=spec['run_id']: raise ValueError('run directory identity mismatch')
-        if experiment.get('status')=='complete':
-            for name,digest in experiment['result_sha256'].items():
-                if sha256(directory/name)!=digest: raise ValueError(f'result SHA mismatch: {name}')
-            return {'status':'skipped_verified','index':index,'audio_synthesized_now':False,'tracker_replays_now':0}
-    _write_json(experiment_path,{'schema_version':SCHEMA_VERSION,'status':'running','run_id':spec['run_id'],'spec':spec})
-    stream_start=time.perf_counter()
-    with PeakRSS() as stream_memory:
-        rows,bearing_meta,restored=_restore_bearings(output,manifest,spec,directory)
-        stations,trajectory,_,info=_scenario(manifest,spec)
-        tracker=manifest['processing']['tracker']
-        history=ManoeuvreHistoryConfig(np.asarray(tracker['qc_m2_s3'],float),
-            history_step_s=float(tracker['history_step_s']),history_window_s=float(tracker['history_window_s']),
-            maximum_range_m=float(tracker['maximum_range_m']),
-            maximum_transport_delay_s=float(tracker['maximum_transport_delay_s']))
-        calibrations=calibration_from_experiment({'processing':manifest['processing']})
-        artifacts=['bearing_records.csv.gz','bearing_manifest.json']
-        summaries=[]
-        for method in METHODS:
-            measurements=_make_measurements(rows,calibrations,method,'original',int(tracker['frame_stride']))
-            for variant in VARIANTS:
-                recovery_settings=dict(tracker['recovery'])
-                recovery_settings['confirmation_station_count']=manifest['variants'][variant]['confirmation_station_count']
-                recovery=InitializationRecoveryConfig(**recovery_settings)
-                with PeakRSS() as tracker_memory:
-                    tracks,updates,diagnostics,original=_run_tracker(
-                        stations,trajectory,measurements,method,variant,history,recovery,float(info['reception_start_s']))
-                derived=summarize_track(tracks,updates,diagnostics['batch_fits'],
-                                        diagnostics['lifecycle'],reception_start_s=float(info['reception_start_s']))
-                if derived['valid_publication_count']!=original['valid_publication_count'] or derived['accepted_update_count']!=original['accepted_update_count']:
-                    raise ValueError('independent summary disagrees with frozen tracker runner')
-                summary={'run_id':spec['run_id'],'index':index,'trajectory':spec['trajectory'],
-                         'source_class':spec['source_class'],'distance_m':spec['distance_m'],
-                         'replicate':spec['replicate'],'estimator_variant':method,
-                         'confirmation_variant':variant,**derived,
-                         'tracker_wall_s':original['tracker_runtime_s'],
-                         'tracker_sampled_peak_rss_bytes':tracker_memory.peak_bytes,
-                         'maximum_history_memory_bytes':original['maximum_history_memory_bytes']}
-                summaries.append(summary)
-                suffix=f'{method}_{variant}.csv.gz'
-                for kind,data in {'tracking':tracks,'updates':updates,**diagnostics}.items():
-                    name=f'{kind}_{suffix}'
-                    columns={'tracking':('processing_time_s','confirmed','valid','failure_reason'),
-                             'updates':('event_id','update_applied','failure_reason'),
-                             'batch_fits':('processing_time_s','reason'),
-                             'lifecycle':('processing_time_s','action','reason'),
-                             'hypotheses':('processing_time_s','action','reason'),
-                             'event_uses':('event_id','role')}[kind]
-                    _write_csv_gz(directory/name,data,columns=columns if not data else None)
-                    artifacts.append(name)
-    stream_wall=time.perf_counter()-stream_start
-    _write_json(directory/'summary.json',{'schema_version':SCHEMA_VERSION,'run_id':spec['run_id'],
-        'spec':spec,'bearing_manifest_sha256':sha256(directory/'bearing_manifest.json'),
-        'audio_synthesis_count':bearing_meta['audio_synthesis_count'],
-        'stream_wall_s':stream_wall,'stream_sampled_peak_rss_bytes':stream_memory.peak_bytes,
-        'method_variants':summaries})
-    artifacts.append('summary.json')
-    _write_json(experiment_path,{'schema_version':SCHEMA_VERSION,'status':'complete','run_id':spec['run_id'],
-        'spec':spec,'result_sha256':{name:sha256(directory/name) for name in artifacts}})
-    return {'status':'completed','index':index,'run_id':spec['run_id'],
-            'audio_synthesized_now':restored,'tracker_replays_now':4,
-            'stream_wall_s':stream_wall,'stream_sampled_peak_rss_bytes':stream_memory.peak_bytes}
+    """Use the externally supervised v2 envelope; historical artifacts are read only."""
+    from analysis.unseen_execution_v2 import run_one as supervised_run_one
+    return supervised_run_one(output,index)
 
 
 def technical_smoke(output:Path=DEFAULT_OUTPUT) -> dict[str,Any]:
+    from analysis.study_execution import assert_not_stopped
+    assert_not_stopped(output)
     manifest=_load(output)
     index=int(manifest['smoke_index'])
     result=run_one(output,index)
     spec=manifest['specs'][index]
-    directory=_directory(output,spec)
+    directory=(Path(output)/result['summary_directory'] if result.get('summary_directory') else _directory(output,spec))
     summary=json.loads((directory/'summary.json').read_text())
     limit=manifest['technical_limits']
     projected=24*float(summary['stream_wall_s'])
@@ -489,7 +429,7 @@ def technical_smoke(output:Path=DEFAULT_OUTPUT) -> dict[str,Any]:
            'stream_wall_s':summary['stream_wall_s'],'stream_sampled_peak_rss_bytes':peak,
            'projected_matrix_wall_s':projected,'technical_limits':limit,
            'technical_cost_pass':pass_cost,
-           'bearing_manifest_sha256':sha256(directory/'bearing_manifest.json')}
+           'bearing_manifest_sha256':summary['bearing_manifest_sha256']}
     path=Path(output)/'technical_smoke.json'
     if path.exists():
         old=json.loads(path.read_text())
@@ -499,6 +439,10 @@ def technical_smoke(output:Path=DEFAULT_OUTPUT) -> dict[str,Any]:
 
 
 def run_all(output:Path=DEFAULT_OUTPUT) -> dict[str,Any]:
+    from analysis.study_execution import assert_not_stopped
+    assert_not_stopped(output)
+    if (Path(output)/'execution_v2/technical_stop.json').exists():
+        raise RuntimeError('execution-v2 technical stop blocks run-all')
     manifest=_load(output)
     smoke_path=Path(output)/'technical_smoke.json'
     if not smoke_path.exists() or not json.loads(smoke_path.read_text())['technical_cost_pass']:
@@ -507,7 +451,8 @@ def run_all(output:Path=DEFAULT_OUTPUT) -> dict[str,Any]:
     for spec in manifest['specs']:
         process=subprocess.run([sys.executable,'-m','analysis.unseen_manoeuvres_and_sources','run-one',
                                 '--output',str(output),'--index',str(spec['index'])],
-                               cwd=ROOT,capture_output=True,text=True,check=False)
+                               cwd=ROOT,capture_output=True,text=True,check=False,
+                               timeout=float(manifest['technical_limits']['max_wall_s_per_stream'])+5)
         if process.returncode:
             raise RuntimeError(f'run-one index={spec["index"]} failed: {process.stderr[-4000:]}')
         result=json.loads(process.stdout.strip().splitlines()[-1])

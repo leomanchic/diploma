@@ -1,0 +1,45 @@
+{
+  "analyzer_sha256": "2b5c9ce4a284a0d3a08da0304ed86fa8f8bd90d7c5125226ff21532bc9bc2ad3",
+  "files_sha256": {
+    "batch_attempts.csv.gz": "5f20bc0b3289ae7eca6afb6049b9291b43ab896d012ba89553597f463d5b4a6c",
+    "bearing_metrics.csv.gz": "244a59bb1705ccbbcf62c8fb6c7aa8ee99ffccd322b0d55ac26e9c90163230aa",
+    "bearing_residuals.csv.gz": "ae249a235577cd9cd66559006c78ba636e68eb1b1237d93cade1bcfbba970b2e",
+    "calibration_metrics.csv.gz": "3b36061568cb9ae110612a97be372fe14bf02ee50536e4ad74a7d740d50a32f7",
+    "chain_summary.csv.gz": "7515b4eda83031e7ec36bba618db39984383fb4740c5971a254084982a00d396",
+    "failure_timeline_200m.csv.gz": "4adcd6ad65fa3e9a17f686fc394170710a279bce00039ce354148848ead6f78d",
+    "fit_generation_counts.csv.gz": "bad5cf1068f0a4f5361c299c591dd987cf763a126f3173e08efc674bde33bdaf",
+    "hypothesis_details.csv.gz": "cd4828b6f6f2a2820590113df7971724526b4f944975120bc3bd6683ecb3b000",
+    "interstation_correlations.csv.gz": "a50c4767b6688722854a49cb9d6630f8635b5ddc445cd82c9011babbad82586b",
+    "large_error_runs.csv.gz": "45ba9c753b246cec597849fc5806ed53d7394942dc38169b0edf4a308341b164",
+    "pair_audit.json": "44fc0d2af951992e7fd7f970a39ec205c024bbd3729d111e43b0a6826402ad5d",
+    "temporal_correlations.csv.gz": "cf04fef68ecb3507c2fd088bcb5c513c5175045844c87ab80d12e432f14d652b"
+  },
+  "missing_evidence": [
+    "pair correlation curves and selected lag peaks not saved",
+    "geometric candidate rejection journal not exported by historical runner",
+    "hypothesis states/covariances and every interim confirmation decision not exported"
+  ],
+  "original_tracker_count": 40,
+  "paired_sequence_count": 5,
+  "processing_code_sha256": "26600ff6ba008c0ac9b2f958a3178600affe6002b68db911d6d8ca7eeb9f7c4b",
+  "protocol_freeze_commit": "3bbf527",
+  "protocol_manifest_sha256": "6b08b70bad99a7049e55285929377c791b606c9f5cbf0548c53166776f7bd468",
+  "replays_executed_by_analysis": 0,
+  "rows": {
+    "batch_attempts": 3293,
+    "bearing_metrics": 120,
+    "bearing_residuals": 112500,
+    "calibration_metrics": 120,
+    "chain_summary": 40,
+    "failure_timeline_200m": 1416,
+    "fit_generation_counts": 42,
+    "hypothesis_details": 200,
+    "interstation_correlations": 120,
+    "large_error_runs": 24797,
+    "temporal_correlations": 900
+  },
+  "schema_version": 1,
+  "sequence_count": 10,
+  "source_manifest_sha256": "e1957719e4f988b786c521e4c9c6453f6f8a16d9e9fd8139b092cf4458889277",
+  "status": "read_only_analysis_complete"
+}

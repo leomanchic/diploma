@@ -11,7 +11,8 @@
 
 Матрица остановлена на индексе 11 после превышения замороженного лимита
 30 минут на поток. Из 24 потоков завершены 15, из 96 треков — 60.
-`run-all` здесь **не** является командой проверки: он начал бы обработку
+`run-all` здесь **не** является командой проверки: execution-v2 запрещает запуск
+при наличии `technical_stop.json`. Прежний runner мог начать обработку
 незавершённых потоков и нарушил бы правило остановки.
 
 ```bash
@@ -93,11 +94,53 @@ export RUN_DIR="$PWD/results/px4_flight/unseen_spatial_002"
 запись. Принятый исследовательский manifest привязан к SHA именно этих двух записей
 и к замороженному плану 24 потоков. Новые полёты требуют отдельного нового
 протокола, нового каталога результата и новой технической проверки стоимости;
-их нельзя подменить в принятом manifest. Текущий `run-all` автоматически
-обрабатывает незавершённые индексы и потому **не запускается** после
-технического стопа. Для воспроизведения доступен SHA-аудит выше.
+их нельзя подменить в принятом manifest. Execution-v2 блокирует обычный
+`run-all` после технического стопа. Для воспроизведения доступен SHA-аудит выше.
 
 В журналах обработки время локальное относительно начала приёма;
 `time_origin_gazebo_s` в `bearing_manifest.json` переводит его обратно в
 абсолютное время Gazebo. Это представление устраняет потерю точности шага
 48 кГц при больших абсолютных метках, не меняя физическую временную шкалу.
+
+
+## Execution-v2 и диагностический S8
+
+Обычные `run-one`, `smoke` и `run-all` отказываются до вычислений, если есть
+`technical_stop.json` либо `execution_v2/technical_stop.json`. Историческую
+метку не удалять. В этой задаче продолжение остановленной матрицы не разрешено.
+
+Новые версии запуска: `analysis/unseen_execution_v2.py` и
+`analysis/study_execution.py`. Завершение каждого tracker variant сохраняется
+атомарным `completion_{method}_{variant}.json` в отдельном `execution_v2/runs`.
+Сверяются шесть журналов, их схемы/хеши, exact publication schedule,
+event IDs и происхождение bearing/settings. Наличие одного tracking CSV не
+доказывает завершение; проверяемые полные варианты пропускаются. Если
+исторический stream прерван, full variant импортируется только по сохранённым
+SHA partial audit и полному набору/расписанию. Исторические outputs не
+перезаписываются. Parent supervisor соблюдает frozen external timeout и
+сохраняет новые supervision/stop артефакты, worker имеет отдельный watchdog.
+
+Будущее продолжение возможно только с отдельно согласованным frozen protocol
+и authorization JSON: `schema_version=1`, `action=authorized_continuation`,
+`execution_version=2`, SHA evaluation/stop/protocol, `allowed_indices` и явное
+`approved_by_user`. Разрешение на продолжение основной матрицы сейчас не
+создано. Изолированный вход для такого будущего разрешения — `continue-one`
+в `analysis.unseen_execution_v2`, не обход проверки в обычном runner.
+Этот вход сохраняет отдельные variant completions и stream summary в
+`execution_v2`; прежний `aggregate` предназначен для полного исторического
+формата и не объединяет их с неполной остановленной матрицей. Продолжение
+и его отдельная итоговая агрегация требуют нового согласованного протокола.
+
+Исторический runner побайтно сохранён в `analysis/frozen`; опубликованный
+manifest сверяется с его SHA, новые manifests — с новым runner. Processing
+code/settings SHA и исторические run IDs остаются обязательными.
+
+Текущая read-only диагностика и просмотр notebook:
+
+```bash
+.venv/bin/python -m analysis.harmonic_tracking_failure verify
+.venv/bin/python -m jupyter nbconvert --execute --to notebook --inplace notebooks/harmonic_tracking_failure.ipynb
+```
+
+Эти команды не запускают audio synthesis, tracker replay или полёты.
+Полный разбор: `HARMONIC_TRACKING_FAILURE_REPORT.md`.
