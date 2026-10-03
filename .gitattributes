@@ -1,0 +1,3 @@
+# SHA-pinned artifacts keep exact bytes unless a narrower rule opts into LF.
+# This also protects new artifact extensions from core.autocrlf conversion.
+* -text

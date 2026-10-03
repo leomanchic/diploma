@@ -1,3 +1,8 @@
+# The repository default preserves unknown SHA artifact formats byte-for-byte.
+# The explicitly listed source/text formats below keep the established LF rule.
+# Captured process streams are immutable bytes, even when empty or mixed-EOL.
+*.stdout -text
+*.stderr -text
 # Frozen SHA-256 inputs and Python source keep identical bytes on Windows.
 *.py text eol=lf
 *.csv text eol=lf

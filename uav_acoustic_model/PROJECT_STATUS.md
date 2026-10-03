@@ -2,6 +2,21 @@
 
 Последнее обновление: 2026-10-03
 
+## Исправление сохранения байтов при Windows checkout
+
+- От `19b1980` в той же `analysis/harmonic-tracking-failure`: корневой
+  `.gitattributes` сохраняет неизвестные форматы побайтно, существующие
+  явно заданные LF-правила сохранены; `.stdout`/`.stderr` имеют `-text`.
+  Исторические inputs, manifests и ожидаемые SHA не менялись.
+- `tests/test_sha_checkout.py` выполняет настоящий свежий checkout с
+  `core.autocrlf=true`, сравнивает каждый tracked blob, 529 исходных SHA и
+  70 delivery SHA. Непустые stdout/stderr, смешанные LF/CRLF и неизвестное
+  расширение проверены дополнительными fixtures. Целевые тесты **32 passed**,
+  сохранённая harmonic диагностика проходит verify, `pip check` без конфликтов.
+- Прежний Windows CI `37130125607` упал на SHA `batch_logs/00.stdout`;
+  Linux прошёл. Новый Linux/Windows CI проверяется после обычного push.
+  Аудиосинтез, диагностические replay и остановленная матрица не повторялись.
+
 ## Текущая диагностика внутри S8: harmonic tracking failure
 
 - База `ae2858718bd00a318512d996589d91ade7c9a578`, отдельная ветка
