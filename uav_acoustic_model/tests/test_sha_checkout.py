@@ -12,10 +12,16 @@ REPOSITORY = ROOT.parent
 
 
 def _git(directory: Path, *arguments: str) -> bytes:
-    return subprocess.run(
-        ['git', *arguments], cwd=directory, capture_output=True, check=True,
+    completed = subprocess.run(
+        ['git', *arguments], cwd=directory, capture_output=True,
         timeout=120,
-    ).stdout
+    )
+    if completed.returncode:
+        raise AssertionError(
+            f'git {" ".join(arguments)} exited {completed.returncode}:\n'
+            + completed.stderr.decode('utf-8', errors='replace')[:6000]
+        )
+    return completed.stdout
 
 
 def test_autocrlf_checkout_preserves_every_tracked_blob_and_frozen_sha(tmp_path):
@@ -29,6 +35,9 @@ def test_autocrlf_checkout_preserves_every_tracked_blob_and_frozen_sha(tmp_path)
     checkout = tmp_path / 'checkout'
     checkout.mkdir()
     _git(checkout, 'init', '--quiet')
+    # pytest's Windows temp prefix pushes saved artifact paths past MAX_PATH.
+    # Enable Git's long-path support only in this isolated fixture repository.
+    _git(checkout, 'config', 'core.longpaths', 'true')
     objects = Path(_git(
         REPOSITORY, 'rev-parse', '--path-format=absolute', '--git-path', 'objects'
     ).decode().strip())
