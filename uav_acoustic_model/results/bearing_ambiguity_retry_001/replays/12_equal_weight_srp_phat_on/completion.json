@@ -1,0 +1,19 @@
+{
+  "files_sha256": {
+    "batch_fits_equal_weight_srp_phat_three_station_confirmation.csv.gz": "45b0eda8c9b9ee7fb6279c8a14e3dd52519d0f950fb5b27d4ebd5d068aa9314e",
+    "event_uses_equal_weight_srp_phat_three_station_confirmation.csv.gz": "3f86375e2469abc5cfe1886d5b6adac80500eedf7f4cad70ee3eae213eacb587",
+    "gate_events.csv.gz": "ea3e4d3997b05fcc0c38175c2b6af40d7863787baf89cae03e37992827ed1311",
+    "hypotheses_equal_weight_srp_phat_three_station_confirmation.csv.gz": "d45a51b778f8cef86cd9eda142d85956386d301311e7440a1f972c3bbc14acad",
+    "lifecycle_equal_weight_srp_phat_three_station_confirmation.csv.gz": "82821b53d367c0206993e7a6dd27ce48a07d1610f482205611a196ac9dc72599",
+    "summary.json": "782090b35a19f8fac2d320104222cfd0899de83c281b61f69a8f7c455fa61ec6",
+    "tracking_equal_weight_srp_phat_three_station_confirmation.csv.gz": "7f612af460eb74ea8fafefb3df41b14ba63c0262a6ad6f358e51c9f27ca03303",
+    "updates_equal_weight_srp_phat_three_station_confirmation.csv.gz": "3147042d46c1f6bf7ee60e55aefc3751021ce8a4a85404efb1ad563fdf6a5b1c",
+    "verified_schedule.json": "cf624ff51288ab236c07ab90627b1d3205f5177a7cae7eef80b559ba74221c8c"
+  },
+  "gate": "on",
+  "gate_manifest_sha256": "dcd54a7acd7ad58b2b7c7d4f4a040a38022b6d4c77f62593db10fa4647458ddf",
+  "index": 12,
+  "kind": "replay",
+  "method": "equal_weight_srp_phat",
+  "status": "complete_verified"
+}

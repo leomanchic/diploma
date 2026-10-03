@@ -211,3 +211,32 @@ def test_freeze_refuses_evaluation_access(monkeypatch,tmp_path):
     p=tmp_path/'runs'/'08';p.mkdir(parents=True);(p/'checkpoint.json').write_text('{}')
     with pytest.raises(ValueError,match='evaluation accessed before gate freeze'):report.freeze(tmp_path)
     assert not (tmp_path/'gate_manifest.json').exists()
+
+
+def test_published_retry_complete_and_rejections_excluded_all_roles():
+    from pathlib import Path
+    from analysis.bearing_ambiguity_study import ROOT
+    from analysis.bearing_ambiguity_report import verify
+    from analysis.localization_error_attribution import _read_csv_gz
+    out=ROOT/'results/bearing_ambiguity_retry_001'
+    assert verify(out)==(16,8)
+    for directory in (out/'replays').iterdir():
+        rejected={r['event_id'] for r in _read_csv_gz(directory/'gate_events.csv.gz') if r['gate_rejected']=='True'}
+        method=json.loads((directory/'summary.json').read_text())['method']
+        for kind in ('batch_fits','hypotheses','event_uses','updates'):
+            rows=_read_csv_gz(directory/f'{kind}_{method}_three_station_confirmation.csv.gz')
+            for r in rows:
+                if r.get('event_id'):assert r['event_id'] not in rejected
+                for key in ('event_ids','construction_event_ids','confirmation_event_ids'):
+                    if r.get(key):assert set(json.loads(r[key])).isdisjoint(rejected)
+
+
+def test_published_gcc_opt_out_numeric_parity():
+    from analysis.bearing_ambiguity_study import ROOT
+    from analysis.localization_error_attribution import _read_csv_gz
+    method='all_6_equal_gcc_wls'
+    for index in (8,12):
+        root=ROOT/'results/bearing_ambiguity_retry_001/replays'
+        for journal in ('tracking','updates','batch_fits','hypotheses','event_uses','lifecycle'):
+            name=f'{journal}_{method}_three_station_confirmation.csv.gz'
+            assert _read_csv_gz(root/f'{index:02d}_{method}_off'/name)==_read_csv_gz(root/f'{index:02d}_{method}_on'/name)

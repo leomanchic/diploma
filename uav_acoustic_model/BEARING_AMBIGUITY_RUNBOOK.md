@@ -7,16 +7,17 @@ from the checkout. It is not installed or enabled by the core package.
 ## Inspect published artifacts (no synthesis/replay)
 
 ```bash
-python -m analysis.bearing_ambiguity_study verify
-python -m analysis.bearing_ambiguity_study report
-python -m jupyter nbconvert --execute --to notebook --inplace notebooks/bearing_ambiguity_gate.ipynb
+python -m analysis.bearing_ambiguity_study verify --output results/bearing_ambiguity_retry_001
+python -m analysis.bearing_ambiguity_study report --output results/bearing_ambiguity_retry_001
+python -m jupyter nbconvert --execute --to notebook --inplace notebooks/bearing_ambiguity_retry.ipynb
 ```
 
 `report` recalculates derived tables from saved bearings/features and frozen
 thresholds. `verify` validates protocol, code, recording and completion hashes.
-For a completed study, all-frame and stride tables would be separate.
+The completed retry provides separate all-frame and stride tables.
 The accepted technical failure has no raw bearings, thresholds or tracking results.
-Its default `verify/report` commands audit the preserved failure only.
+Commands without `--output` audit the preserved failure only. The commands
+above inspect the completed retry, including the negative joint result.
 Use `--output results/bearing_ambiguity_retry_001` to inspect the authorized retry. `gate_decisions.csv.gz` contains explicit reasons. Curves
 are `.npz` files (numpy `load(..., allow_pickle=False)`) with actual six GCC
 curves and SRP diagnostic grid, selected maximum and separated competitor.
@@ -27,7 +28,11 @@ The original attempt remains immutable. The user subsequently authorized a
 separate retry (BEARING_AMBIGUITY_RETRY_AUTHORIZATION.json), using the same
 scientific protocol, thresholds grid, seeds and limits. Its preflight worker
 time is carried into the total 6-hour budget. Use a NEW output directory. Do not overwrite published recordings/results.
-Freeze/commit implementation and protocol first. Execute these stages in order:
+The following commands document the authorized run already completed. Its
+output directory now exists: initialization refuses to overwrite it. To inspect
+the published result use the commands above. Any additional experiment requires
+a separate authorization with its own output path. Freeze/commit implementation
+and protocol first; these were the execution stages in order:
 
 ```bash
 export OPENBLAS_NUM_THREADS=1

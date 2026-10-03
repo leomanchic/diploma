@@ -1,8 +1,43 @@
 # Состояние проекта UAV Acoustic Model
 
-Последнее обновление: 2026-10-03
+Последнее обновление: 2026-10-04
 
-## Экспериментальный bearing ambiguity gate: технический отказ
+## Текущая задача S8: завершённое исследование bearing ambiguity gate
+
+- Пользователь разрешил повтор после `3282afa`; новая попытка отделена в
+  `results/bearing_ambiguity_retry_001`. Исходный отказ/IDs/SHA/manifest/ledger
+  не менялись. Авторизация и preflight `4c23999` сохраняют научный протокол
+  `07ad77b`, seeds/settings/limits; предыдущие 1,287 с включены в 6h budget.
+- Development **8/8**, gate frozen до evaluation коммитом `1437cea`,
+  evaluation **8/8**, заранее выбранные tracker replay **8/8**. Сохранены
+  **173 808** bearing записей и **144** actual correlation/SRP diagnostics.
+  Heavy wall **1852,936 с** (30,88 мин); без timeout и technical stop.
+  Старую 15/24 матрицу, полёты и старые исследования не повторяли.
+- Пороги common по class/distance: GCC p=0/m=0, SRP p=0/m=0,05.
+  Evaluation GCC >10° passed/all valid **26,415%→26,415%**; SRP
+  **24,881%→18,991%** (−23,672% относительно), retention **92,659%**,
+  good false rejection **2,909%** macro по stream/station cells. Предзаданный
+  критерий ≥25% для обоих методов **не пройден**; пороги не подбирали снова.
+- Tracking **не улучшилось**: broadband off/on идентичны, confirmation
+  1,055313 с, valid availability 94,545%, RMSE 2,006/2,000 м GCC/SRP,
+  по 2 fits. Harmonic off/on обоих методов не подтверждены, availability 0%,
+  по 128 fits; SRP gate исключил 12/165 выбранных events, отказ сохранился.
+  GCC off/on все шесть журналов совпадают численно. Rejected IDs проверены
+  в construction/confirmation/updates на опубликованных результатах.
+- Это отрицательный итог заданного joint criterion с частичным bearing-level
+  эффектом SRP, limited dependent synthetic transfer. Scores не probabilities,
+  iid-frame/популяционные выводы не заявлены. Gate default off; bias/R/Qc,
+  алгоритмы и budgets прежние. S8 остаётся In progress, без нового подэтапа.
+- Отчёт `BEARING_AMBIGUITY_RETRY_REPORT.md`, выполненный saved-artifact
+  `notebooks/bearing_ambiguity_retry.ipynb`, подробные per-stream/station
+  all-frame/stride таблицы, missing durations, causal 2/3-station windows,
+  actual curves/maps, paired tracking и отказов. Целевые тесты **22 passed**
+  (включая настоящий autocrlf checkout), полный pytest **619 passed**
+  за 188,77 с; notebook **7/7** code cells, без ошибок. `pip check` и
+  `git diff --check` пройдены. Linux/Windows CI проверяется для итогового SHA;
+  фактический статус сообщается отдельно.
+
+## История bearing ambiguity gate: preflight-отказ
 
 - От `4ef0fb1` отдельная `feature/bearing-ambiguity-gate`, чистый исходный
   worktree. Протокол до расчётов — `07ad77b`, реализация до первой попытки —
