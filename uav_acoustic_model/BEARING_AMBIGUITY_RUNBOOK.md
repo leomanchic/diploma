@@ -16,22 +16,25 @@ python -m jupyter nbconvert --execute --to notebook --inplace notebooks/bearing_
 thresholds. `verify` validates protocol, code, recording and completion hashes.
 For a completed study, all-frame and stride tables would be separate.
 The accepted technical failure has no raw bearings, thresholds or tracking results.
-Its default `verify/report` commands audit the preserved failure only. `gate_decisions.csv.gz` contains explicit reasons. Curves
+Its default `verify/report` commands audit the preserved failure only.
+Use `--output results/bearing_ambiguity_retry_001` to inspect the authorized retry. `gate_decisions.csv.gz` contains explicit reasons. Curves
 are `.npz` files (numpy `load(..., allow_pickle=False)`) with actual six GCC
 curves and SRP diagnostic grid, selected maximum and separated competitor.
 
-## New bounded experiment — requires new authorization
+## Authorized retry — 2026-10-03
 
-The published attempt stopped before synthesis, and the user declined restart.
-The commands below document a future procedure; do not run them as a continuation
-of this task. Use a NEW output directory. Do not overwrite published recordings/results.
+The original attempt remains immutable. The user subsequently authorized a
+separate retry (BEARING_AMBIGUITY_RETRY_AUTHORIZATION.json), using the same
+scientific protocol, thresholds grid, seeds and limits. Its preflight worker
+time is carried into the total 6-hour budget. Use a NEW output directory. Do not overwrite published recordings/results.
 Freeze/commit implementation and protocol first. Execute these stages in order:
 
 ```bash
 export OPENBLAS_NUM_THREADS=1
 export OMP_NUM_THREADS=1
-OUT="$PWD/results/bearing_ambiguity_local_001"
-python -m analysis.bearing_ambiguity_study initialize --output "$OUT"
+OUT="$PWD/results/bearing_ambiguity_retry_001"
+python -m analysis.bearing_ambiguity_study initialize --output "$OUT" \
+  --authorization BEARING_AMBIGUITY_RETRY_AUTHORIZATION.json
 python -m analysis.bearing_ambiguity_study development --output "$OUT"
 python -m analysis.bearing_ambiguity_study freeze --output "$OUT"
 # Review and commit the gate manifest before evaluation.
@@ -44,6 +47,9 @@ python -m analysis.bearing_ambiguity_study verify --output "$OUT"
 Windows PowerShell: set `$env:OPENBLAS_NUM_THREADS='1'`,
 `$env:OMP_NUM_THREADS='1'` and `$OUT=Join-Path $PWD 'results/bearing_ambiguity_local_001'`.
 The external worker supervisor handles process termination on both platforms.
+The initializer refuses an existing directory. Published completed stages can
+be verified and skipped; incomplete/stopped attempts cannot be retried. A new
+experiment needs its own authorization and a different directory.
 Do not directly call internal `audio-worker` / `replay-worker`: they are only
 for the supervisor, which freezes attempts before starting and enforces limits.
 

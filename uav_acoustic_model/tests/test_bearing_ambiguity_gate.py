@@ -187,3 +187,27 @@ def test_absent_good_labels_are_explicit_development_failure():
     assert all(t==dict(minimum_participation=0,minimum_margin=0) for t in thresholds.values())
     assert not any(c['feasible'] for c in candidates)
     assert all(json.loads(c['good_false_rejection_by_class_json'])==dict(broadband=None,nonstationary_harmonic=None) for c in candidates)
+
+
+def test_confirmation_availability_excludes_future_delivery():
+    from analysis.bearing_ambiguity_report import availability
+    rows=[dict(event_id=str(i),valid=True,station_id=f'S{i}',frame_index=0,available_timestamp_s=t) for i,t in enumerate([.1,.2,.4])]
+    features={str(i):ObservableFeatures(.9,.9) for i in range(3)}
+    r=availability(rows,features,GateConfig(True))
+    assert r['trailing_3s_3_stations_fraction']==pytest.approx(1/3)
+    assert r['trailing_3s_2_stations_fraction']==pytest.approx(2/3)
+
+
+def test_evaluation_worker_requires_gate_freeze(monkeypatch,tmp_path):
+    from analysis import bearing_ambiguity_study as runner
+    monkeypatch.setattr(runner,'load',lambda output:protocol())
+    with pytest.raises(FileNotFoundError):runner.audio_worker(tmp_path,8)
+    assert not (tmp_path/'runs').exists() and not (tmp_path/'source_banks').exists()
+
+
+def test_freeze_refuses_evaluation_access(monkeypatch,tmp_path):
+    from analysis import bearing_ambiguity_report as report
+    monkeypatch.setattr(report,'load',lambda output:protocol())
+    p=tmp_path/'runs'/'08';p.mkdir(parents=True);(p/'checkpoint.json').write_text('{}')
+    with pytest.raises(ValueError,match='evaluation accessed before gate freeze'):report.freeze(tmp_path)
+    assert not (tmp_path/'gate_manifest.json').exists()

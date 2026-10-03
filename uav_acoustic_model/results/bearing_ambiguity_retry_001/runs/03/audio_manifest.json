@@ -1,0 +1,38 @@
+{
+  "bearing_count": 11250,
+  "frames_per_station": 1875,
+  "recording_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+  "run_id": "amb-0f9002185533cce7a2220f8e",
+  "source_bank": {
+    "file_sha256": "2ee53e1bb5489473be85115f782ab373942e9676c66d67fcdf14642b3bd26121",
+    "sample_count": 1036961,
+    "seed": 9747867827986205917,
+    "signal_sha256": "b092b0dee9b3fb6f3108b114e426705c911be8ee9c334ab51f20444500404741",
+    "start_time_s": 113.78588270104248
+  },
+  "source_signal_sha256": "b092b0dee9b3fb6f3108b114e426705c911be8ee9c334ab51f20444500404741",
+  "spec": {
+    "distance_m": 700,
+    "index": 3,
+    "noise_seed": 19454512346333794,
+    "replicate": 1,
+    "snr_ref_db": 10.0,
+    "source_class": "broadband",
+    "source_seed": 9747867827986205917,
+    "split": "development",
+    "trajectory": "spatial"
+  },
+  "standardized_noise_sha256": "a8d1dbaecbcda9a34ba7ccb8bda4866f8c317e0d8861135489dc446eebbf3778",
+  "station_snr_db": {
+    "S0": -7.616053151593921,
+    "S1": -6.8138809908063305,
+    "S2": -6.813500529400094
+  },
+  "synthesis_count": 1,
+  "time_origin_gazebo_s": 115.968,
+  "translation_enu_m": [
+    489.11513708315493,
+    482.43445003778515,
+    111.66065535459697
+  ]
+}

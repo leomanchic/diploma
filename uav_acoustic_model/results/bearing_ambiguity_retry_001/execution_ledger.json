@@ -1,0 +1,111 @@
+{
+  "attempts": [
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 0,
+      "key": "audio:0:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 92.78503625099984
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 1,
+      "key": "audio:1:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 90.00407427000027
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 2,
+      "key": "audio:2:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 93.18824346699694
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 3,
+      "key": "audio:3:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 93.52555511099854
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 4,
+      "key": "audio:4:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 93.66658648900193
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 5,
+      "key": "audio:5:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 93.03327753099802
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 6,
+      "key": "audio:6:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 92.02465826099797
+    },
+    {
+      "execution_version": 2,
+      "gate": null,
+      "index": 7,
+      "key": "audio:7:None:None",
+      "kind": "audio",
+      "method": null,
+      "returncode": 0,
+      "status": "complete",
+      "timed_out": false,
+      "timeout_s": 1200,
+      "wall_s": 92.15769117400123
+    }
+  ],
+  "previous_worker_wall_s": 1.287010576999819,
+  "stopped": false,
+  "worker_wall_s": 741.6721331309946
+}

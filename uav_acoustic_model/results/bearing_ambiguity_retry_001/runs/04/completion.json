@@ -1,0 +1,21 @@
+{
+  "files_sha256": {
+    "audio_manifest.json": "2d0f926554b6851398ffea70c75ab2b3f5072502c6fd4689d2086c45cdea6e2e",
+    "bearing_records.csv.gz": "8960996697bd000f16decec53863eb7df321b9305eda4eb5f3d2c19f3a1b9ae2",
+    "checkpoint.json": "d18c40ef1a8a8a03c3629fd3d42d341c7667efe042d8e5b9ac8c6044a594dc13",
+    "curves_S0_0.npz": "991fbe40bc131442c2dfb25a6e633d3da485dde7a42f917cf1d5c7f7dcf7e22a",
+    "curves_S0_1874.npz": "ce50af7dde6be7de97907ea10b9abded7f2bc93efa7eaf51bdabb67ae0280e2f",
+    "curves_S0_32.npz": "259750c3eb0804a5511b7eedd0c198e38a989ddde305b3eef9eb76bd9a1508eb",
+    "curves_S1_0.npz": "0c547d96402083574cd573ace18a3d8e68ab4388161d5ddfb769bf488919dad6",
+    "curves_S1_1874.npz": "68036cec2dfc3d4c5752a42453450ec6368c16099b02fa041d629eee9eea3c48",
+    "curves_S1_32.npz": "300e1e3d9130a26acbc6f9babcfadf99531b2e1ce0aa7eb98b08d69e74a65527",
+    "curves_S2_0.npz": "03946e6043eafb6d241b6e7a892e9ed0f6b243bfc678277e27f546f42d189796",
+    "curves_S2_1874.npz": "b9842ed570c2cb6924a50f9a6719503c3154c2e3280a146e42efae0c1428d590",
+    "curves_S2_32.npz": "b607f17436f546a7cb1e1f4ae7bd991750f16672824ac540a252ef1cff13e835",
+    "features.csv.gz": "8525679f5431898a7c686b2227d3a1e222f8bb158d43adeb9e38a228e248cba3"
+  },
+  "index": 4,
+  "kind": "audio",
+  "status": "complete_verified",
+  "study_manifest_sha256": "b9d9c0d375fdb752cea6a52eb551069a5561abb8a566c824c8a88c62b86484ec"
+}
