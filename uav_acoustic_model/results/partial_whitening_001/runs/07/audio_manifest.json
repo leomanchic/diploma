@@ -1,0 +1,57 @@
+{
+  "ambiguity_gate_enabled": false,
+  "audio_stream_id": "pw-bb00c3c7660e5477fbf2639a",
+  "bearing_count": 33750,
+  "frames_per_station": 1875,
+  "recording_sha256": "bdecd75dc942e39aed67ee5dc136e78f14a1a7f67ba5f32c4ae6ca59e9e67ba4",
+  "source_bank": {
+    "file_sha256": "68578eb3214da47c024f295fd63a2c109af2de6fe6dfa356cea78fa551938caf",
+    "sample_count": 1036961,
+    "seed": 15015348065396377546,
+    "signal_sha256": "3b71a9bbf06b2dad6b9922d41b40657d516247099e427614b49e02fe1b0d6eaf",
+    "start_time_s": 113.78588270104248
+  },
+  "source_signal_sha256": "3b71a9bbf06b2dad6b9922d41b40657d516247099e427614b49e02fe1b0d6eaf",
+  "spec": {
+    "distance_m": 700,
+    "index": 7,
+    "noise_seed": 8222585009132598903,
+    "replicate": 1,
+    "source_class": "nonstationary_harmonic",
+    "source_seed": 15015348065396377546,
+    "split": "development",
+    "station_noise_seeds": {
+      "S0": 8165107787365971941,
+      "S1": 12152814261308412467,
+      "S2": 15679236861764819329
+    },
+    "trajectory": "spatial"
+  },
+  "standardized_noise_sha256": "c755b92a42333a861141f1a7a12486b8e4c0511bd5029d2378eac80b4642a21a",
+  "station_snr_db": {
+    "S0": -7.700643409740987,
+    "S1": -6.954638887172826,
+    "S2": -6.948685307390317
+  },
+  "synthesis_count": 1,
+  "time_origin_gazebo_s": 115.968,
+  "translation_enu_m": [
+    489.11513708315493,
+    482.43445003778515,
+    111.66065535459697
+  ],
+  "variants": {
+    "0.5": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ],
+    "0.75": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ],
+    "1.0": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ]
+  }
+}

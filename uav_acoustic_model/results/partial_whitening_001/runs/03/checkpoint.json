@@ -1,0 +1,20 @@
+{
+  "actual_bearing_rows": 33750,
+  "expected_bearing_rows": 33750,
+  "frames_per_station": 1875,
+  "status": "complete",
+  "variants": {
+    "0.5": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ],
+    "0.75": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ],
+    "1.0": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ]
+  }
+}
