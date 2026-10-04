@@ -2,7 +2,26 @@
 
 Последнее обновление: 2026-10-04
 
-## Текущая задача S8: завершённое исследование bearing ambiguity gate
+## Текущая задача S8: нормированное partial whitening
+
+- От `430cad8` отдельная ветка `feature/partial-whitening-localization` и
+  изолированный worktree; исходное дерево чистое, historical SHA/IDs сохранены.
+- Явный experimental frontend в `analysis/`: β=1/0,75/0,5,
+  `Psi_base*(|C|/max_K|C|)^(1-beta)`; прежняя PHAT invalid/floor семантика,
+  GCC lag/search и cubic SRP сохранены. Ambiguity gate выключен.
+- Protocol `PARTIAL_WHITENING_PROTOCOL.md` + manifest фиксируют до расчётов
+  8 spatial development / 8 radial evaluation, новые source/noise seeds,
+  разные harmonic параметры split, loss с invalid denominator и selection
+  constraints; отдельный commit selection до evaluation обязателен.
+- Не более 16 synthesis / 8 replay, 1200/600 с, 6h total, один внешний
+  worker, timeout/lock/checkpoints/strict completion. Прежние R/bias/Qc,
+  propagation, three-station confirmation и budgets неизменны.
+- Предварительные тесты **24 passed**, полный preflight pytest
+  **643 passed**; итоговая приёмка и фактические результаты будут
+  зафиксированы после исследования.
+  S8 остаётся In progress. Новый фильтр/gate/adaptive R не добавлены.
+
+## История S8: завершённое исследование bearing ambiguity gate
 
 - Пользователь разрешил повтор после `3282afa`; новая попытка отделена в
   `results/bearing_ambiguity_retry_001`. Исходный отказ/IDs/SHA/manifest/ledger

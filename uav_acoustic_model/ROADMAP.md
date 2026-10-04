@@ -19,18 +19,19 @@ Python, SHA-проверяемые эксперименты, 3D viewer и сох
 validation остаются отдельными требованиями; текущая диагностика S8 их не
 закрывает.
 
-**Текущая работа внутри S8:** диагностика сохранённых harmonic отказов по
-цепочке аудио → bearing → calibration → initialization → confirmation,
-с четырьмя заранее ограниченными ideal-bearing replay и execution-v2
-защитой technical stop/timeout/completion. Критерий завершения этой задачи:
-воспроизводимый механизм отказа либо точно названное недостающее
-свидетельство, отчёт/notebook, неизменённые historical SHA/IDs/settings,
-целевая/полная приёмка и CI. S8 остаётся **In progress**.
+**Текущая работа внутри S8:** один explicit normalized partial-whitening
+frontend, β∈{1,0.75,0.5}, ambiguity gate off. Development 8 spatial потоков,
+selection по harmonic L с broadband/valid guardrails; отдельный freeze commit
+до 8 radial evaluation потоков; до8 paired tracker replay. Новые acoustic
+seeds на известных записях, прежние propagation/R/bias/Qc/confirmation/budgets.
+Это transfer diagnostic, не независимые полёты или qualification нового R.
+Цель — per-method результат, включая отрицательный, bounded execution,
+отчёт/notebook и Linux/Windows CI. Новый обязательный подэтап не вводится;
+S8 остаётся **In progress**.
 
-**Один следующий проверяемый алгоритмический шаг:** explicit ambiguity /
-validity gate frontend на наблюдаемых данных; development и evaluation
-источники/движения/seeds раздельны, gate заморожен до evaluation. Это
-предложение по результатам диагностики, ещё не внедрённое изменение.
+Предыдущий ambiguity gate `430cad8`: GCC без эффекта, SRP частично снизил
+крупные bearing errors, tracking не улучшилось; joint criterion не пройден,
+gate default off. Старый preflight-отказ и остановленная 15/24 matrix сохранены.
 
 ## Календарный ориентир до мая 2027
 
