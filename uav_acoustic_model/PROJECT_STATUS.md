@@ -2,24 +2,42 @@
 
 Последнее обновление: 2026-10-04
 
-## Текущая задача S8: нормированное partial whitening
+## Текущая задача S8: завершённое normalized partial-whitening исследование
 
-- От `430cad8` отдельная ветка `feature/partial-whitening-localization` и
-  изолированный worktree; исходное дерево чистое, historical SHA/IDs сохранены.
-- Явный experimental frontend в `analysis/`: β=1/0,75/0,5,
-  `Psi_base*(|C|/max_K|C|)^(1-beta)`; прежняя PHAT invalid/floor семантика,
-  GCC lag/search и cubic SRP сохранены. Ambiguity gate выключен.
-- Protocol `PARTIAL_WHITENING_PROTOCOL.md` + manifest фиксируют до расчётов
-  8 spatial development / 8 radial evaluation, новые source/noise seeds,
-  разные harmonic параметры split, loss с invalid denominator и selection
-  constraints; отдельный commit selection до evaluation обязателен.
-- Не более 16 synthesis / 8 replay, 1200/600 с, 6h total, один внешний
-  worker, timeout/lock/checkpoints/strict completion. Прежние R/bias/Qc,
-  propagation, three-station confirmation и budgets неизменны.
-- Предварительные тесты **24 passed**, полный preflight pytest
-  **643 passed**; итоговая приёмка и фактические результаты будут
-  зафиксированы после исследования.
-  S8 остаётся In progress. Новый фильтр/gate/adaptive R не добавлены.
+- База `430cad8`, отдельная `feature/partial-whitening-localization` и worktree.
+  Протокол/проверенный opt-in код `ccd44d7` до вычислений; выбранное β=0,5
+  для обоих методов frozen отдельным `a056e99` **до evaluation** вместе с
+  SHA кода, всех development artifacts и source banks. Historical SHA/IDs
+  и production model/simulation/estimators/validation сохранены.
+- **8/8 development +8/8 evaluation**, **8/8 actual tracker replay**,
+  24 успешных workers, без timeout/technical stop/повторов. **437 616** bearing
+  rows, **360** actual spectrum/correlation/SRP diagnostics;8 source banks.
+  Heavy wall **2197,147 с (36,62 мин)** из 6h, один worker, max 158,239 с/audio
+  и 52,884 с/replay; первоначальные 1200/600 с limits не расширялись.
+- Evaluation harmonic all-frame equal-cell L (invalid+>10°)/planned:
+  **GCC 51,184%→15,154% (−70,394% относительно)**;
+  **SRP 44,783%→18,958% (−57,668%)**. Valid100%, broadband guardrails пройдены.
+  По отдельному frozen criterion оба frontend перспективны для calibration.
+  Это dependent synthetic transfer на известных trajectory, не новые полёты,
+  не population/independent-frame qualification.
+- **Устойчивого harmonic tracking не получено**: baseline и selected обоих
+  методов availability 0% и без confirmation, conditional position error undefined.
+  Baseline 128 fits/`computational_budget_exceeded`;selected 106 fits/
+  `tentative_initialization_unconfirmed`. Нулевая availability не выдаётся
+  за нулевую ошибку. Tracking-preservation условие здесь не является успехом
+  harmonic tracking: нулевая baseline availability также нулевая.
+- Broadband confirmation 1,055313 с иavailability 94,545% сохранились;
+  RMSE GCC 2,105→2,139м, SRP 2,101→2,134м, P95 немного снизилась.
+  Прежняя baseline-calibrated R/bias, Qc/history, confirmation/budgets неизменны;
+  uncertainty нового frontend не квалифицирована, evaluation R не подбирали.
+  Ambiguity gate выключен, production frontend по умолчанию не менялся.
+- Отчёт `PARTIAL_WHITENING_REPORT.md`, новый выполненный saved-artifact
+  `notebooks/partial_whitening.ipynb` **7/7 code cells**, без ошибок;
+  per-cell all/stride metrics, durations серий, preserved failures, actual
+  weights/curves/maps, six tracker journals. Targeted+checkout **27 passed**;
+  полный pytest **645 passed** за 210,61 с, `pip check` без конфликтов,
+  `git diff --check` чист. Фактический Linux/Windows CI сообщается с итоговым SHA.
+  S8 остаётся In progress; новый обязательный подэтап не вводился.
 
 ## История S8: завершённое исследование bearing ambiguity gate
 

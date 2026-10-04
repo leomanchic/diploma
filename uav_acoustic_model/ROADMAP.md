@@ -19,15 +19,23 @@ Python, SHA-проверяемые эксперименты, 3D viewer и сох
 validation остаются отдельными требованиями; текущая диагностика S8 их не
 закрывает.
 
-**Текущая работа внутри S8:** один explicit normalized partial-whitening
-frontend, β∈{1,0.75,0.5}, ambiguity gate off. Development 8 spatial потоков,
-selection по harmonic L с broadband/valid guardrails; отдельный freeze commit
-до 8 radial evaluation потоков; до8 paired tracker replay. Новые acoustic
-seeds на известных записях, прежние propagation/R/bias/Qc/confirmation/budgets.
-Это transfer diagnostic, не независимые полёты или qualification нового R.
-Цель — per-method результат, включая отрицательный, bounded execution,
-отчёт/notebook и Linux/Windows CI. Новый обязательный подэтап не вводится;
-S8 остаётся **In progress**.
+**Текущая работа внутри S8:** завершён bounded normalized partial-whitening
+frontend experiment от `430cad8`, protocol `ccd44d7`, development selection
+freeze `a056e99` до evaluation. 16 audio/8 replay, β=0,5 для GCC/SRP;
+harmonic L на evaluation снизилась на 70,39%/57,67%, broadband/valid guardrails
+сохранены. Оба варианта перспективны для отдельной calibration по заданному
+per-method criterion, **устойчивого harmonic tracking нет**:availability 0%,
+confirmation отсутствует, tentative/budget failures сохранены. Старые
+R/bias/Qc/confirmation/budgets иaccepted production code не изменены,
+ambiguity gate выключен. Known trajectories/new acoustic seeds —dependent
+synthetic transfer, не independent flights или uncertainty qualification.
+Отчёт/notebook и targeted/full tests+Linux/WindowsCI завершают эту задачу.
+Новый обязательный подэтап не вводится; S8 остаётся **In progress**.
+
+Следующая отдельная проверка требует frozen calibration/evaluation нового
+frontend с независимыми source/noise данными; эта evaluation не используется
+для подбора новой R или расширения β-grid. Никаких новых вычислений такой
+calibration в текущем эксперименте не выполнено.
 
 Предыдущий ambiguity gate `430cad8`: GCC без эффекта, SRP частично снизил
 крупные bearing errors, tracking не улучшилось; joint criterion не пройден,

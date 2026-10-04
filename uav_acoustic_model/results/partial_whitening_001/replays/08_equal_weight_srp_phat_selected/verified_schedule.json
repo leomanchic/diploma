@@ -1,0 +1,13 @@
+{
+  "files_sha256": {
+    "batch_fits_equal_weight_srp_phat_three_station_confirmation.csv.gz": "c323cfd2e936d745766e46035b8fe1c3dd74eeecfe39f2803f5bb09919634db4",
+    "event_uses_equal_weight_srp_phat_three_station_confirmation.csv.gz": "5c60ff86cf023d65aef6622097d05e02c08b0a6159351ced564c208d5276bb06",
+    "hypotheses_equal_weight_srp_phat_three_station_confirmation.csv.gz": "3b34016c4ca5a4a3d46f28acb88f9dc41cf10aecf2c689aca539781f15b092ff",
+    "lifecycle_equal_weight_srp_phat_three_station_confirmation.csv.gz": "81c1d787b22125c132f2bb756a7f4b01c0198b0584ef1b593c8dd53998588d2f",
+    "tracking_equal_weight_srp_phat_three_station_confirmation.csv.gz": "5468e8f60008ede6d6c22ca920236df8a0a7687913549437f148d8709a525d4b",
+    "updates_equal_weight_srp_phat_three_station_confirmation.csv.gz": "3762c5a14caa02e94d9e3e2d1765dedff3fd0d672211ecee9243e4e2c571bb89"
+  },
+  "last_publication_s": 18.493312500000002,
+  "publication_count": 165,
+  "publication_schedule_sha256": "e2777eb7843c57fe3359011b3e325b88e7b0e153cefc65c8f34972d83fbeeedf"
+}

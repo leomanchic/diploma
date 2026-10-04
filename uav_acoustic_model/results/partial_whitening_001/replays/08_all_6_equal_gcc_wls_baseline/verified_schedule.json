@@ -1,0 +1,13 @@
+{
+  "files_sha256": {
+    "batch_fits_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "56dd2f4db04b91d649488debe844d62c6ba561881bfca5bf0d6450af9263376f",
+    "event_uses_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "d6385bb780582590822554d355ba28bfebf551fad8a5bcd4320fe9dbb4fcbba0",
+    "hypotheses_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "8b48f33d8c459816f99f7e405596d3d312cbd7cb5b6ab0da22171c3e0a5d7ef5",
+    "lifecycle_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "7047dd3994fd1c08e88a1f523eab73a6cd0590aa4c55e753829376b42b575fe1",
+    "tracking_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "bde5a96ee2234625454bc236653f24a1ebecc2a155e0d3271fc560a59cdbe29d",
+    "updates_all_6_equal_gcc_wls_three_station_confirmation.csv.gz": "336efc7f448f93ca8dceb99ea5bff2cf6aa382c30272e6773ee5f954ad27b351"
+  },
+  "last_publication_s": 18.493312500000002,
+  "publication_count": 165,
+  "publication_schedule_sha256": "e2777eb7843c57fe3359011b3e325b88e7b0e153cefc65c8f34972d83fbeeedf"
+}

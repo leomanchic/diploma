@@ -1,0 +1,43 @@
+{
+  "ambiguity_gate_enabled": false,
+  "audio_complete": 16,
+  "baseline_R_reused": true,
+  "evaluation_criteria": [
+    {
+      "baseline_harmonic_loss": 0.511836578846888,
+      "beta": 0.5,
+      "broadband_loss_ok": true,
+      "broadband_p95_limit_deg": 0.7047475361585285,
+      "broadband_p95_ok": true,
+      "harmonic_loss_relative_reduction": 0.703935098843715,
+      "harmonic_valid_ok": true,
+      "method": "all_6_equal_gcc_wls",
+      "promising_for_further_calibration": true,
+      "selected_harmonic_loss": 0.151536846124475
+    },
+    {
+      "baseline_harmonic_loss": 0.44783314242077127,
+      "beta": 0.5,
+      "broadband_loss_ok": true,
+      "broadband_p95_limit_deg": 0.6933976592567099,
+      "broadband_p95_ok": true,
+      "harmonic_loss_relative_reduction": 0.5766812320153468,
+      "harmonic_valid_ok": true,
+      "method": "equal_weight_srp_phat",
+      "promising_for_further_calibration": true,
+      "selected_harmonic_loss": 0.1895761741122566
+    }
+  ],
+  "identical_beta_one_reuses": 0,
+  "matrix_planned_audio": 16,
+  "matrix_planned_replay_comparisons": 8,
+  "replay_computations": 8,
+  "scope": "known Gazebo trajectories; dependent synthetic transfer, not independent flights or iid frames",
+  "selected_beta": {
+    "all_6_equal_gcc_wls": 0.5,
+    "equal_weight_srp_phat": 0.5
+  },
+  "stop_reason": null,
+  "technical_stop": false,
+  "worker_wall_s": 2197.1469727700023
+}

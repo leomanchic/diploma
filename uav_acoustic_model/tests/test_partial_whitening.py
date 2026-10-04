@@ -221,3 +221,48 @@ def test_new_experiment_init_and_empty_report(tmp_path):
     r=report(out)
     assert r['audio_complete']==r['replay_computations']==0
     assert r['selected_beta'] is None and not r['technical_stop']
+
+
+def test_published_study_complete_with_exact_frozen_selection_and_reuse():
+    """Read saved artifacts only; never synthesize audio or rerun a tracker."""
+    import json
+    from analysis.partial_whitening_study import OUT,load,selection_manifest
+    from analysis.partial_whitening_report import verify,select_beta,cell_metrics
+    m=load(OUT);g=selection_manifest(OUT,m);e=verify(OUT)
+    assert e['audio_complete']==16
+    nonbaseline=sum(beta!=1 for beta in g['selected_beta'].values())
+    assert e['replay_computations']==4+2*nonbaseline
+    assert e['identical_beta_one_reuses']==4-2*nonbaseline
+    assert e['replay_computations']+e['identical_beta_one_reuses']==8
+    chosen,candidates=select_beta(cell_metrics(OUT,'development'))
+    assert chosen==g['selected_beta'] and len(candidates)==6
+    l=json.loads((OUT/'execution_ledger.json').read_text())
+    assert not l['stopped'] and l['worker_wall_s']<m['limits']['total_worker_wall_s']
+    assert len(l['attempts'])==16+e['replay_computations']
+    assert all(a['status']=='complete' and not a['timed_out'] and a['wall_s']<a['timeout_s'] for a in l['attempts'])
+    assert not m['ambiguity_gate_enabled']
+
+
+def test_published_variants_share_audio_but_not_event_identity():
+    import json
+    from analysis.partial_whitening_study import OUT,load,run_dir,variants,selection_manifest
+    from analysis.localization_error_attribution import _read_csv_gz
+    from model.measurements import BearingMeasurement
+    from model.bearing_events import bearing_event_id
+    m=load(OUT);g=selection_manifest(OUT,m)
+    stream_ids=set();event_ids=set()
+    for spec in m['specs']:
+        directory=run_dir(OUT,spec['index']);meta=json.loads((directory/'audio_manifest.json').read_text())
+        assert meta['synthesis_count']==1 and not meta['ambiguity_gate_enabled']
+        assert meta['source_bank']['seed']==spec['source_seed']
+        rows=_read_csv_gz(directory/'bearing_records.csv.gz')
+        sid={r['audio_stream_id'] for r in rows};assert len(sid)==1 and sid.isdisjoint(stream_ids);stream_ids.update(sid)
+        allowed=variants(spec,g)
+        assert {(float(r['frontend_beta']),r['estimator_variant']) for r in rows}=={(b,method) for b,methods in allowed.items() for method in methods}
+        local_ids={r['event_id'] for r in rows};assert len(local_ids)==len(rows) and local_ids.isdisjoint(event_ids);event_ids.update(local_ids)
+        # Identity is deterministic metadata, not a function of angular labels.
+        for r in rows[:6]:
+            event=BearingMeasurement.invalid(station_id=r['station_id'],sequence_id=r['sequence_id'],frame_index=int(r['frame_index']),
+                reception_center_timestamp_s=float(r['frame_center_reception_time_s']),available_timestamp_s=float(r['available_timestamp_s']),
+                estimator_variant=r['estimator_variant'],invalid_reason='identity-check')
+            assert bearing_event_id(event)==r['event_id']

@@ -1,0 +1,29 @@
+{
+  "files_sha256": {
+    "audio_manifest.json": "4cae3485338bd42cea9048cb33b7aa1f7fc3fb877ebee635e755ae1b688b7a0e",
+    "bearing_records.csv.gz": "7c4507085ce9cdc2a28bc2beb2ad5077c761e96adc154cbaec2f12ef1ee06804",
+    "checkpoint.json": "eb218f7407a72abbb3b8ac200fe4d63e4982a1eb62a23157d4e6a037ea1cef5a",
+    "curves_S0_0_b0.5.npz": "4fae545672e242169aee09498a951dac9cb7352b06fce101c0585532cf73d49a",
+    "curves_S0_0_b1.0.npz": "7b105dd787e67a8886c1a04124a0c7ae5c5a535fd74b897015d49e068e2c04fd",
+    "curves_S0_1745_b0.5.npz": "8b31664a61eb983152d1476b89da3bb0195ce59b415cad76991f1b068c0b1764",
+    "curves_S0_1745_b1.0.npz": "1bc36058c4c70f675e9fd454b1527195609dfed4b14a5a7af76aa1e7ff23532f",
+    "curves_S0_32_b0.5.npz": "cfd3ba0715eb736fb07c1544e90c9d38e531b5e66119d3d87ae7f3980edfe81e",
+    "curves_S0_32_b1.0.npz": "583c54ec0a0508116743f732d043607909012ccf211dcf8398587adf137d9294",
+    "curves_S1_0_b0.5.npz": "6034f110721a43d588dba606944d76a9b79bf940eefa63ad7bc810bfe26255e3",
+    "curves_S1_0_b1.0.npz": "aa6fc7e2bcc80c373477fae81c07c9c60f0e1e42f2a62be7a6f354ee2eb8b744",
+    "curves_S1_1745_b0.5.npz": "ef48b5340982abfcec23d8a9cfe39ab8a7b654d4cb7a3b72af80f596dbc23f16",
+    "curves_S1_1745_b1.0.npz": "e85dd00b88afeafc252fd1cf91893fdf7bd7410752f9567263f00daa0d47b0e0",
+    "curves_S1_32_b0.5.npz": "b5210e0a04fdcd37721ba344d5a496ae1760c870b0d43c5f1cd17c298186d8ca",
+    "curves_S1_32_b1.0.npz": "113c4c57b62245e4af05d51f4a789326f46b8bf6b47d3a0162d86189a1226020",
+    "curves_S2_0_b0.5.npz": "960eb299e66392a34765cd543129fc0f0ffcb2d0a8e13fdb441701e760c52178",
+    "curves_S2_0_b1.0.npz": "57fc4021fd23bb6c976b1cd928eb309cb081ca88b58055eda1fe287e610d7058",
+    "curves_S2_1745_b0.5.npz": "6e45b519b6f106de2dbe813caab67a085a0e7950c63141ea4ed3b5c298c19b43",
+    "curves_S2_1745_b1.0.npz": "7f6c652e21900c5b46b0f8899250b94adfd5ec0d08734c2842e9ddac1a387b6c",
+    "curves_S2_32_b0.5.npz": "f2c6cfddf7721e8305df430bc46384ed34758a788e987ed436d25a199533b91d",
+    "curves_S2_32_b1.0.npz": "90444a059e2854811b795f10105bdefbf13d03dc776813fbeaad000c630c734c"
+  },
+  "index": 14,
+  "kind": "audio",
+  "status": "complete_verified",
+  "study_manifest_sha256": "2ac9b7471b4017b009dc45d4490d8b61a427914250c538fa330246baef2263b8"
+}

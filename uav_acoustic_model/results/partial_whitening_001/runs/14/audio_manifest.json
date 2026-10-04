@@ -1,0 +1,53 @@
+{
+  "ambiguity_gate_enabled": false,
+  "audio_stream_id": "pw-a5ffb1a79f63b99b02bdc23d",
+  "bearing_count": 20952,
+  "frames_per_station": 1746,
+  "recording_sha256": "3c03ebc3b83ac7ebd9500179d6074f0900ed89cf0d70efa43854e849c14c28f1",
+  "source_bank": {
+    "file_sha256": "346c29a0d6025af42fa59ed18454b7631c47e47defa3245b23d53b40c5e52f2a",
+    "sample_count": 972819,
+    "seed": 4314103335752162750,
+    "signal_sha256": "c994a329e6f5c688c87e6af1a102b3e03d2f575606d2cd06c9efea3a2b48d2d2",
+    "start_time_s": 106.2418913688324
+  },
+  "source_signal_sha256": "c994a329e6f5c688c87e6af1a102b3e03d2f575606d2cd06c9efea3a2b48d2d2",
+  "spec": {
+    "distance_m": 700,
+    "index": 14,
+    "noise_seed": 3572115528787393098,
+    "replicate": 0,
+    "source_class": "nonstationary_harmonic",
+    "source_seed": 4314103335752162750,
+    "split": "evaluation",
+    "station_noise_seeds": {
+      "S0": 5581119707295808113,
+      "S1": 6162220035012802196,
+      "S2": 13734845277502526075
+    },
+    "trajectory": "radial"
+  },
+  "standardized_noise_sha256": "baef5dc9c9834bed40401739eff341483bda0bb6372294047a199e0c70e07d00",
+  "station_snr_db": {
+    "S0": -7.510408224227749,
+    "S1": -6.7495960758565365,
+    "S2": -6.755706545577525
+  },
+  "synthesis_count": 1,
+  "time_origin_gazebo_s": 108.424,
+  "translation_enu_m": [
+    489.13250363644346,
+    482.47355916523475,
+    111.63901032251086
+  ],
+  "variants": {
+    "0.5": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ],
+    "1.0": [
+      "all_6_equal_gcc_wls",
+      "equal_weight_srp_phat"
+    ]
+  }
+}
